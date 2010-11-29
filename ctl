@@ -78,7 +78,7 @@ compile()
     for i in `echo $* | sed 's/%//g'`
     do
         echo "[C] $i.o"
-        $CC -c -o $i.o $i.c
+        $CC $DIST_CFLAGS -c -o $i.o $i.c
     done
 }
 
@@ -89,7 +89,7 @@ link()
     do
         e=`echo $BIN/$obj | sed 's/\.o//g'`
         echo "[L] $e"
-        $CC -o $e $libs $obj
+        $CC $DIST_CFLAGS -o $e $libs $obj
     done
 }
 
@@ -107,6 +107,25 @@ clean()
     find . -name '*.o' -exec rm {} \;
     find . -name '*.log' -exec rm {} \;
     rm -rf version.c y.tab.[ch] lex.yy.c $BIN
+}
+
+dist()
+{
+    DIST_CFLAGS=$*
+
+    clean
+    compile $LIBS $PROGS
+    echo
+    link $PROGS
+    echo
+
+    d="bandicoot-$VERSION"
+    mkdir -p $BIN/$d
+    cp LICENSE NOTICE $BIN/bandicoot $BIN/$d && cd $BIN
+
+    a="`pwd`/$d.tar.gz"
+    echo "[A] $a"
+    tar cfz $a $d
 }
 
 cmd=$1
@@ -179,16 +198,7 @@ case $cmd in
         find . -regex '.*\.[chly]' -exec egrep -H -i 'fixme|todo|think' {} \;
         ;;
     dist)
-        clean
-        compile $LIBS $PROGS
-        echo
-        link $PROGS
-        echo
-        cp LICENSE NOTICE $BIN && cd $BIN
-
-        a="`pwd`/bandicoot-$VERSION.tar.gz"
-        echo "[A] $a"
-        tar cfz $a bandicoot LICENSE NOTICE
+        dist "-Os $2"
         ;;
     *)
         echo "unknown command '$cmd', usage: ctl <command>"
