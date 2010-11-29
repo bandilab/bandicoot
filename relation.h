@@ -1,0 +1,83 @@
+/*
+Copyright 2008-2010 Ostap Cherkashin
+Copyright 2008-2010 Julius Chrobak
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+struct Args {
+    int len;
+    long vers[MAX_ARGS];
+    char *names[MAX_ARGS];
+    TBuf *tbufs[MAX_ARGS];
+};
+
+struct Rel {
+    Head *head;
+    TBuf *body;
+    void *ctxt;
+
+    void (*init)(struct Rel *self, struct Args *args);
+    void (*free)(struct Rel *self);
+};
+
+typedef struct Rel Rel;
+typedef struct Args Args;
+
+static void rel_init(Rel *r, Args *args)
+{
+    r->init(r, args);
+    if (r->body != NULL)
+        tbuf_reset(r->body);
+}
+
+static void rel_free(Rel *r)
+{
+    r->free(r);
+    if (r->body != NULL)
+        tbuf_free(r->body);
+
+    mem_free(r->head);
+    mem_free(r);
+}
+
+static Tuple *rel_next(Rel *r)
+{
+    return tbuf_next(r->body);
+}
+
+extern Rel *rel_param(Head *head, const char *name);
+extern Rel *rel_tmp(Rel *r, Rel *clones[], int cnt);
+/* TODO: relations passed to rel_store & rel_eq must be rel_init()'ed */
+extern Rel *rel_load(Head *head, const char *name);
+extern int rel_store(const char *name, long vers, Rel *r);
+extern int rel_eq(Rel *l, Rel *r);
+
+extern Rel *rel_join(Rel *l, Rel *r);
+extern Rel *rel_union(Rel *l, Rel *r);
+extern Rel *rel_diff(Rel *l, Rel *r);
+extern Rel *rel_project(Rel *r, char *attrs[], int len);
+extern Rel *rel_rename(Rel *r, char *from[], char *to[], int len);
+extern Rel *rel_select(Rel *r, Expr *bool_expr);
+extern Rel *rel_extend(Rel *r, char *names[], Expr *e[], int len);
+extern Rel *rel_sum_unary(Rel *r,
+                          char *names[],
+                          Type types[],
+                          Sum *sums[],
+                          int len);
+extern Rel *rel_sum(Rel *r,
+                    Rel *per,
+                    char *names[],
+                    Type types[],
+                    Sum *sums[],
+                    int len);

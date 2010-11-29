@@ -1,0 +1,49 @@
+test/progs/assign_bad_types_err.b:17: wrong types in assignment
+test/progs/assign_bad_wvar_err.b:11: relational variable 'does_not_exist' is not declared
+test/progs/func_bad_res_type_err.b:16: bad return type
+test/progs/func_redecl_err.b:17: function 'svc_name' is already declared
+test/progs/func_unexp_ret_stmt_err.b:12: unexpected return in function with void result type
+test/progs/func_unknown_res_type_err.b:9: unknown relation type 'unknown_t'
+test/progs/literal_int_overflow_neg_err.b:32: int constant value overflow 2147483649
+test/progs/literal_int_overflow_pos_err.b:32: int constant value overflow 2147483648
+test/progs/literal_long_overflow_neg_err.b:32: long constant value overflow 9223372036854775809
+test/progs/literal_long_overflow_pos_err.b:32: long constant value overflow 9223372036854775808
+test/progs/load_unknown_var_err.b:9: variable 'a' is not defined
+test/progs/params_rel_unknown_param_err.b:9: variable 'p' is not defined
+test/progs/params_rel_unknown_type_err.b:1: unknown relation type 'unknown_t'
+test/progs/primitive_expr_and_err.b:11: expressions must be of the same type, found 2 and 0
+test/progs/primitive_expr_div_err.b:17: expressions must be of the same type, found 2 and 1
+test/progs/primitive_expr_eq_err.b:11: expressions must be of the same type, found 1 and 2
+test/progs/primitive_expr_gt_err.b:11: expressions must be of the same type, found 2 and 0
+test/progs/primitive_expr_lt_err.b:11: expressions must be of the same type, found 1 and 0
+test/progs/primitive_expr_mul_err.b:17: expressions must be of the same type, found 0 and 2
+test/progs/primitive_expr_neq_err.b:11: expressions must be of the same type, found 0 and 1
+test/progs/primitive_expr_not_real_err.b:10: expressions must be of type Int, found 1
+test/progs/primitive_expr_not_string_err.b:10: expressions must be of type Int, found 2
+test/progs/primitive_expr_or_err.b:11: expressions must be of the same type, found 1 and 0
+test/progs/primitive_expr_sub_err.b:17: expressions must be of the same type, found 2 and 1
+test/progs/primitive_expr_sum_err.b:17: expressions must be of the same type, found 0 and 1
+test/progs/project_bad_attr_err.b:16: unknown attribute 'z' in project
+test/progs/project_max_attrs_err.b:18: number of attributes (64) exceeds the maximum
+test/progs/project_same_attr_err.b:14: attribute 'x' is already used
+test/progs/rel_type_max_attrs_err.b:66: number of attributes (64) exceeds the maximum
+test/progs/rel_type_same_attr_err.b:4: attribute 'x' is already used
+test/progs/rel_type_same_type_err.b:9: relation type 'point' is already defined
+test/progs/rel_var_name_err.b:6: relational type 'point' cannot be used as a variable name
+test/progs/rel_var_read_after_assign_err.b:9: variable 'gp' cannot be read (it was modified by one of the previous statements)
+test/progs/rel_var_reassign_err.b:9: cannot reassign variable 'p'
+test/progs/rel_var_redecl2_err.b:10: variable 'gp' is already declared
+test/progs/rel_var_redecl_err.b:12: relational variable 'a' is already defined
+test/progs/rel_var_unknown_type_err.b:7: relation type 'doesnt_exist' does not exist
+test/progs/rename_attr_exists_err.b:12: rename to 'time' overwrites existing attribute
+test/progs/rename_same_from_err.b:10: attribute 'x' is already used
+test/progs/rename_same_to_err.b:11: rename to 'x_coord' overwrites existing attribute
+test/progs/rename_unknown_attr_err.b:11: unknown attribute 'z' in rename
+test/progs/semidiff_types_err.b:17: use of semidiff with no commmon attributes
+test/progs/summarize_attr_err.b:32: attribute s does not exist
+test/progs/summarize_def_err.b:32: invalid type of default value, expected 0, got 1
+test/progs/summarize_expr_err.b:32: only constant expressions are allowed for default values
+test/progs/summarize_str_err.b:32: invalid type of default value: string
+test/progs/tmp_var_redecl_err.b:39: variable 'tmp' is already declared
+test/progs/tmp_var_unknown_err.b:33: variable 'unknown_tmp_var' is not defined
+test/progs/union_types_err.b:17: cannot union relations of different types

@@ -1,0 +1,6 @@
+id=int`string_val=string`int_val=int`real_val=real
+1`hello_from_r1`2`6.257
+2`hello_from_r1`1`7.123
+3`hello_from_r1`2`98.1
+4`hello_from_r1`6`.89
+5`hello_from_r1`7`1.114
