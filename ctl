@@ -39,7 +39,7 @@ check_lp64()
 {
     lp64=`mktemp lp64-XXXX`
     echo 'int main() { return sizeof(long); }' \
-        | $CC -o $lp64 -x c -
+        | $CC $DIST_CFLAGS -o $lp64 -x c -
 
     ./$lp64
     if [ "8" = "$?" ]
