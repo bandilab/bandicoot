@@ -107,6 +107,7 @@ clean()
     find . -name '*.o' -exec rm {} \;
     find . -name '*.log' -exec rm {} \;
     rm -rf version.c y.tab.[ch] lex.yy.c $BIN
+    rm -rf "bandicoot-$VERSION" "bandicoot-src-$VERSION"
 }
 
 dist()
@@ -120,10 +121,25 @@ dist()
     echo
 
     d="bandicoot-$VERSION"
-    mkdir -p $BIN/$d
-    cp LICENSE NOTICE $BIN/bandicoot $BIN/$d && cd $BIN
+    mkdir -p $d
+    cp LICENSE NOTICE $BIN/bandicoot $d
 
-    a="`pwd`/$d.tar.gz"
+    a="$BIN/$d.tgz"
+    echo "[A] $a"
+    tar cfz $a $d
+}
+
+src()
+{
+    clean 
+    create_out_dirs
+
+    d="bandicoot-src-$VERSION"
+    mkdir -p $d
+    git clone -q . $d
+    rm -rf $d/.git
+
+    a="$BIN/$d.tgz"
     echo "[A] $a"
     tar cfz $a $d
 }
@@ -199,6 +215,9 @@ case $cmd in
         ;;
     dist)
         dist "-Os $2"
+        ;;
+    src)
+        src
         ;;
     *)
         echo "unknown command '$cmd', usage: ctl <command>"
