@@ -376,7 +376,8 @@ extern Head *env_head(Env *env, const char *var)
 
 extern Func *env_func(Env *env, const char *name)
 {
-    return env->fns.funcs[array_scan(env->fns.names, env->fns.len, name)];
+    int idx = array_scan(env->fns.names, env->fns.len, name);
+    return (idx == -1) ? NULL : env->fns.funcs[idx];
 }
 
 static L_Attrs attr_name(const char *name)
