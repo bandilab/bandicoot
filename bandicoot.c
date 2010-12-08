@@ -184,10 +184,11 @@ int main(int argc, char *argv[])
         else
             usage(argv[0]);
 
-    if (str_cmp(argv[1], "deploy") == 0 && s != NULL && v != NULL && e == -1)
+    if (str_cmp(argv[1], "deploy") == 0 && s != NULL && v != NULL && e == -1) {
         vol_deploy(v, s);
-    else if (str_cmp(argv[1], "start") == 0 &&
-             s == NULL && v != NULL && e != -1)
+        sys_print("deployed: %s -> %s\n", s, v);
+    } else if (str_cmp(argv[1], "start") == 0 &&
+               s == NULL && v != NULL && e != -1)
     {
         if (e || p < 1 || p > 65535) {
             sys_print("invalid port '%d'\n", p);
@@ -198,6 +199,10 @@ int main(int argc, char *argv[])
         tx_init(env->vars.names, env->vars.len);
 
         int sfd = sys_socket(p);
+
+        char tmp[32];
+        sys_time(tmp);
+        sys_print("started: %s, volume=%s, port=%d\n--\n", tmp, v, p);
 
         for (;;) {
             long cfd = sys_accept(sfd);

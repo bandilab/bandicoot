@@ -31,6 +31,7 @@ limitations under the License.
 #include <unistd.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "system.h"
 #include "memory.h"
@@ -199,6 +200,12 @@ extern long sys_millis()
     return t.tv_sec * 1000L + t.tv_usec / 1000L;
 }
 
+extern void sys_time(char *buf)
+{
+    time_t t = time(NULL);
+    strftime(buf, 32, "%Y-%m-%d %H:%M:%S UTC", gmtime(&t));
+}
+
 extern void sys_die(const char *msg, ...)
 {
     va_list ap;
@@ -292,5 +299,4 @@ extern int sys_empty(const char *dir)
     mem_free(files);
 
     return res;
-
 }

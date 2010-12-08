@@ -47,3 +47,4 @@ extern int sys_accept(int socket);
 extern void sys_print(const char *msg, ...);
 extern long sys_millis(); /* suitable for quick time measures only (long might
                              not be enough on 32bit systems) */
+extern void sys_time(char *buf);
