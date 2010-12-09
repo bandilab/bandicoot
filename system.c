@@ -33,6 +33,7 @@ limitations under the License.
 #include <pthread.h>
 #include <time.h>
 
+#include "config.h"
 #include "system.h"
 #include "memory.h"
 #include "string.h"
@@ -146,9 +147,9 @@ extern void sys_close(int fd)
         sys_die("sys: cannot close file descriptor\n");
 }
 
-extern char **sys_lsdir(const char *path, int *len)
+extern char **sys_list(const char *path, int *len)
 {
-    char *mem = mem_alloc(256);
+    char *mem = mem_alloc(MAX_PATH);
     int n = 0, off = 0, *offs = mem_alloc(sizeof(int));
     offs[0] = 0;
 
@@ -158,12 +159,14 @@ extern char **sys_lsdir(const char *path, int *len)
 
     struct dirent *e;
     while ((e = readdir(d)) != 0) {
-        off += str_cpy(mem + off, e->d_name) + 1;
-        n++;
+        if (str_cmp(e->d_name, ".") != 0 && str_cmp(e->d_name, "..") != 0) {
+            off += str_cpy(mem + off, e->d_name) + 1;
+            n++;
 
-        mem = mem_realloc(mem, off + 256);
-        offs = mem_realloc(offs, (n + 1) * sizeof(int));
-        offs[n] = off;
+            mem = mem_realloc(mem, off + MAX_PATH);
+            offs = mem_realloc(offs, (n + 1) * sizeof(int));
+            offs[n] = off;
+        }
     }
     closedir(d);
 
@@ -293,9 +296,8 @@ extern int sys_accept(int socket)
 extern int sys_empty(const char *dir)
 {
     int num_files;
-    char **files = sys_lsdir(dir, &num_files);
-    /* FIXME: this might not be portable condition */
-    int res = (num_files == 2);
+    char **files = sys_list(dir, &num_files);
+    int res = num_files == 0;
     mem_free(files);
 
     return res;

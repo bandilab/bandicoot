@@ -30,7 +30,7 @@ extern void sys_cpy(const char *dest, const char *src);
 extern void sys_remove(const char *path);
 extern void sys_close(int fd);
 extern char *sys_load(const char *path);
-extern char **sys_lsdir(const char *path, int *len);
+extern char **sys_list(const char *dir, int *len);
 extern int sys_empty(const char *dir);
 
 /* [multi]proc */

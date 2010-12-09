@@ -17,68 +17,7 @@ limitations under the License.
 
 #include "common.h"
 
-static Args args = {
-    .len = 54,
-    .names = { "input",
-               "compound_1", /* FIXME: this should probably come from
-                                       lsdir("test/data"); */
-               "compound_1_res",
-               "empty_r1",
-               "empty_r2",
-               "equal_r1",
-               "equal_r2",
-               "equal_r3",
-               "extend_1",
-               "extend_res_1",
-               "extend_res_2",
-               "io",
-               "join_1_r1",
-               "join_1_r2",
-               "join_1_res",
-               "join_2_r1",
-               "join_2_r2",
-               "join_2_res",
-               "one_r1",
-               "one_r2",
-               "perf_io",
-               "perf_rel",
-               "project_1",
-               "project_1_res",
-               "project_2",
-               "project_2_res",
-               "rename_1",
-               "rename_1_res",
-               "select_1",
-               "select_1_res",
-               "select_2",
-               "select_2_res",
-               "select_3",
-               "select_3_res",
-               "semidiff_1_l",
-               "semidiff_1_r",
-               "semidiff_1_res",
-               "semidiff_2_l",
-               "semidiff_2_r",
-               "semidiff_2_res",
-               "storage_r1",
-               "storage_r2",
-               "summarize_dep",
-               "summarize_emp",
-               "summarize_res_1",
-               "summarize_res_2",
-               "two_r2",
-               "tx_empty",
-               "union_1_l",
-               "union_1_r",
-               "union_1_res",
-               "union_2_l",
-               "union_2_r",
-               "union_2_res"}
-};
-
-#define wlen 1
-static long wvers[wlen];
-static char *wnames[] = { "tx_empty" };
+static Args args;
 static Env *env = NULL;
 
 static Rel *pack(char *str)
@@ -105,7 +44,7 @@ static int equal(Rel *left, const char *name)
 {
     Rel *right = load(name);
 
-    long sid = tx_enter(args.names, args.vers, args.len, 0, 0, 0);
+    long sid = tx_enter(args.names, args.vers, args.len, NULL, NULL, 0);
 
     rel_init(left, &args);
     rel_init(right, &args);
@@ -123,7 +62,7 @@ static int equal(Rel *left, const char *name)
 static int count(const char *name)
 {
     Rel *r = load(name);
-    long sid = tx_enter(args.names, args.vers, args.len, 0, 0, 0);
+    long sid = tx_enter(args.names, args.vers, args.len, NULL, NULL, 0);
     rel_init(r, &args);
 
     Tuple *t;
@@ -169,7 +108,10 @@ static void test_store()
 {
     Rel *r = load("one_r1");
 
-    long sid = tx_enter(args.names, args.vers, args.len, wnames, wvers, wlen);
+    char *wnames[] = {"tx_empty"};
+    long wvers[1];
+
+    long sid = tx_enter(args.names, args.vers, args.len, wnames, wvers, 1);
     rel_init(r, &args);
 
     rel_store("tx_empty", wvers[0], r);
@@ -281,8 +223,7 @@ static void test_semidiff()
 static void test_summary()
 {
     int int_zero = 0, int_minus_one = -1;
-    double real_minus_one = -1.0, real_plus_one = 1.0, real_zero = 0.0,
-           real_minus_decimal = -0.99;
+    double real_plus_one = 1.0, real_zero = 0.0, real_minus_decimal = -0.99;
     long long long_minus_one = -1, long_zero = 0;
 
     char *names[] = {"employees", 
@@ -404,6 +345,10 @@ int main()
     env = env_new(vol_init("bin/volume"));
     tx_init(env->vars.names, env->vars.len);
 
+    char **files = sys_list("test/data", &args.len);
+    for (int i = 0; i < args.len; ++i)
+        args.names[i] = files[i];
+
     test_load();
     test_eq();
     test_store();
@@ -419,6 +364,7 @@ int main()
 
     tx_free();
     env_free(env);
+    mem_free(files);
 
     return 0;
 }

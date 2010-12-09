@@ -50,18 +50,15 @@ int main(void)
     if (sys_exists("doesnotexist"))
         fail();
 
-    char **names = sys_lsdir("bin/test/lsdir", &len);
-    if (len != 3)
-        fail();
-
-    if (array_scan(names, len, ".") == -1)
-        fail();
-    if (array_scan(names, len, "..") == -1)
+    char **names = sys_list("bin/test/lsdir", &len);
+    if (len != 1)
         fail();
     if (array_scan(names, len, "one_dir") == -1)
         fail();
-
     mem_free(names);
+
+    if (!sys_empty("bin/test/lsdir/one_dir"))
+        fail();
 
     return 0;
 }
