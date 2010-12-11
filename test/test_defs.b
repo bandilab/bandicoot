@@ -12,6 +12,7 @@ two_r2: basic_01;
 tx_empty: basic_01;
 compound_1: basic_01;
 compound_1_res: basic_01;
+param_1: basic_01;
 
 rel basic_02 {
     id: int,
@@ -294,6 +295,11 @@ fn load_one_r2(): basic_01
     return one_r2;
 }
 
+fn load_param_1(): basic_01
+{
+    return param_1;
+}
+
 fn load_perf_io(): io_test
 {
     return perf_io;
@@ -561,6 +567,11 @@ fn store_one_r1(x: basic_01)
 fn store_one_r2(x: basic_01)
 {
     one_r2 = x;
+}
+
+fn store_param_1(x: basic_01)
+{
+    param_1 = x;
 }
 
 fn store_perf_io(x: io_test)

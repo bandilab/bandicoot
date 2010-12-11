@@ -27,6 +27,9 @@ static Rel *pack(char *str)
     Rel *res = NULL;
 
     if (buf != NULL) {
+        /* rel_init (init_param) will pick up tbuf[0] (it should be
+           fine to reuse the global variable name for parameter as
+           they are in a different namespace) */
         args.tbufs[0] = buf;
         res = rel_param(h, args.names[0]);
     }
@@ -83,6 +86,15 @@ static void test_load()
     if (count("one_r1") != 1)
         fail();
     if (count("two_r2") != 2)
+        fail();
+}
+
+static void test_param()
+{
+    char param_1[1024];
+    str_cpy(param_1, "a=int`c=string\n1`one\n2`two\n1`one\n2`two");
+
+    if (!equal(pack(param_1), "param_1"))
         fail();
 }
 
@@ -350,6 +362,7 @@ int main()
         args.names[i] = files[i];
 
     test_load();
+    test_param();
     test_eq();
     test_store();
     test_select();

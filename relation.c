@@ -138,8 +138,6 @@ extern Rel *rel_param(Head *head, const char *name)
     Ctxt *c = res->ctxt;
     str_cpy(c->name, name);
 
-    /* FIXME: free res & write a test for this */
-
     return rel_project(res, head->names, head->len);
 }
 
