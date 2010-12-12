@@ -18,16 +18,13 @@ fn dim1(): Dims
     t := time extend(id = 1);
     p := pos extend(id = 1);
 
-    st := t summarize
-            (min_time = min(time, 0L), max_time = max(time, -3L))
-          t project(id);
+    st := (t, t project(id)) summarize(min_time = min(time, 0L),
+                                       max_time = max(time, -3L));
 
-    sp := p summarize
-            (min_pos = min(pos, 0),
-             max_pos = max(pos, 0),
-             avg_pos = avg(pos, 0.0),
-             add_pos = add(pos, 0))
-          p project(id);
+    sp := (p, p project(id)) summarize(min_pos = min(pos, 0),
+                                       max_pos = max(pos, 0),
+                                       avg_pos = avg(pos, 0.0),
+                                       add_pos = add(pos, 0));
 
     return (st * sp);
 }

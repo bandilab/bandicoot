@@ -103,11 +103,11 @@ static void add_func(const char *name,
 %type <attrs> project_attr project_attrs
 %type <attrs> rename_attr rename_attrs
 %type <attrs> extend_attr extend_attrs
-%type <attrs> summarize_attrs summarize_attr
-%type <rel> rel_prim_expr rel_unary_expr rel_binary_expr rel_mul_expr rel_expr
+%type <attrs> sum_attrs sum_attr
+%type <rel> rel_prim_expr rel_post_expr rel_mul_expr rel_expr
 %type <expr> prim_const_expr prim_simple_expr prim_top_expr prim_unary_expr
 %type <expr> prim_mul_expr prim_add_expr prim_bool_cmp_expr prim_expr
-%type <sum> summarize_func
+%type <sum> sum_func
 %type <stmts> func_params func_body stmt_return stmt_assign stmt_assigns
 %type <head> rel_head func_res
 
@@ -190,31 +190,26 @@ rel_prim_expr:
     | '(' rel_expr ')'  { $$ = $2; }
     ;
 
-rel_unary_expr:
+rel_post_expr:
       rel_prim_expr
         { $$ = $1; }
-    | rel_unary_expr TK_PROJECT '(' project_attrs ')'
+    | rel_post_expr TK_PROJECT '(' project_attrs ')'
         { $$ = r_unary($1, $4, PROJECT); }
-    | rel_unary_expr TK_RENAME '(' rename_attrs ')'
+    | rel_post_expr TK_RENAME '(' rename_attrs ')'
         { $$ = r_unary($1, $4, RENAME); }
-    | rel_unary_expr TK_SELECT '(' prim_expr ')'
+    | rel_post_expr TK_SELECT '(' prim_expr ')'
         { $$ = r_select($1, $4); }
-    | rel_unary_expr TK_EXTEND '(' extend_attrs ')'
+    | rel_post_expr TK_EXTEND '(' extend_attrs ')'
         { $$ = r_unary($1, $4, EXTEND); }
-    | rel_unary_expr TK_SUMMARIZE '(' summarize_attrs ')'
+    | rel_post_expr TK_SUMMARIZE '(' sum_attrs ')'
         { $$ = r_sum($1, NULL, $4); }
-    ;
-
-rel_binary_expr:
-      rel_unary_expr
-        { $$ = $1; }
-    | rel_unary_expr TK_SUMMARIZE '(' summarize_attrs ')' rel_binary_expr
-        { $$ = r_sum($1, $6, $4); }
+    | '(' rel_post_expr ',' rel_post_expr ')' TK_SUMMARIZE '(' sum_attrs ')'
+        { $$ = r_sum($2, $4, $8); }
     ;
 
 rel_mul_expr:
-      rel_binary_expr                   { $$ = $1; }
-    | rel_mul_expr '*' rel_binary_expr  { $$ = r_binary($1, $3, JOIN); }
+      rel_post_expr                     { $$ = $1; }
+    | rel_mul_expr '*' rel_post_expr    { $$ = r_binary($1, $3, JOIN); }
     ;
 
 rel_expr:
@@ -250,16 +245,16 @@ extend_attr:
       TK_NAME '=' prim_expr              { $$ = attr_extend($1, $3); }
     ;
 
-summarize_attrs:
-      summarize_attr                     { $$ = $1; }
-    | summarize_attrs ',' summarize_attr { $$ = attr_merge($1, $3); }
+sum_attrs:
+      sum_attr                  { $$ = $1; }
+    | sum_attrs ',' sum_attr    { $$ = attr_merge($1, $3); }
     ;
 
-summarize_attr:
-      TK_NAME '=' summarize_func         { $$ = attr_sum($1, $3); }
+sum_attr:
+      TK_NAME '=' sum_func      { $$ = attr_sum($1, $3); }
     ;
 
-summarize_func:
+sum_func:
       TK_NAME '(' ')'
         { $$ = sum_create($1, "", NULL); }
     | TK_NAME '(' TK_NAME ',' prim_expr ')'
