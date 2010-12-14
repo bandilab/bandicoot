@@ -61,7 +61,6 @@ static L_Expr *p_op(L_Expr *l, L_Expr *r, L_Expr_Type node_type);
 static void p_free(L_Expr *e);
 static int is_constant(L_Expr *e);
 
-
 static L_Stmts stmt_create(L_Stmt_Type type, 
                            Head *rel_type,
                            const char *name,
@@ -439,9 +438,11 @@ static L_Attrs attr_merge(L_Attrs l, L_Attrs r)
 static L_Sum sum_create(const char *func, const char *attr, L_Expr *def)
 {
     L_Sum res;
-    if (str_cmp(func, "count") == 0)
+    if (str_cmp(func, "count") == 0) {
         res.sum_type = COUNT;
-    else if (str_cmp(func, "avg") == 0)
+        L_Value v = {.v_int = 0};
+        def = p_value(v, Int);
+    } else if (str_cmp(func, "avg") == 0)
         res.sum_type = AVG;
     else if (str_cmp(func, "max") == 0)
         res.sum_type = MAX;

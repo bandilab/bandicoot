@@ -51,3 +51,9 @@ fn next(): rel {order: int}
                  project(norder)
                  rename(order = norder);
 }
+
+
+fn count(): rel {count: int}
+{
+    return queue summarize(count = count());
+}
