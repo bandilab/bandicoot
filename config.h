@@ -15,18 +15,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/* FIXME: cleanup MAX_* (there are duplicates or bad names + some constants
+          are not required) */
 #define MAX_PATH 256
 #define MAX_REL_TYPES 128
 #define MAX_VARS 128
 #define MAX_ATTRS 64
-#define MAX_VALUE_SIZE 128
 #define MAX_TUPLE_SIZE 4096
-#define MAX_HEAD_SIZE 4096
 #define MAX_ARGS 64
 #define MAX_NAME 32
 #define MAX_RVARS 128
 #define MAX_STMTS 128
 #define MAX_STRING 1024
+#define MAX_BLOCK 65536
 
 #ifndef NULL
 #define NULL ((void*) 0)

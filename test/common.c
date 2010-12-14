@@ -22,7 +22,7 @@ extern void fail_test(int line)
     sys_die("line %d: test failed\n", line);
 }
 
-static Tuple *gen_tuple(int i)
+extern Tuple *gen_tuple(int i)
 {
     char buf[32];
     str_print(buf, "hello_from_gen%d", i);

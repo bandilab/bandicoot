@@ -101,14 +101,8 @@ static void init_load(Rel *r, Args *args)
     Ctxt *c = r->ctxt;
     int pos = array_scan(args->names, args->len, c->name);
     int fd = vol_open(c->name, args->vers[pos], READ);
-    r->body = tbuf_new();
-
-    Tuple *t;
-    while ((t = tuple_dec(fd)) != NULL)
-        tbuf_add(r->body, t);
-
-    /* FIXME: tuple_dec should not closes the file descriptor,
-              we should close it here */
+    r->body = tbuf_read(fd);
+    sys_close(fd);
 }
 
 extern Rel *rel_load(Head *head, const char *name)
@@ -500,12 +494,7 @@ extern Rel *rel_sum_unary(Rel *r,
 extern int rel_store(const char *name, long vers, Rel *r)
 {
     int res = 0, fd = vol_open(name, vers, CREATE | WRITE);
-    Tuple *t;
-    while ((t = rel_next(r)) != NULL) {
-        tuple_enc(t, fd);
-        tuple_free(t);
-        res++;
-    }
+    tbuf_write(r->body, fd);
     sys_close(fd);
 
     return res;

@@ -66,14 +66,42 @@ static void test_reord(Value vals[], int len)
     tuple_free(t3);
 }
 
-static void test_encdec(Head *h, Value vals[], int len)
+static void test_encdec()
 {
-    /* FIXME: encdec must be now called on top of a FD */
+    Head *h = gen_head();
+    int lpos[MAX_ATTRS];
+    int rpos[MAX_ATTRS];
+    int len = head_common(h, h, lpos, rpos);
+
+    Tuple *t1 = gen_tuple(1);
+
+    char buf1[MAX_STRING];
+    char buf2[MAX_STRING];
+
+    int enc_len1 = tuple_enc(t1, buf1);
+    int dec_len1;
+    Tuple *t2 = tuple_dec(buf1, &dec_len1);
+    if (dec_len1 != enc_len1)
+        fail();
+    if (!tuple_eq(t1, t2, lpos, rpos, len))
+        fail();
+
+    int enc_len2 = tuple_enc(t2, buf2);
+    if (dec_len1 != enc_len2)
+        fail();
+    if (mem_cmp(buf1 + sizeof(Tuple),
+                buf2 + sizeof(Tuple),
+                enc_len2 - sizeof(Tuple)) != 0)
+        fail();
+
+    tuple_free(t1);
+    tuple_free(t2);
+    mem_free(h);
 }
 
-static void test_tbuf(Value vals[], int len)
+static void test_tbuf()
 {
-    Tuple *t = tuple_new(vals, len);
+    Tuple *t = gen_tuple(1);
 
     TBuf *b = tbuf_new();
     if (b->pos != b->len || b->pos != 0)
@@ -116,14 +144,10 @@ int main(void)
     v2[0] = val_new_int(&v_int2);
     v2[1] = val_new_str(v_str2);
 
-    Head *h = gen_head();
-
     test_join(v1, 2, v2, 2);
     test_reord(v1, 2);
-    test_encdec(h, v1, 2);
-    test_tbuf(v1, 2);
-
-    mem_free(h);
+    test_encdec();
+    test_tbuf();
 
     return 0;
 }

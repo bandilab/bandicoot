@@ -69,32 +69,21 @@ extern Tuple *tuple_cpy(Tuple *t)
     return res;
 }
 
-extern Tuple *tuple_dec(int fd)
+extern Tuple *tuple_dec(void *mem, int *len)
 {
-    Tuple *res = NULL;
-
-    char sz_buf[sizeof(int)];
-    int size = sys_readn(fd, sz_buf, sizeof(sz_buf));
-    if (size > 0) {
-        size = int_dec(sz_buf);
-        res = mem_alloc(size);
-        if (sys_readn(fd, res, size) != size)
-            sys_die("sys: cannot read tuple from file\n");
-
-        init(res);
-    } else
-        sys_close(fd);
+    *len = int_dec(mem);
+    Tuple *res = mem_alloc(*len);
+    mem_cpy(res, mem, *len);
+    init(res);
 
     return res;
 }
 
-extern void tuple_enc(Tuple *t, int fd)
+extern int tuple_enc(Tuple *t, void *buf)
 {
-    char sz_buf[sizeof(int)];
-    int_enc(sz_buf, t->size);
-    sys_write(fd, sz_buf, sizeof(sz_buf));
-    void *mem = t;
-    sys_write(fd, mem, t->size);
+    mem_cpy(buf, t, t->size);
+
+    return t->size;
 }
 
 extern Value tuple_attr(Tuple *t, int pos)
@@ -180,4 +169,58 @@ extern void tbuf_free(TBuf *b)
     if (b->buf != NULL)
         mem_free(b->buf);
     mem_free(b);
+}
+
+extern TBuf *tbuf_read(int fd)
+{
+    TBuf *b = tbuf_new();
+    char size_buf[sizeof(int)];
+    char data_buf[MAX_BLOCK];
+
+    while (sys_readn(fd, size_buf, sizeof(int)) == sizeof(int)) {
+        int size = int_dec(size_buf);
+        char *p = data_buf;
+
+        if (sys_readn(fd, p, size) != size)
+            sys_die("tuple: cannot read data\n");
+
+        while (p - data_buf < size) {
+            int len = 0;
+            Tuple *t = tuple_dec(p, &len);
+            tbuf_add(b, t);
+            p += len;
+        }
+    }
+
+    return b;
+}
+
+extern int tbuf_write(TBuf *b, int fd)
+{
+    char size_buf[sizeof(int)];
+    char data_buf[MAX_BLOCK];
+    char *p = data_buf;
+    int used = 0, count = 0;
+
+    Tuple *t;
+    while ((t = tbuf_next(b)) != NULL) {
+        used = p - data_buf;
+        if (MAX_BLOCK - used < t->size) {
+            int_enc(size_buf, used);
+            sys_write(fd, size_buf, sizeof(int));
+            sys_write(fd, data_buf, used);
+            p = data_buf;
+        }
+
+        p += tuple_enc(t, p);
+        tuple_free(t);
+        count++;
+    }
+
+    used = p - data_buf;
+    int_enc(size_buf, used);
+    sys_write(fd, size_buf, sizeof(int));
+    sys_write(fd, data_buf, used);
+
+    return count;
 }

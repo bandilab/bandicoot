@@ -168,7 +168,7 @@ static void usage(char *p)
 
 int main(int argc, char *argv[])
 {
-    int e = -1, p;
+    int e = -1, p = 0;
     char *v = NULL, *s = NULL;
 
     if (argc < 2)

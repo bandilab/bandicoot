@@ -29,11 +29,9 @@ typedef struct {
 
 extern Tuple *tuple_new(Value vals[], int len);
 extern Tuple *tuple_cpy(Tuple *t);
-extern Tuple *tuple_dec(int fd);
 extern Tuple *tuple_join(Tuple *l, Tuple *r, int lpos[], int rpos[], int len);
 extern Tuple *tuple_reord(Tuple *t, int pos[], int len);
 extern Value tuple_attr(Tuple *t, int pos);
-extern void tuple_enc(Tuple *t, int fd);
 extern void tuple_free(Tuple *t);
 extern int tuple_eq(Tuple *l, Tuple *r, int lpos[], int rpos[], int len);
 
@@ -45,8 +43,10 @@ typedef struct {
 } TBuf;
 
 extern TBuf *tbuf_new();
+extern TBuf *tbuf_read(int fd);
 extern Tuple *tbuf_next(TBuf *b);
 extern void tbuf_add(TBuf *b, Tuple *t);
 extern void tbuf_reset(TBuf *b);
 extern void tbuf_free(TBuf *b);
 extern void tbuf_clean(TBuf *b);
+extern int tbuf_write(TBuf *b, int fd);

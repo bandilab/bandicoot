@@ -52,41 +52,35 @@ static void perf_cmp(int M)
 
 static void perf_encdec(int M)
 {
-    /* FIXME: tuple encdec works on top of fd */
-    /*
     int count = M * 1000 * 1000;
 
     Head *h = gen_head();
     int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
     int len = head_common(h, h, lpos, rpos);
 
-    Tuple **tbuf = gen_tuples(0, 1);
-    Tuple *t = tbuf[0];
+    Tuple *t = gen_tuple(1);
 
     char buf[MAX_TUPLE_SIZE];
     long i;
 
     long time = sys_millis();
     for (i = 0; i < count; ++i)
-        tuple_enc(buf, t, attrs, len);
+        tuple_enc(t, buf);
     sys_print("tuple_enc(%dM) in %dms\n", M, sys_millis() - time);
 
     tuple_free(t);
-    mem_free(tbuf);
 
-    tbuf = mem_alloc(count * sizeof(Tuple*));
-    Pool *p = pool_new();
+    Tuple **tbuf = mem_alloc(count * sizeof(Tuple*));
 
     time = sys_millis();
-    for (i = 0; i < count; ++i)
-        while ((tbuf[i] = tuple_dec(p, buf, &len)) == 0)
-            p = pool_new();
+    for (i = 0; i < count; ++i) {
+        tbuf[i] = tuple_dec(buf, &len);
+    }
     sys_print("tuple_dec(%dM) in %dms\n", M, sys_millis() - time);
 
     for (i = 0; i < count; ++i)
         tuple_free(tbuf[i]);
     mem_free(tbuf);
-    */
 }
 
 int main()
@@ -94,6 +88,7 @@ int main()
     perf_cmp(1);
     perf_cmp(10);
     perf_encdec(1);
+    perf_encdec(10);
 
     return 0;
 }

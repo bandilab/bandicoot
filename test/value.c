@@ -96,10 +96,10 @@ static void test_encdec()
 
 static void test_to_str()
 {
-    char istr[MAX_VALUE_SIZE];
-    char rstr[MAX_VALUE_SIZE];
-    char sstr[MAX_VALUE_SIZE];
-    char lstr[MAX_VALUE_SIZE];
+    char istr[MAX_STRING];
+    char rstr[MAX_STRING];
+    char sstr[MAX_STRING];
+    char lstr[MAX_STRING];
 
     int v_int = 123;
     double v_real = 123.232;

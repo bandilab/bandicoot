@@ -38,8 +38,13 @@ limitations under the License.
 
 extern void fail_test(int line);
 extern Head *gen_head();
+extern Tuple *gen_tuple(int i);
 extern TBuf *gen_tuples(int start, int end);
 extern Rel *gen_rel(int start, int end);
+
+/* from tuple.c */
+extern Tuple *tuple_dec(void *mem, int *len);
+extern int tuple_enc(Tuple *t, void *buf);
 
 static Expr *expr_true()
 {
