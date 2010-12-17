@@ -150,6 +150,7 @@ static void test_tmp_var()
     OK("tmp_var_basic.b");
     FAIL("tmp_var_unknown_err.b");
     FAIL("tmp_var_redecl_err.b");
+    FAIL("tmp_var_max_read_err.b");
 }
 
 static void test_summarize()

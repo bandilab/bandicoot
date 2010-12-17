@@ -622,7 +622,11 @@ static Rel *r_convert(L_Rel *rel,
                     break;
                 }
             }
-            /* FIXME: what if (i == MAX_RVARS) */
+            if (res == NULL)
+                yyerror("cannot read variable '%s', " 
+                        "the maximum number of reuses ('%d') "
+                        "of temporary/input variables in a function exceeded",
+                        rel->var, MAX_RVARS);
         } else if (tv_idx < 0 && rv_idx >= 0) { /* global */
             res = rel_load(env_head(genv, rel->var), rel->var);
         } else if (rv_idx < 0) {

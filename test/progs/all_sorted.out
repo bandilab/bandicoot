@@ -44,6 +44,7 @@ test/progs/summarize_attr_err.b:32: attribute s does not exist
 test/progs/summarize_def_err.b:32: invalid type of default value, expected 0, got 1
 test/progs/summarize_expr_err.b:32: only constant expressions are allowed for default values
 test/progs/summarize_str_err.b:32: invalid type of default value: string
+test/progs/tmp_var_max_read_err.b:40: cannot read variable 'p', the maximum number of reuses ('128') of temporary/input variables in a function exceeded
 test/progs/tmp_var_redecl_err.b:39: variable 'tmp' is already declared
 test/progs/tmp_var_unknown_err.b:33: variable 'unknown_tmp_var' is not defined
 test/progs/union_types_err.b:17: cannot union relations of different types
