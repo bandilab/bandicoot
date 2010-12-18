@@ -21,9 +21,6 @@ limitations under the License.
 #include "memory.h"
 #include "http.h"
 
-/* FIXME: with google-chrome when loading svc_extend and then pressing F5
-          to reload the page we get segmentation fault */
-
 static const char *HTTP_400 =
     "HTTP/1.1 400 Bad Request\r\n"
     "Content-Type: text/plain\r\n"
@@ -50,10 +47,9 @@ static const char *HTTP_200 =
     "Content-Type: text/plain\r\n"
     "Transfer-Encoding: chunked\r\n\r\n";
 
-/* FIXME: according to the spec we _must_ support:
-            - at least GET and HEAD methods
-            - absolute URIs
-            - transfer chunked encoding as input */
+/* TODO: support HEAD method (e.g. to check if a func takes input params) */
+/* TODO: support absolute URIs */
+/* TODO: support transfer chunked encoding as input */
 
 /* FIXME: sys_{read,write} calls cause sys_die in case of an IO error which
           can happen when (for example) clients close the socket connection
