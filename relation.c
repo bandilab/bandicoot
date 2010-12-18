@@ -56,7 +56,7 @@ typedef struct {
 
     /* temp */
     int ccnt;
-    Rel *clones[MAX_RVARS];
+    Rel *clones[MAX_VARS];
 } Ctxt;
 
 static void free(Rel *r)

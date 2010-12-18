@@ -417,7 +417,7 @@ static L_Attrs attr_sum(const char *name, L_Sum sum)
 static L_Attrs attr_merge(L_Attrs l, L_Attrs r)
 {
     if (l.len + r.len > MAX_ATTRS)
-        yyerror("number of attributes (%d) exceeds the maximum", l.len);
+        yyerror("number of attributes exceeds the maximum (%d)", MAX_ATTRS);
 
     for (int i = 0; i < r.len && l.len < MAX_ATTRS; ++i) {
         if (array_scan(l.names, l.len, r.names[i]) > -1)
@@ -483,6 +483,9 @@ static void add_head(const char *name, Head *head)
 {
     if (array_scan(genv->types.names, genv->types.len, name) > -1)
         yyerror("relation type '%s' is already defined", name);
+    else if (genv->types.len == MAX_TYPES)
+        yyerror("number of relational type declarations "
+                "exceeds the maximum (%d)", MAX_TYPES);
     else {
         int i = genv->types.len++;
         genv->types.names[i] = str_dup(name);
@@ -500,6 +503,9 @@ static void add_relvar(const char *rel, const char *var)
         yyerror("relational variable '%s' is already defined", var);
     else if (array_scan(genv->types.names, genv->types.len, var) > -1)
         yyerror("relational type '%s' cannot be used as a variable name", var);
+    else if (genv->vars.len == MAX_VARS)
+        yyerror("number of global variables exceeds the maximum (%d)",
+                MAX_VARS);
     else {
         int j = genv->vars.len++;
         genv->vars.names[j] = str_dup(var);
@@ -598,7 +604,7 @@ static Expr *p_convert(Head *h, L_Expr *e, L_Expr_Type parent_type)
 static Rel *r_convert(L_Rel *rel,
                       L_Stmts stmts,
                       int pos,
-                      Rel *clones[MAX_STMTS][MAX_RVARS])
+                      Rel *clones[MAX_STMTS][MAX_VARS])
 {
     Rel *res = NULL, *l = NULL, *r = NULL;
     L_Attrs attrs;
@@ -615,7 +621,8 @@ static Rel *r_convert(L_Rel *rel,
         int rv_idx = array_scan(genv->vars.names, genv->vars.len, rel->var);
 
         if (tv_idx >= 0 && tv_idx < pos && rv_idx < 0) { /* local */
-            for (int i = 0; i < MAX_RVARS; ++i) {
+            rel->node_type = CLONE;
+            for (int i = 0; i < MAX_VARS; ++i) {
                 if (clones[tv_idx][i] != NULL) {
                     res = clones[tv_idx][i];
                     clones[tv_idx][i] = NULL;
@@ -623,10 +630,8 @@ static Rel *r_convert(L_Rel *rel,
                 }
             }
             if (res == NULL)
-                yyerror("cannot read variable '%s', " 
-                        "the maximum number of reuses ('%d') "
-                        "of temporary/input variables in a function exceeded",
-                        rel->var, MAX_RVARS);
+                yyerror("number of reads of temporary/input variable "
+                        "exceeds the maximum (%d)", MAX_VARS);
         } else if (tv_idx < 0 && rv_idx >= 0) { /* global */
             res = rel_load(env_head(genv, rel->var), rel->var);
         } else if (rv_idx < 0) {
@@ -757,11 +762,8 @@ static Rel *r_convert(L_Rel *rel,
     return res;
 }
 
-static void append_rvars(L_Rel *rel, char *rvars[MAX_RVARS], int *pos)
+static void append_rvars(L_Rel *rel, char *rvars[MAX_VARS], int *pos)
 {
-    if (*pos >= MAX_RVARS)
-        yyerror("number of read variables exceeds maximum");
-
     if (rel->node_type == LOAD && array_scan(rvars, *pos, rel->var) == -1)
         rvars[(*pos)++] = str_dup(rel->var);
     if (rel->left != NULL)
@@ -798,7 +800,7 @@ static L_Stmts stmt_create(L_Stmt_Type type,
 static L_Stmts stmt_merge(L_Stmts l, L_Stmts r)
 {
     if (l.len + r.len > MAX_STMTS)
-        yyerror("maximum number of statements exceeded"); 
+        yyerror("number of statements exceeds the maximum (%d)", MAX_STMTS); 
 
     for (int i = 0; i < r.len; ++i, ++l.len) {
         l.types[l.len] = r.types[i];
@@ -850,7 +852,7 @@ static void add_func(const char *name,
     stmts = stmt_merge(params, stmts);
 
     int t_cnts[MAX_STMTS];
-    Rel *t_clones[MAX_STMTS][MAX_RVARS];
+    Rel *t_clones[MAX_STMTS][MAX_VARS];
     for (int i = 0; i < stmts.len; ++i)
         if (stmts.types[i] == TEMP || stmts.types[i] == PARAM) {
             char *wvar = stmts.names[i];
@@ -862,7 +864,7 @@ static void add_func(const char *name,
             for (int j = i + 1; j < stmts.len; ++j)
                 count_reads(wvar, stmts.bodies[j], &t_cnts[i]);
 
-            for (int j = 0; j < MAX_RVARS; ++j)
+            for (int j = 0; j < MAX_VARS; ++j)
                 t_clones[i][j] = NULL;
         }
 
@@ -875,9 +877,10 @@ static void add_func(const char *name,
             fn->p.names[fn->p.len] = wvar;
             fn->p.rels[fn->p.len++] = rel_tmp(body, t_clones[i], t_cnts[i]);
         } else {
+            body = r_convert(stmts.bodies[i], stmts, i, t_clones);
+
             append_rvars(stmts.bodies[i], fn->r.vars, &fn->r.len);
 
-            body = r_convert(stmts.bodies[i], stmts, i, t_clones);
             r_free(stmts.bodies[i]);
         }
 

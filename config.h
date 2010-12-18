@@ -15,18 +15,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/* FIXME: cleanup MAX_* (there are duplicates or bad names + some constants
-          are not required) */
 #define MAX_PATH 256
-#define MAX_REL_TYPES 128
-#define MAX_VARS 128
+
+/* maximum number of named relational type declarations */
+#define MAX_TYPES 128
+
+/* maximum number of attributes per relational type */
 #define MAX_ATTRS 64
-#define MAX_TUPLE_SIZE 4096
-#define MAX_ARGS 64
+
+/* maximum length of indetifiers */
 #define MAX_NAME 32
-#define MAX_RVARS 128
+
+/* maximum number of global variables and re-reads of temporary/input
+   variables */
+#define MAX_VARS 128
+
+/* MAX_VARS + number of input parameters to a function */
+#define MAX_ARGS MAX_VARS + 1
+
+/* maximum number of statements per function */
 #define MAX_STMTS 128
+
+/* maximum length of a string as constant */
 #define MAX_STRING 1024
+
+/* size of block for IO operations */
 #define MAX_BLOCK 65536
 
 #ifndef NULL

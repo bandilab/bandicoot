@@ -147,18 +147,39 @@ static void test_pack()
 static void test_unpack()
 {
     int size;
-    char str[1024];
+    char str[11 + MAX_STRING];
 
-    char *one_r1 = "a=int`c=string\n123`hehehe\n";
-    str_cpy(str, one_r1);
+    char *data = "a=int`c=string\n123`hehehe\n";
+    str_cpy(str, data);
 
     Rel *rel = pack_init(str);
     char *unpacked = rel_unpack(rel, &size);
 
-    if (str_cmp(one_r1, unpacked) != 0)
+    if (str_cmp(data, unpacked) != 0)
         fail();
 
     rel_free(rel);
+    mem_free(unpacked);
+
+    char *p = mem_alloc(MAX_STRING + 2);
+    for (int i = 0; i < MAX_STRING; ++i)
+        p[i] = 'A';
+    p[MAX_STRING] = '\n';
+    p[MAX_STRING + 1] = '\0';
+
+    data = "a=string\n";
+    char data2[str_len(data) + str_len(p)];
+    str_cpy(data2, data);
+    str_cpy(data2 + str_len(data), p);
+    str_cpy(str, data2);
+
+    rel = pack_init(str);
+    unpacked = rel_unpack(rel, &size);
+    if (str_cmp(data2, unpacked) != 0)
+        fail();
+
+    rel_free(rel);
+    mem_free(p);
     mem_free(unpacked);
 }
 

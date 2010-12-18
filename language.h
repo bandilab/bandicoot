@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-typedef enum { LOAD, PROJECT, RENAME, SELECT,
+typedef enum { LOAD, CLONE, PROJECT, RENAME, SELECT,
                EXTEND, JOIN, UNION, DIFF, SUMMARIZE } L_Rel_Type;
 
 typedef enum { ATTR, VALUE, NOT, EQ, NEQ, AND,

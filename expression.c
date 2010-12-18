@@ -299,7 +299,7 @@ extern Value expr_new_val(Expr *e, Tuple *t)
 {
     do_eval(e, t);
 
-    Value v;
+    Value v = {.size = 0, .data = NULL };
     if (e->type == Int)
         v = val_new_int(&(e_int(e)));
     else if (e->type == Real)

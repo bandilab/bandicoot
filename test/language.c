@@ -43,6 +43,7 @@ static void test_rel_types()
     FAIL("rel_type_same_attr_err.b");
     FAIL("rel_type_same_type_err.b");
     FAIL("rel_type_max_attrs_err.b");
+    FAIL("rel_type_max_decl_err.b");
 }
 
 static void test_rel_vars()
@@ -54,6 +55,7 @@ static void test_rel_vars()
     FAIL("rel_var_redecl2_err.b");
     FAIL("rel_var_name_err.b");
     FAIL("rel_var_read_after_assign_err.b");
+    FAIL("rel_var_max_vars_err.b");
 }
 
 static void test_func()

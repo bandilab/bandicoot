@@ -20,7 +20,7 @@ typedef struct {
 
     struct {
         int len;
-        char *vars[MAX_RVARS];
+        char *vars[MAX_VARS];
     } r;
 
     struct {
@@ -45,14 +45,14 @@ typedef struct {
 typedef struct {
     struct {
         int len;
-        char *names[MAX_REL_TYPES];
-        Head *heads[MAX_REL_TYPES];
+        char *names[MAX_TYPES];
+        Head *heads[MAX_TYPES];
     } vars, types;
 
     struct {
         int len;
-        char *names[MAX_RVARS];
-        Func *funcs[MAX_RVARS];
+        char *names[MAX_VARS];
+        Func *funcs[MAX_VARS];
     } fns;
 } Env;
 

@@ -207,8 +207,6 @@ static int tuple_unpack(char *dest, Tuple *t, int len, Type type[])
     return off;
 }
 
-static const int UNPACK_STEP = MAX_TUPLE_SIZE * 16;
-
 /* TODO: returning a single buf is too much, consider returning chunks,
          or may be directly writing to the output stream in chunks */
 extern char *rel_unpack(Rel *rel, int *size)
@@ -216,7 +214,9 @@ extern char *rel_unpack(Rel *rel, int *size)
     int len = rel->head->len;
     Type *types = rel->head->types;
 
-    int buf_size = UNPACK_STEP;
+    int tsize = len * MAX_STRING + len;
+    int unpack_step = tsize * 16;
+    int buf_size = unpack_step;
     char *buf = mem_alloc(buf_size);
     int off = head_unpack(buf, rel->head);
 
@@ -225,8 +225,8 @@ extern char *rel_unpack(Rel *rel, int *size)
         off += tuple_unpack(buf + off, t, len, types);
         buf[off++] = '\n';
 
-        if ((buf_size - off) < MAX_TUPLE_SIZE)
-            buf = mem_realloc(buf, buf_size += UNPACK_STEP);
+        if ((buf_size - off) < tsize)
+            buf = mem_realloc(buf, buf_size += unpack_step);
 
         tuple_free(t);
     }

@@ -60,7 +60,7 @@ static void perf_encdec(int M)
 
     Tuple *t = gen_tuple(1);
 
-    char buf[MAX_TUPLE_SIZE];
+    char buf[h->len * MAX_STRING + h->len];
     long i;
 
     long time = sys_millis();
