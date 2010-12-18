@@ -73,6 +73,13 @@ static void test_load()
     FAIL("load_unknown_var_err.b");
 }
 
+static void test_join()
+{
+    OK("join_basic.b");
+    OK("join_cart.b");
+    FAIL("join_types_err.b");
+}
+
 static void test_union()
 {
     OK("union_basic.b");
@@ -162,6 +169,8 @@ static void test_summarize()
     FAIL("summarize_attr_err.b");
     FAIL("summarize_str_err.b");
     FAIL("summarize_expr_err.b");
+    FAIL("summarize_common_err.b");
+    FAIL("summarize_attr_exists_err.b");
 }
 
 static void test_literal()
@@ -180,6 +189,7 @@ int main()
     test_rel_vars();
     test_func();
     test_load();
+    test_join();
     test_union();
     test_semidiff();
     test_project();

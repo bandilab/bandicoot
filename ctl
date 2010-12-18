@@ -203,7 +203,7 @@ case $cmd in
     test)
         run $STRUCT_TESTS
         cat test/progs/*.log | sort > bin/lang_test.out
-        diff -u bin/lang_test.out test/progs/all_sorted.out
+        diff -u test/progs/all_sorted.out bin/lang_test.out
         if [ "$?" != "0" ]
         then
             echo "---"
