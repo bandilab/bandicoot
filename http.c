@@ -31,6 +31,16 @@ static const char *HTTP_404 =
     "Content-Type: text/plain\r\n"
     "Content-Length: 0\r\n\r\n";
 
+static const char *HTTP_405 =
+    "HTTP/1.1 405 Method Not Allowed\r\n"
+    "Content-Type: text/plain\r\n"
+    "Content-Length: 0\r\n\r\n";
+
+static const char *HTTP_500 =
+    "HTTP/1.1 500 Internal Server Error\r\n"
+    "Content-Type: text/plain\r\n"
+    "Content-Length: 0\r\n\r\n";
+
 static const char *HTTP_OPTS =
     "HTTP/1.1 200 OK\r\n"
     "Access-Control-Allow-Origin: *\r\n"
@@ -150,40 +160,70 @@ exit:
     return req;
 }
 
-extern void http_200(int fd)
+extern int http_200(int fd)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_200);
 
     sys_write(fd, HTTP_200, size);
+
+    return 200;
 }
 
-extern void http_400(int fd)
+extern int http_400(int fd)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_400);
 
     sys_write(fd, HTTP_400, size);
+
+    return 400;
 }
 
-extern void http_404(int fd)
+extern int http_404(int fd)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_404);
 
     sys_write(fd, HTTP_404, size);
+
+    return 404;
 }
 
-extern void http_opts(int fd)
+extern int http_405(int fd)
+{
+    static int size;
+    if (size == 0)
+        size = str_len(HTTP_405);
+
+    sys_write(fd, HTTP_405, size);
+
+    return 405;
+}
+
+extern int http_500(int fd)
+{
+    static int size;
+    if (size == 0)
+        size = str_len(HTTP_500);
+
+    sys_write(fd, HTTP_500, size);
+
+    return 500;
+}
+
+extern int http_opts(int fd)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_OPTS);
 
     sys_write(fd, HTTP_OPTS, size);
+
+    return 200;
 }
 
 extern void http_chunk(int fd, const void *buf, int size)

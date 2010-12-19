@@ -217,17 +217,18 @@ extern void sys_die(const char *msg, ...)
     vprintf(msg, ap);
     va_end(ap);
 
-    printf("[system error: '%s']\n", strerror(errno));
+    if (errno)
+        printf("[system error: '%s']\n", strerror(errno));
 
-    exit(EXIT_FAILURE);
+    exit(PROC_FAIL);
 }
 
-extern int sys_proc(void (*fn)(void *arg), void *arg)
+extern char sys_proc(void (*fn)(void *arg), void *arg)
 {
     pid_t pid;
     if ((pid = fork()) == 0) {
         fn(arg);
-        sys_exit(0);
+        sys_exit(PROC_OK);
     }
 
     if (pid == -1)
@@ -241,10 +242,10 @@ extern int sys_proc(void (*fn)(void *arg), void *arg)
     if (res == -1)
         sys_die("sys: wait for child pid %d failed\n", pid);
 
-    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : PROC_FAIL;
 }
 
-extern void sys_exit(int status)
+extern void sys_exit(char status)
 {
     exit(status);
 }

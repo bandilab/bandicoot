@@ -67,11 +67,57 @@ static void test_thread()
     sys_thread(thread_a, (void*) 0x75L);
 }
 
+static void proc_exit_normal(void *arg)
+{
+}
+
+static void proc_exit_ok(void *arg)
+{
+    sys_exit(PROC_OK);
+}
+
+static void proc_exit_fail(void *arg)
+{
+    sys_exit(PROC_FAIL);
+}
+
+static void proc_exit_400(void *arg)
+{
+    sys_exit(PROC_400);
+}
+
+static void proc_exit_404(void *arg)
+{
+    sys_exit(PROC_404);
+}
+
+static void proc_exit_405(void *arg)
+{
+    sys_exit(PROC_405);
+}
+
+static void test_exit()
+{
+    if (PROC_OK != sys_proc(proc_exit_normal, NULL))
+        fail();
+    if (PROC_OK != sys_proc(proc_exit_ok, NULL))
+        fail();
+    if (PROC_FAIL != sys_proc(proc_exit_fail, NULL))
+        fail();
+    if (PROC_400 != sys_proc(proc_exit_400, NULL))
+        fail();
+    if (PROC_404 != sys_proc(proc_exit_404, NULL))
+        fail();
+    if (PROC_405 != sys_proc(proc_exit_405, NULL))
+        fail();
+}
+
 int main(void)
 {
     test_thread();
     test_mutex();
     test_proc();
+    test_exit();
 
     return 0;
 }

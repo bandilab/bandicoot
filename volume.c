@@ -198,10 +198,8 @@ extern void vol_wstate(char *names[], long vers[], int len)
 
 static void init(const char *p)
 {
-    if (str_len(p) > MAX_PATH) {
-        sys_print("volume path '%s' is too long\n", p);
-        sys_exit(1);
-    }
+    if (str_len(p) > MAX_PATH)
+        sys_die("volume path '%s' is too long\n", p);
 
     int plen = str_cpy(path, p) - 1;
     for (; path[plen] == '/' && plen > 0; --plen)
@@ -242,10 +240,8 @@ extern void vol_deploy(const char *p, const char *new_src)
     Env *new_env = env_new(new_src);
     Env *old_env = env_new(source);
 
-    if (!env_compat(old_env, new_env)) {
-        sys_print("cannot deploy source file '%s'\n", new_src);
-        sys_exit(1);
-    }
+    if (!env_compat(old_env, new_env))
+        sys_die("cannot deploy source file '%s'\n", new_src);
 
     int old_len = old_env->vars.len;
     int new_len = new_env->vars.len;

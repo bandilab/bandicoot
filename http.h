@@ -27,8 +27,10 @@ typedef struct {
 
 extern Http_Req *http_parse(int fd);
 
-extern void http_404(int fd);
-extern void http_400(int fd);
-extern void http_200(int fd);
-extern void http_opts(int fd);
+extern int http_500(int fd);
+extern int http_405(int fd);
+extern int http_404(int fd);
+extern int http_400(int fd);
+extern int http_200(int fd);
+extern int http_opts(int fd);
 extern void http_chunk(int fd, const void *buf, int size);

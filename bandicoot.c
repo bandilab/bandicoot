@@ -49,10 +49,9 @@ static void exec_proc(void *arg)
     Func *fn = e->fn;
     Http_Req *req = e->req;
 
-    if (fn->p.len == 1 && req->method != POST)
-        sys_die("FIXME: should be 404");
-    if (req->method == POST && fn->p.len == 0)
-        sys_die("FIXME: should be 404");
+    if ((fn->p.len == 1 && req->method != POST) ||
+        (fn->p.len == 0 && req->method == POST))
+        sys_exit(PROC_405);
 
     int idx = 0;
     Args args = {.len = fn->r.len + fn->p.len};
@@ -62,10 +61,8 @@ static void exec_proc(void *arg)
         Head *head;
         TBuf *tbuf = rel_pack_sep(req->body, &head);
 
-        if (tbuf == NULL)
-            sys_die("FIXME: should be 400");
-        if (!head_eq(head, fn->p.rels[0]->head))
-            sys_die("FIXME: should be 404");
+        if (tbuf == NULL || !head_eq(head, fn->p.rels[0]->head))
+            sys_exit(PROC_400);
 
         args.tbufs[0] = tbuf;
         idx++;
@@ -92,33 +89,35 @@ static void exec_proc(void *arg)
 
         int size;
         char *res = rel_unpack(fn->ret, &size);
+
+        http_200(e->fd);
         http_chunk(e->fd, res, size);
 
         mem_free(res);
-    }
+    } else
+        http_200(e->fd);
 }
 
 static void *exec_thread(void *arg)
 {
-    int ok = 0, fd = (long) arg;
+    int status = -1, fd = (long) arg;
     long time = sys_millis(), sid = 0;
 
     Http_Req *req = http_parse(fd);
     if (req == NULL) {
-        http_400(fd);
+        status = http_400(fd);
         goto exit;
     }
 
     if (req->method == OPTIONS) {
-        http_opts(fd);
-        ok = 1;
+        status = http_opts(fd);
         goto exit;
     }
 
     /* FIXME: concurrent calls to env_func */
     Func *fn = env_func(env, req->path + 1);
     if (fn == NULL) {
-        http_404(fd);
+        status = http_404(fd);
         goto exit;
     }
 
@@ -127,27 +126,31 @@ static void *exec_thread(void *arg)
     sid = tx_enter(fn->r.vars, e.rvers, fn->r.len,
                    fn->w.vars, e.wvers, fn->w.len);
 
-    http_200(fd);
-
-    ok = !sys_proc(exec_proc, &e);
-    if (ok) {
+    int exit_code = sys_proc(exec_proc, &e);
+    if (exit_code == PROC_OK) {
         tx_commit(sid);
         http_chunk(fd, NULL, 0);
+        status = 200;
     } else {
         tx_revert(sid);
-        /* FIXME: as we don't terminate with the 0-chunk it should be
-           treated as a failure on the client side, though if we
-           have more verbose child exit codes we could have handled
-           it more gracefully */
+
+        if (exit_code == PROC_400)
+            status = http_400(fd);
+        else if (exit_code == PROC_404)
+            status = http_404(fd);
+        else if (exit_code == PROC_405)
+            status = http_405(fd);
+        else
+            status = http_500(fd);
     }
 
 exit:
-    sys_print("[%016X] method '%c', path '%s', time %dms - %s\n",
+    sys_print("[%016X] method '%c', path '%s', time %dms - %3d\n",
               sid,
               (req == NULL) ? '?' : req->method,
               (req == NULL) ? "malformed" : req->path,
               sys_millis() - time,
-              ok ? "ok" : "failed");
+              status);
 
     if (req != NULL)
         mem_free(req);
@@ -162,8 +165,7 @@ static void usage(char *p)
     sys_print("commands:\n");
     sys_print("  start  -v <volume> -p <port>\n");
     sys_print("  deploy -v <volume> -s <source.file>\n\n");
-    sys_print(VERSION);
-    sys_exit(1);
+    sys_die(VERSION);
 }
 
 int main(int argc, char *argv[])
@@ -190,10 +192,8 @@ int main(int argc, char *argv[])
     } else if (str_cmp(argv[1], "start") == 0 &&
                s == NULL && v != NULL && e != -1)
     {
-        if (e || p < 1 || p > 65535) {
-            sys_print("invalid port '%d'\n", p);
-            sys_exit(1);
-        }
+        if (e || p < 1 || p > 65535)
+            sys_die("invalid port '%d'\n", p);
 
         env = env_new(vol_init(v));
         tx_init(env->vars.names, env->vars.len);

@@ -162,5 +162,5 @@ extern void yyerror(const char *msg, ...)
     fflush(stderr);
     va_end(ap);
 
-    sys_exit(1);
+    sys_exit(PROC_FAIL);
 }
