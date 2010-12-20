@@ -1,6 +1,7 @@
 test/progs/assign_bad_types_err.b:17: invalid type in assignment, expects rel {x: real, y: real, }, found rel {id: int, name: string, }
 test/progs/assign_bad_wvar_err.b:11: unknown variable 'does_not_exist'
 test/progs/func_bad_res_type_err.b:16: invalid type in return, expects rel {r: real, }, found rel {x: real, y: real, }
+test/progs/func_missing_ret_stmt_err.b:12: missing return statement in a function with defined return type
 test/progs/func_redecl_err.b:17: function 'svc_name' already defined
 test/progs/func_unexp_ret_stmt_err.b:12: unexpected return in function with void result type
 test/progs/func_unknown_res_type_err.b:9: unknown type 'unknown_t'

@@ -385,7 +385,7 @@ extern Head *env_head(Env *env, const char *var)
     if (i < 0)
         return NULL;
 
-    return head_cpy(env->vars.heads[i]);
+    return env->vars.heads[i];
 }
 
 extern Func *env_func(Env *env, const char *name)
@@ -900,15 +900,12 @@ static void add_func(const char *name,
         char *wvar = stmts.names[i];
 
         if (stmts.types[i] == PARAM) {
-            body = rel_param(stmts.heads[i], stmts.names[i]);
-            fn->p.names[fn->p.len] = wvar;
+            body = rel_param(stmts.heads[i], wvar);
+            fn->p.names[fn->p.len] = str_dup(wvar);
             fn->p.rels[fn->p.len++] = rel_tmp(body, t_clones[i], t_cnts[i]);
         } else {
             body = r_convert(stmts.bodies[i], stmts, i, t_clones);
-
             append_rvars(stmts.bodies[i], fn->r.vars, &fn->r.len);
-
-            r_free(stmts.bodies[i]);
         }
 
         if (stmts.types[i] == ASSIGN) {
@@ -929,7 +926,7 @@ static void add_func(const char *name,
                 yyerror("invalid type in assignment, expects %s, found %s",
                         wstr, bstr);
 
-            fn->w.vars[fn->w.len] = wvar;
+            fn->w.vars[fn->w.len] = str_dup(wvar);
             fn->w.rels[fn->w.len++] = body; 
         } else if (stmts.types[i] == RETURN) {
             if (res_type == NULL)
@@ -950,17 +947,32 @@ static void add_func(const char *name,
                             res_str, hstr);
 
             fn->ret = rel_project(body, res_type->names, res_type->len);
-            mem_free(res_type);
-            mem_free(wvar);
         } else if (stmts.types[i] == TEMP) {
-            fn->t.names[fn->t.len] = wvar;
+            fn->t.names[fn->t.len] = str_dup(wvar);
             fn->t.rels[fn->t.len++] = rel_tmp(body, t_clones[i], t_cnts[i]);
         }
+
+    }
+
+    if (res_type != NULL) {
+        if (stmts.types[stmts.len - 1] != RETURN)
+            yyerror("missing return statement in a function with "
+                    "defined return type");
+        mem_free(res_type);
     }
 
     int len = genv->fns.len++;
     genv->fns.names[len] = str_dup(name);
     genv->fns.funcs[len] = fn;
+
+    for (int i = 0; i < stmts.len; ++i) {
+        if (stmts.heads[i] != NULL)
+            mem_free(stmts.heads[i]);
+        if (stmts.names[i] != NULL)
+            mem_free(stmts.names[i]);
+        if (stmts.bodies[i] != NULL)
+            r_free(stmts.bodies[i]);
+    }
 }
 
 static void r_free(L_Rel *r)

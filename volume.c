@@ -148,7 +148,7 @@ static void cleanup()
     int num_files;
     char **files = sys_list(path, &num_files);
     for (int i = 0; i < num_files; ++i) {
-        char rel[MAX_NAME];
+        char rel[MAX_NAME] = "";
         long sid = parse(files[i], rel);
         int idx = array_scan(vars, len, rel);
 

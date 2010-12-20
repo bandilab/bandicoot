@@ -108,7 +108,7 @@ static void init_load(Rel *r, Args *args)
 extern Rel *rel_load(Head *head, const char *name)
 {
     Rel *res = alloc(init_load);
-    res->head = head;
+    res->head = head_cpy(head);
 
     Ctxt *c = res->ctxt;
     str_cpy(c->name, name);
@@ -126,8 +126,7 @@ static void init_param(Rel *r, Args *args)
 extern Rel *rel_param(Head *head, const char *name)
 {
     Rel *res = alloc(init_param);
-    res->head = head; /* FIXME: we do head_cpy everywhere but in
-                                rel_param & rel_load <- inconsisten */
+    res->head = head_cpy(head);
 
     Ctxt *c = res->ctxt;
     str_cpy(c->name, name);

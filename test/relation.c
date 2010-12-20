@@ -32,6 +32,7 @@ static Rel *pack(char *str)
            they are in a different namespace) */
         args.tbufs[0] = buf;
         res = rel_param(h, args.names[0]);
+        mem_free(h);
     }
 
     return res;

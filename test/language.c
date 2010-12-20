@@ -65,6 +65,7 @@ static void test_func()
     FAIL("func_unknown_res_type_err.b");
     FAIL("func_bad_res_type_err.b");
     FAIL("func_unexp_ret_stmt_err.b");
+    FAIL("func_missing_ret_stmt_err.b");
 }
 
 static void test_load()
