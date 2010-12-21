@@ -254,7 +254,7 @@ static void test_summary()
     head_attr(r->head, "age", &pos1, &tp1);
     head_attr(r->head, "salary", &pos2, &tp2);
     head_attr(r->head, "birth", &pos3, &tp3);
-    Sum *sums[] = {sum_count(),
+    Sum *sums[] = {sum_cnt(),
                    /* age calcs */
                    sum_min(pos1, tp1, val_new_int(&int_minus_one)),
                    sum_max(pos1, tp1, val_new_int(&int_minus_one)),
@@ -285,7 +285,7 @@ static void test_summary()
                          sum_max(pos1, tp1, val_new_int(&int_zero)),
                          sum_min(pos2, tp2, val_new_real(&real_zero)),
                          sum_max(pos2, tp2, val_new_real(&real_zero)),
-                         sum_count(),
+                         sum_cnt(),
                          sum_add(pos2, tp2, val_new_real(&real_zero))};
 
     sum = rel_sum_unary(r, unary_names, unary_types, unary_sums, 6);

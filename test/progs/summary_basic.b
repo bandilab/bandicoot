@@ -55,5 +55,5 @@ fn next(): rel {order: int}
 
 fn count(): rel {count: int}
 {
-    return queue summary(count = count());
+    return queue summary(count = cnt());
 }

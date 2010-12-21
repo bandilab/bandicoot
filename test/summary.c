@@ -30,9 +30,9 @@ struct {
     double avg_int, avg_real, avg_long;
 } res;
 
-static void test_count(Tuple *tuples[])
+static void test_cnt(Tuple *tuples[])
 {
-    Sum *s = sum_count();
+    Sum *s = sum_cnt();
 
     sum_reset(s);
     for (int i = 0; i < MAX; ++i)
@@ -230,7 +230,7 @@ int main()
         tuples[i] = tuple_new(vals, 3);
     }
 
-    test_count(tuples);
+    test_cnt(tuples);
     test_min(tuples);
     test_max(tuples);
     test_avg(tuples);

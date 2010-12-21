@@ -41,23 +41,23 @@ static Sum *alloc(int size, int pos, Type t, Value def) {
     return res;
 }
 
-static void count_reset(Sum *s)
+static void cnt_reset(Sum *s)
 {
     s->def.i = s->res.i = s->cnt = 0;
 }
 
-static void count_update(Sum *s, Tuple *t)
+static void cnt_update(Sum *s, Tuple *t)
 {
     (s->cnt)++;
     s->def.i = s->res.i = s->cnt;
 }
 
-extern Sum *sum_count()
+extern Sum *sum_cnt()
 {
     Value v = {.size = 0, .data = NULL};
     Sum *res = alloc(sizeof(Sum), 0, Int, v);
-    res->reset = count_reset;
-    res->update = count_update;
+    res->reset = cnt_reset;
+    res->update = cnt_update;
 
     return res;
 }

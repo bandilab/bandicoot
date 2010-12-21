@@ -42,7 +42,7 @@ typedef struct Sum Sum;
 #define sum_reset(s) (s->reset(s))
 #define sum_update(s, t) (s->update(s, t))
 
-extern Sum *sum_count();
+extern Sum *sum_cnt();
 extern Sum *sum_avg(int pos, Type t, Value def);
 extern Sum *sum_min(int pos, Type t, Value def);
 extern Sum *sum_max(int pos, Type t, Value def);

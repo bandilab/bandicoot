@@ -229,7 +229,7 @@ static void perf_sum(int count)
     int pos;
     Type at;
     head_attr(rel->head, "a", &pos, &at);
-    Sum *sums[] = {sum_count(),
+    Sum *sums[] = {sum_cnt(),
                    sum_min(pos, Int, val_new_int(&v)),
                    sum_max(pos, Int, val_new_int(&v))};
 

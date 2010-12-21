@@ -458,8 +458,8 @@ static L_Attrs attr_merge(L_Attrs l, L_Attrs r)
 static L_Sum sum_create(const char *func, const char *attr, L_Expr *def)
 {
     L_Sum res;
-    if (str_cmp(func, "count") == 0) {
-        res.sum_type = COUNT;
+    if (str_cmp(func, "cnt") == 0) {
+        res.sum_type = CNT;
         L_Value v = {.v_int = 0};
         def = p_value(v, Int);
     } else if (str_cmp(func, "avg") == 0)
@@ -744,8 +744,8 @@ static Rel *r_convert(L_Rel *rel,
                             attrs.names[i], rhstr);
             }
 
-            if (s.sum_type == COUNT)
-                sums[i] = sum_count();
+            if (s.sum_type == CNT)
+                sums[i] = sum_cnt();
             else {
                 if (!is_constant(s.def))
                     yyerror("only constant expressions are allowed for "
