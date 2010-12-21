@@ -4,5 +4,5 @@ rel Emp {
 
 fn addUp(e: Emp): rel {salary: real}
 {
-    return e summarize(salary = avg(s, 0.0));
+    return e summary(salary = avg(s, 0.0));
 }

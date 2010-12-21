@@ -248,7 +248,7 @@ static void test_summary()
                      Real, Real, Real, Real,
                      Long, Long, Real, Long};
 
-    Rel *r = load("summarize_emp");
+    Rel *r = load("summary_emp");
     int pos1, pos2, pos3;
     Type tp1, tp2, tp3;
     head_attr(r->head, "age", &pos1, &tp1);
@@ -272,15 +272,15 @@ static void test_summary()
                    sum_add(pos3, tp3, val_new_long(&long_zero))
                    };
 
-    Rel *sum = rel_sum(r, load("summarize_dep"), names, types, sums, 13);
-    if (!equal(sum, "summarize_res_1"))
+    Rel *sum = rel_sum(r, load("summary_dep"), names, types, sums, 13);
+    if (!equal(sum, "summary_res_1"))
         fail();
 
     char *unary_names[] = {"min_age", "max_age", "min_salary",
                            "max_salary", "count", "add_salary"};
     Type unary_types[] = {Int, Int, Real, Real, Int, Real};
 
-    r = load("summarize_emp");
+    r = load("summary_emp");
     Sum *unary_sums[] = {sum_min(pos1, tp1, val_new_int(&int_zero)),
                          sum_max(pos1, tp1, val_new_int(&int_zero)),
                          sum_min(pos2, tp2, val_new_real(&real_zero)),
@@ -289,7 +289,7 @@ static void test_summary()
                          sum_add(pos2, tp2, val_new_real(&real_zero))};
 
     sum = rel_sum_unary(r, unary_names, unary_types, unary_sums, 6);
-    if (!equal(sum, "summarize_res_2"))
+    if (!equal(sum, "summary_res_2"))
         fail();
 }
 

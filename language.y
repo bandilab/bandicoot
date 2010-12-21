@@ -95,7 +95,7 @@ static void add_func(const char *name,
 
 %token TK_REL TK_FN TK_RETURN
 %token TK_INT TK_LONG TK_REAL TK_STRING
-%token TK_PROJECT TK_RENAME TK_SELECT TK_EXTEND TK_SUMMARIZE
+%token TK_PROJECT TK_RENAME TK_SELECT TK_EXTEND TK_SUMMARY
 %token TK_EQ TK_NEQ TK_AND TK_OR
 
 %token <name> TK_NAME
@@ -203,9 +203,9 @@ rel_post_expr:
         { $$ = r_select($1, $4); }
     | rel_post_expr TK_EXTEND '(' extend_attrs ')'
         { $$ = r_unary($1, $4, EXTEND); }
-    | rel_post_expr TK_SUMMARIZE '(' sum_attrs ')'
+    | rel_post_expr TK_SUMMARY '(' sum_attrs ')'
         { $$ = r_sum($1, NULL, $4); }
-    | '(' rel_post_expr ',' rel_post_expr ')' TK_SUMMARIZE '(' sum_attrs ')'
+    | '(' rel_post_expr ',' rel_post_expr ')' TK_SUMMARY '(' sum_attrs ')'
         { $$ = r_sum($2, $4, $8); }
     ;
 
@@ -471,7 +471,7 @@ static L_Sum sum_create(const char *func, const char *attr, L_Expr *def)
     else if (str_cmp(func, "add") == 0)
         res.sum_type = ADD;
     else
-        yyerror("unkown function in summarize operator %s", func);
+        yyerror("unkown function in summary operator %s", func);
 
     str_cpy(res.attr, attr);
     res.def = def;
@@ -728,7 +728,7 @@ static Rel *r_convert(L_Rel *rel,
             yyerror("use of semidiff with no commmon attributes (%s and %s)",
                     lhstr, rhstr);
         res = rel_diff(l, r);
-    } else if (t == SUMMARIZE) {
+    } else if (t == SUMMARY) {
         Sum *sums[MAX_ATTRS];
         for (int i = 0; i < attrs.len; ++i) {
             L_Sum s = attrs.sums[i];
@@ -736,7 +736,7 @@ static Rel *r_convert(L_Rel *rel,
             int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
             if (r != NULL) {
                 if (head_common(l->head, r->head, lpos, rpos) == 0)
-                    yyerror("use of summarize with no commmon attributes "
+                    yyerror("use of summary with no commmon attributes "
                             "(%s and %s)", lhstr, rhstr);
 
                 if (head_find(r->head, attrs.names[i]))
@@ -1038,7 +1038,7 @@ static L_Rel *r_select(L_Rel *l, L_Expr *expr)
 
 static L_Rel *r_sum(L_Rel *r, L_Rel *per, L_Attrs attrs)
 {
-    L_Rel *res = r_binary(r, per, SUMMARIZE);
+    L_Rel *res = r_binary(r, per, SUMMARY);
     res->attrs = attrs;
 
     return res;

@@ -16,7 +16,7 @@ limitations under the License.
 */
 
 typedef enum { LOAD, CLONE, PROJECT, RENAME, SELECT,
-               EXTEND, JOIN, UNION, DIFF, SUMMARIZE } L_Rel_Type;
+               EXTEND, JOIN, UNION, DIFF, SUMMARY } L_Rel_Type;
 
 typedef enum { ATTR, VALUE, NOT, EQ, NEQ, AND,
                OR, GT, LT, SUM, SUB, MUL, DIV, 

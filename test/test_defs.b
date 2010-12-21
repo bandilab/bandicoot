@@ -136,13 +136,13 @@ rel semidiff_r {
 semidiff_1_r: semidiff_r;
 semidiff_2_r: semidiff_r;
 
-rel summarize_test_dep {
+rel summary_test_dep {
     dep_name: string,
 }
 
-summarize_dep: summarize_test_dep;
+summary_dep: summary_test_dep;
 
-rel summarize_test_emp {
+rel summary_test_emp {
     age: int,
     name: string,
     salary: real,
@@ -150,9 +150,9 @@ rel summarize_test_emp {
     dep_name: string,
 }
 
-summarize_emp: summarize_test_emp;
+summary_emp: summary_test_emp;
 
-rel summarize_test_1 {
+rel summary_test_1 {
     dep_name: string,
     employees: int,
     min_age: int,
@@ -169,9 +169,9 @@ rel summarize_test_1 {
     add_birth: long,
 }
 
-summarize_res_1: summarize_test_1;
+summary_res_1: summary_test_1;
 
-rel summarize_test_2 {
+rel summary_test_2 {
     min_age: int,
     max_age: int,
     min_salary: real,
@@ -180,7 +180,7 @@ rel summarize_test_2 {
     add_salary: real,
 }
 
-summarize_res_2: summarize_test_2;
+summary_res_2: summary_test_2;
 
 rel Bookings {
     date: string,
@@ -410,24 +410,24 @@ fn load_storage_r2(): basic_02
     return storage_r2;
 }
 
-fn load_summarize_dep(): summarize_test_dep
+fn load_summary_dep(): summary_test_dep
 {
-    return summarize_dep;
+    return summary_dep;
 }
 
-fn load_summarize_emp(): summarize_test_emp
+fn load_summary_emp(): summary_test_emp
 {
-    return summarize_emp;
+    return summary_emp;
 }
 
-fn load_summarize_res_1(): summarize_test_1
+fn load_summary_res_1(): summary_test_1
 {
-    return summarize_res_1;
+    return summary_res_1;
 }
 
-fn load_summarize_res_2(): summarize_test_2
+fn load_summary_res_2(): summary_test_2
 {
-    return summarize_res_2;
+    return summary_res_2;
 }
 
 fn load_two_r2(): basic_01
@@ -684,24 +684,24 @@ fn store_storage_r2(x: basic_02)
     storage_r2 = x;
 }
 
-fn store_summarize_dep(x: summarize_test_dep)
+fn store_summary_dep(x: summary_test_dep)
 {
-    summarize_dep = x;
+    summary_dep = x;
 }
 
-fn store_summarize_emp(x: summarize_test_emp)
+fn store_summary_emp(x: summary_test_emp)
 {
-    summarize_emp = x;
+    summary_emp = x;
 }
 
-fn store_summarize_res_1(x: summarize_test_1)
+fn store_summary_res_1(x: summary_test_1)
 {
-    summarize_res_1 = x;
+    summary_res_1 = x;
 }
 
-fn store_summarize_res_2(x: summarize_test_2)
+fn store_summary_res_2(x: summary_test_2)
 {
-    summarize_res_2 = x;
+    summary_res_2 = x;
 }
 
 fn store_two_r2(x: basic_01)

@@ -35,7 +35,7 @@ typedef struct {
     /* load, param */
     char name[MAX_NAME];
 
-    /* join, union, diff, project, binary summarize */
+    /* join, union, diff, project, binary sum */
     struct {
         int len;
         int lpos[MAX_ATTRS];
@@ -50,7 +50,7 @@ typedef struct {
     int ecnt;
     Expr *exprs[MAX_ATTRS];
 
-    /* unary & binary summarize */
+    /* unary & binary sum */
     int scnt;
     Sum *sums[MAX_ATTRS];
 

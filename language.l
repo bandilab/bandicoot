@@ -56,7 +56,7 @@ static int line = 1;
 "rename"            { return TK_RENAME; }
 "select"            { return TK_SELECT; }
 "extend"            { return TK_EXTEND; }
-"summarize"         { return TK_SUMMARIZE; }
+"summary"           { return TK_SUMMARY; }
 
                     /* TODO: hex & octal numbers? */
 [0-9]+              {

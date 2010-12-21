@@ -12,5 +12,5 @@ d: Dep;
 
 fn addUp(e: Emp): rel {salary: real}
 {
-    return (e, d) summarize(salary = avg(salary, (1.0 * salary)));
+    return (e, d) summary(salary = avg(salary, (1.0 * salary)));
 }

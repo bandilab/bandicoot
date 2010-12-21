@@ -4,5 +4,5 @@ rel Emp {
 
 fn addUp(e: Emp): Emp
 {
-    return e summarize(name = min(name, ""));
+    return e summary(name = min(name, ""));
 }

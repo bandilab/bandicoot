@@ -163,15 +163,15 @@ static void test_tmp_var()
     FAIL("tmp_var_max_read_err.b");
 }
 
-static void test_summarize()
+static void test_summary()
 {
-    OK("summarize_basic.b");
-    FAIL("summarize_def_err.b");
-    FAIL("summarize_attr_err.b");
-    FAIL("summarize_str_err.b");
-    FAIL("summarize_expr_err.b");
-    FAIL("summarize_common_err.b");
-    FAIL("summarize_attr_exists_err.b");
+    OK("summary_basic.b");
+    FAIL("summary_def_err.b");
+    FAIL("summary_attr_err.b");
+    FAIL("summary_str_err.b");
+    FAIL("summary_expr_err.b");
+    FAIL("summary_common_err.b");
+    FAIL("summary_attr_exists_err.b");
 }
 
 static void test_literal()
@@ -200,7 +200,7 @@ int main()
     test_params();
     test_compat();
     test_tmp_var();
-    test_summarize();
+    test_summary();
     test_literal();
 
     return 0;
