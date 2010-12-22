@@ -37,7 +37,7 @@ static void test_pack()
 {
     char str[1024];
 
-    str_cpy(str, "a=int`b=string");
+    str_cpy(str, "a:int`b:string");
     Rel *rel = pack_init(str);
     if (rel == NULL)
         fail();
@@ -49,7 +49,7 @@ static void test_pack()
 
     rel_free(rel);
 
-    str_cpy(str, "c=string`a=long\nworld hello`12343");
+    str_cpy(str, "c:string`a:long\nworld hello`12343");
     rel = pack_init(str);
     if (rel == NULL)
         fail();
@@ -71,7 +71,7 @@ static void test_pack()
     tuple_free(t);
     rel_free(rel);
 
-    str_cpy(str, "c=string`a=int\nhello world`12343\nhello world`123430");
+    str_cpy(str, "c:string`a:int\nhello world`12343\nhello world`123430");
     rel = pack_init(str);
     if (rel == NULL)
         fail();
@@ -98,8 +98,8 @@ static void test_pack()
     tuple_free(t);
     rel_free(rel);
 
-    /* test dupl input */
-    str_cpy(str, "c=string`a=int\nhello world`12343\nhello world`12343");
+    /* test duplicate input */
+    str_cpy(str, "c:string`a:int\nhello world`12343\nhello world`12343");
     rel = pack_init(str);
     if (rel == NULL)
         fail();
@@ -128,17 +128,17 @@ static void test_pack()
     if (rel != NULL)
         fail();
 
-    str_cpy(str, "hehehe=hahaha");
+    str_cpy(str, "hehehe:hahaha");
     rel = pack_init(str);
     if (rel != NULL)
         fail();
 
-    str_cpy(str, "abc+_)# $!@#$=int");
+    str_cpy(str, "abc+_)# $!@#$:int");
     rel = pack_init(str);
     if (rel != NULL)
         fail();
 
-    str_cpy(str, "a=int`b=string\nabc`123");
+    str_cpy(str, "a:int`b:string\nabc`123");
     rel = pack_init(str);
     if (rel != NULL)
         fail();
@@ -149,7 +149,7 @@ static void test_unpack()
     int size;
     char str[11 + MAX_STRING];
 
-    char *data = "a=int`c=string\n123`hehehe\n";
+    char *data = "a:int`c:string\n123`hehehe\n";
     str_cpy(str, data);
 
     Rel *rel = pack_init(str);
@@ -167,7 +167,7 @@ static void test_unpack()
     p[MAX_STRING] = '\n';
     p[MAX_STRING + 1] = '\0';
 
-    data = "a=string\n";
+    data = "a:string\n";
     char data2[str_len(data) + str_len(p)];
     str_cpy(data2, data);
     str_cpy(data2 + str_len(data), p);

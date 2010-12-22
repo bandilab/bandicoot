@@ -1,4 +1,4 @@
-c=string`a=int`b=real
+c:string`a:int`b:real
 aa`1`1.01
 aaa`2`2.01
 bbb`3`1.01

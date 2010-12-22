@@ -1,4 +1,4 @@
-id=int`string_val=string`r2_id=int`r2_string_val=string`int_val=int`real_val=real`r2_real_val=real
+id:int`string_val:string`r2_id:int`r2_string_val:string`int_val:int`real_val:real`r2_real_val:real
 1`hello_from_r1`10`hello_from_r2`2`6.257`6.257
 1`hello_from_r1`20`hello_from_r2`2`6.257`7.123
 2`hello_from_r1`30`hello_from_r2`1`7.123`98.1

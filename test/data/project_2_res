@@ -1,4 +1,4 @@
-c=string`b=real
+c:string`b:real
 hello`1.01
 hello`2.01
 hello`1.03

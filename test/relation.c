@@ -93,7 +93,7 @@ static void test_load()
 static void test_param()
 {
     char param_1[1024];
-    str_cpy(param_1, "a=int`c=string\n1`one\n2`two\n1`one\n2`two");
+    str_cpy(param_1, "a:int`c:string\n1`one\n2`two\n1`one\n2`two");
 
     if (!equal(pack(param_1), "param_1"))
         fail();
@@ -335,8 +335,8 @@ static void test_compound()
 
     /* compound with a parameter */
     char union_2_l[1024];
-    str_cpy(union_2_l, "car=string`date=string`email=string`"
-                  "name=string`phone=string`pos=int`time=int\n"
+    str_cpy(union_2_l, "car:string`date:string`email:string`"
+                  "name:string`phone:string`pos:int`time:int\n"
                   "myCar`28-Jun-2010`myEmail`myName`myPhone`2`14");
 
     if (!equal(rel_union(pack(union_2_l),
@@ -344,8 +344,8 @@ static void test_compound()
                "union_2_res"))
         fail();
 
-    str_cpy(union_2_l, "car=string`date=string`email=string`"
-                  "name=string`phone=string`pos=int`time=int\n"
+    str_cpy(union_2_l, "car:string`date:string`email:string`"
+                  "name:string`phone:string`pos:int`time:int\n"
                   "myCar`28-Jun-2010`myEmail`myName`myPhone`2`14");
     if (!equal(rel_union(load("union_2_r"),
                          pack(union_2_l)),

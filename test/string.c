@@ -224,14 +224,14 @@ static void test_split()
         fail();
 
     mem_free(s);
-    str_cpy(str, "c=string`a=int");
+    str_cpy(str, "c:string`a:int");
     s = str_split(str, '`', &cnt);
 
     if (cnt != 2)
         fail();
-    if (str_cmp("c=string", s[0]) != 0)
+    if (str_cmp("c:string", s[0]) != 0)
         fail();
-    if (str_cmp("a=int", s[1]) != 0)
+    if (str_cmp("a:int", s[1]) != 0)
         fail();
 
     mem_free(s);

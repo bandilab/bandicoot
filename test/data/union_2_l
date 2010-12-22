@@ -1,2 +1,2 @@
-car=string`date=string`email=string`name=string`phone=string`pos=int`time=int
+car:string`date:string`email:string`name:string`phone:string`pos:int`time:int
 myCar`28-Jun-2010`myEmail`myName`myPhone`2`14

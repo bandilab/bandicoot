@@ -1,2 +1,2 @@
-c=string`a=int
+c:string`a:int
 hello world`12343

@@ -60,7 +60,7 @@ static Head *head_pack(char *buf, char *names[])
     char *copy[MAX_ATTRS];
     for (int i = 0; i < attrs_len; ++i) {
         int cnt, bad_type;
-        name_type = str_split(attrs[i], '=', &cnt);
+        name_type = str_split(attrs[i], ':', &cnt);
         if (cnt != 2 || !valid_id(name_type[0]))
             goto error;
 
@@ -178,7 +178,7 @@ static int head_unpack(char *dest, Head *h)
     int off = 0;
     for (int i = 0; i < h->len; ++i) {
         off += str_print(dest + off,
-                         "%s=%s",
+                         "%s:%s",
                          h->names[i],
                          type_to_str(h->types[i]));
 
