@@ -17,7 +17,7 @@ limitations under the License.
 
 #include "common.h"
 
-/* FIXME: proper tx test is required */
+/* TODO: proper tx test is required */
 int main(void)
 {
     Env *env = env_new(vol_init("bin/volume"));

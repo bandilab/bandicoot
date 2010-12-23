@@ -145,7 +145,7 @@ extern Env *env_new(const char *file)
     yyparse();
     fclose(yyin);
 
-    /* FIXME: yylex_destroy(); or better create our own yylex() */
+    /* FIXME: yylex_destroy(); */
 
     return env;
 }

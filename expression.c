@@ -261,7 +261,6 @@ extern Expr *expr_sub(Expr *l, Expr *r)
 
 static void op_div(Expr *dest, Expr *l, Expr *r)
 {
-    /* FIXME: div by zero */
     if (l->type == Int)
         e_int(dest) = e_int(l) / e_int(r);
     else if (l->type == Long)

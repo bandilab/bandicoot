@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VERSION="alpha"
+VERSION="v0"
 
 BIN="bin"
 PORT=12345

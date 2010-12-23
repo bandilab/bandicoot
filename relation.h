@@ -58,8 +58,9 @@ static Tuple *rel_next(Rel *r)
 
 extern Rel *rel_param(Head *head, const char *name);
 extern Rel *rel_tmp(Rel *r, Rel *clones[], int cnt);
-/* TODO: relations passed to rel_store & rel_eq must be rel_init()'ed */
 extern Rel *rel_load(Head *head, const char *name);
+
+/* relations passed to both rel_store & rel_eq must be rel_init()'ed */
 extern int rel_store(const char *name, long vers, Rel *r);
 extern int rel_eq(Rel *l, Rel *r);
 

@@ -24,7 +24,7 @@ extern int str_int(const char *s, int *error);
 extern int str_idx(const char *s, const char *seq);
 extern char *str_dup(const char *src);
 extern char *str_trim(char *s);
-/* FIXME: most of the str_split use cases know how many indexes expected,
+/* TODO: most of the str_split use cases know how many indexes expected,
           str_split_big is only required to split very large relational inputs
 
 extern char **str_split_big(char *s, char delim, int *parts);

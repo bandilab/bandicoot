@@ -140,7 +140,7 @@ extern int str_int(const char *s, int *error)
     return sign * val;
 }
 
-/* FIXME: do we need to check real overflows? */
+/* FIXME: we need to check the logic, test with DBL_MAX fails */
 extern double str_real(const char *s, int *error)
 {
     *error = 0;
@@ -183,6 +183,7 @@ extern char *str_trim(char *s)
     return s + left;
 }
 
+/* FIXME: the following fails to split: "hello\\," */
 extern char **str_split(char *buf, char delim, int *parts)
 {
     /* : get rid of str_len */
