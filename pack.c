@@ -28,6 +28,8 @@ limitations under the License.
 #include "summary.h"
 #include "relation.h"
 
+static char DELIM=',';
+
 static int valid_id(const char *id)
 {
     int len = 1;
@@ -52,7 +54,7 @@ static Head *head_pack(char *buf, char *names[])
     char **attrs = NULL, **name_type = NULL;
 
     int attrs_len;
-    attrs = str_split(buf, '`', &attrs_len);
+    attrs = str_split(buf, DELIM, &attrs_len);
     if (attrs_len > MAX_ATTRS)
         goto error;
 
@@ -107,7 +109,7 @@ extern TBuf *rel_pack_sep(char *buf, Head **res_h)
     int i = 1;
     for (; i < len; ++i) {
         int attrs;
-        str_vals = str_split(lines[i], '`', &attrs);
+        str_vals = str_split(lines[i], DELIM, &attrs);
 
         if (attrs != h->len)
             goto failure;
@@ -183,7 +185,7 @@ static int head_unpack(char *dest, Head *h)
                          type_to_str(h->types[i]));
 
         if ((i + 1) != h->len)
-            dest[off++] = '`';
+            dest[off++] = DELIM;
     }
     dest[off++] = '\n';
     dest[off] = '\0';
@@ -196,7 +198,7 @@ static int tuple_unpack(char *dest, Tuple *t, int len, Type type[])
     int off = 0;
     for (int i = 0; i < len; i++) {
         if (i != 0)
-            dest[off++] = '`';
+            dest[off++] = DELIM;
 
         Value v = tuple_attr(t, i);
         off += val_to_str(dest + off, v, type[i]);

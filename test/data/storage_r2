@@ -1,1 +1,1 @@
-id:int`string_val:string`int_val:int`real_val:real
+id:int,string_val:string,int_val:int,real_val:real

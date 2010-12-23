@@ -1,8 +1,8 @@
-new_some:real`new_name:string`new_id:int
-1.01`first`1
-2.01`second`2
-1.03`third`3
-4.01`fourth`4
-1.05`fifth`5
-6.01`sixth`6
-.07`seventh`7
+new_some:real,new_name:string,new_id:int
+1.01,first,1
+2.01,second,2
+1.03,third,3
+4.01,fourth,4
+1.05,fifth,5
+6.01,sixth,6
+.07,seventh,7

@@ -1,2 +1,2 @@
-add_salary:real`min_age:int`max_age:int`min_salary:real`max_salary:real`count:int
--1748.25`30`72`-2007.0`1250.50`5
+add_salary:real,min_age:int,max_age:int,min_salary:real,max_salary:real,count:int
+-1748.25,30,72,-2007.0,1250.50,5

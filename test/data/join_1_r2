@@ -1,5 +1,5 @@
-r2_id:int`id:int`r2_string_val:string`r2_real_val:real
-10`1`hello_from_r2`6.257
-20`1`hello_from_r2`7.123
-30`2`hello_from_r2`98.1
-40`2`hello_from_r2`.89
+r2_id:int,id:int,r2_string_val:string,r2_real_val:real
+10,1,hello_from_r2,6.257
+20,1,hello_from_r2,7.123
+30,2,hello_from_r2,98.1
+40,2,hello_from_r2,.89

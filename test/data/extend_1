@@ -1,4 +1,4 @@
-c:string`a:int
-one_name`1
-two_name`2
-three_name`3
+c:string,a:int
+one_name,1
+two_name,2
+three_name,3

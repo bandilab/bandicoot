@@ -224,8 +224,8 @@ static void test_split()
         fail();
 
     mem_free(s);
-    str_cpy(str, "c:string`a:int");
-    s = str_split(str, '`', &cnt);
+    str_cpy(str, "c:string,a:int");
+    s = str_split(str, ',', &cnt);
 
     if (cnt != 2)
         fail();
@@ -235,8 +235,8 @@ static void test_split()
         fail();
 
     mem_free(s);
-    str_cpy(str, "hello world`123430");
-    s = str_split(str, '`', &cnt);
+    str_cpy(str, "hello world,123430");
+    s = str_split(str, ',', &cnt);
 
     if (cnt != 2)
         fail();
@@ -246,8 +246,8 @@ static void test_split()
         fail();
 
     mem_free(s);
-    str_cpy(str, "hello\\\\`world`123430");
-    s = str_split(str, '`', &cnt);
+    str_cpy(str, "hello\\\\,world,123430");
+    s = str_split(str, ',', &cnt);
 
     if (cnt != 3)
         fail();
@@ -259,12 +259,12 @@ static void test_split()
         fail();
 
     mem_free(s);
-    str_cpy(str, "hello\\`world`123430");
-    s = str_split(str, '`', &cnt);
+    str_cpy(str, "hello\\,world,123430");
+    s = str_split(str, ',', &cnt);
 
     if (cnt != 2)
         fail();
-    if (str_cmp("hello\\`world", s[0]) != 0)
+    if (str_cmp("hello\\,world", s[0]) != 0)
         fail();
     if (str_cmp("123430", s[1]) != 0)
         fail();
