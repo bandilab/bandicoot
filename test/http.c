@@ -64,12 +64,25 @@ int main()
     OK("post_clen_last");
     OK("post_clen_first");
 
-    /*
+    /* TODO: implement the following tests
     OK("post_body_gt_clen");
     OK("many_reqs_in_one");
 
     headers > 8192
     */
+
+    if (http_200(512) != -200)
+        fail();
+    if (http_404(512) != -404)
+        fail();
+    if (http_405(512) != -405)
+        fail();
+    if (http_500(512) != -500)
+        fail();
+    if (http_chunk(512, NULL, 0) != -200)
+        fail();
+    if (http_opts(512) != -200)
+        fail();
 
     return 0;
 }

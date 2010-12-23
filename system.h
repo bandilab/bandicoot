@@ -48,9 +48,12 @@ extern void sys_die(const char *msg, ...);
 /* networking */
 extern int sys_socket(int port);
 extern int sys_accept(int socket);
+extern int sys_send(int fd, const void *buf, int size);
+extern int sys_recv(int fd, void *buf, int size);
 
 /* misc */
 extern void sys_print(const char *msg, ...);
 extern long sys_millis(); /* suitable for quick time measures only (long might
                              not be enough on 32bit systems) */
 extern void sys_time(char *buf);
+extern void sys_signals(); /* sets the required signal dispositions */

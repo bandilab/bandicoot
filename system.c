@@ -32,6 +32,7 @@ limitations under the License.
 #include <dirent.h>
 #include <pthread.h>
 #include <time.h>
+#include <signal.h>
 
 #include "config.h"
 #include "system.h"
@@ -70,7 +71,7 @@ extern int sys_exists(const char *path)
             sys_die("sys: cannot check %s existance\n", path);
     }
 
-    close(fd);
+    sys_close(fd);
 
     return 1;
 }
@@ -101,7 +102,7 @@ extern void sys_cpy(const char *dest, const char *src)
 extern int sys_read(int fd, void *buf, int size)
 {
     int res = read(fd, buf, size);
-    if (res == -1)
+    if (res < 0)
         sys_die("sys: cannot read %d bytes from fd:%d\n", size, fd);
 
     return res;
@@ -137,7 +138,8 @@ extern char *sys_load(const char *path)
 
 extern void sys_write(int fd, const void *buf, int size)
 {
-    if (write(fd, buf, size) < 0)
+    int w = write(fd, buf, size);
+    if (w < 0 || w != size)
         sys_die("sys: cannot write data\n");
 }
 
@@ -294,6 +296,18 @@ extern int sys_accept(int socket)
     return res;
 }
 
+extern int sys_send(int fd, const void *buf, int size)
+{
+    int w = write(fd, buf, size);
+
+    return (w < 0 || w != size) ? -1 : w;
+}
+
+extern int sys_recv(int fd, void *buf, int size)
+{
+    return read(fd, buf, size);
+}
+
 extern int sys_empty(const char *dir)
 {
     int num_files;
@@ -302,4 +316,9 @@ extern int sys_empty(const char *dir)
     mem_free(files);
 
     return res;
+}
+
+extern void sys_signals()
+{
+    signal(SIGPIPE, SIG_IGN);
 }

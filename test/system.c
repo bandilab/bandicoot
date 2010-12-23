@@ -23,31 +23,48 @@ int main(void)
     int len = str_len(str);
     char buf[len];
 
-    int wfd = sys_open("tmp_file", CREATE | WRITE);
-    int rfd = sys_open("tmp_file", READ);
+    int wfd1 = sys_open("tmp_file1", CREATE | WRITE);
+    int wfd2 = sys_open("tmp_file2", CREATE | WRITE);
+    int rfd1 = sys_open("tmp_file1", READ);
+    int rfd2 = sys_open("tmp_file2", READ);
 
-    if (wfd < 0 || rfd < 0)
+    if (wfd1 < 0 || rfd1 < 0 || wfd2 < 0 || rfd2 < 0)
         fail();
 
-    sys_write(wfd, str, len);
-    if (sys_readn(rfd, buf, len) != len)
+    sys_write(wfd1, str, len);
+    if (sys_readn(rfd1, buf, len) != len)
         fail();
 
     if (mem_cmp(buf, str, len) != 0)
         fail();
 
-    char *txt = sys_load("tmp_file");
+    sys_send(wfd2, str, len);
+    if (sys_recv(rfd2, buf, len) != len)
+        fail();
+
+    if (mem_cmp(buf, str, len) != 0)
+        fail();
+
+    char *txt = sys_load("tmp_file1");
+    if (str_cmp(txt, str) != 0)
+        fail();
+    mem_free(txt);
+
+    txt = sys_load("tmp_file2");
     if (str_cmp(txt, str) != 0)
         fail();
 
-    mem_free(txt);
+    sys_remove("tmp_file1");
+    sys_remove("tmp_file2");
 
-    sys_remove("tmp_file");
-
-    sys_close(rfd);
-    sys_close(wfd);
+    sys_close(rfd1);
+    sys_close(rfd2);
+    sys_close(wfd1);
+    sys_close(wfd2);
 
     if (sys_exists("doesnotexist"))
+        fail();
+    if (!sys_exists("bin/test/lsdir"))
         fail();
 
     char **names = sys_list("bin/test/lsdir", &len);

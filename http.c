@@ -61,11 +61,6 @@ static const char *HTTP_200 =
 /* TODO: support absolute URIs */
 /* TODO: support transfer chunked encoding as input */
 
-/* FIXME: sys_{read,write} calls cause sys_die in case of an IO error which
-          can happen when (for example) clients close the socket connection
-          prematurely; it looks like we should introduce sys_{send,recv} which
-          do not shutdown the system */
-
 static char *next(char *buf, const char *sep, int *off)
 {
     int len = str_len(sep), idx = str_idx(buf + *off, sep);
@@ -87,7 +82,10 @@ extern Http_Req *http_parse(int fd)
     int read = 0, body_start = 0, head_off = 0, off = 0;
 
     buf = mem_alloc(8192);
-    read = sys_read(fd, buf, 8191);
+    read = sys_recv(fd, buf, 8191);
+    if (read < 0)
+        goto exit;
+
     buf[read] = '\0';
 
     if ((head = next(buf, "\r\n\r\n", &body_start)) == NULL)
@@ -130,14 +128,13 @@ extern Http_Req *http_parse(int fd)
             buf = mem_realloc(buf, read + remaining);
 
             off = read;
-            while ((read = sys_read(fd, buf + off, remaining)) > 0) {
+            while ((read = sys_recv(fd, buf + off, remaining)) > 0) {
                 off += read;
                 remaining -= read;
             }
         }
 
-        /* TODO: the same "if" appears twice */
-        if (remaining > 0)
+        if (read < 0 || remaining > 0)
             goto exit;
     } else if (str_cmp(method, "GET") == 0) {
         m = GET;
@@ -166,9 +163,7 @@ extern int http_200(int fd)
     if (size == 0)
         size = str_len(HTTP_200);
 
-    sys_write(fd, HTTP_200, size);
-
-    return 200;
+    return sys_send(fd, HTTP_200, size) < 0 ? -200 : 200;
 }
 
 extern int http_400(int fd)
@@ -177,9 +172,7 @@ extern int http_400(int fd)
     if (size == 0)
         size = str_len(HTTP_400);
 
-    sys_write(fd, HTTP_400, size);
-
-    return 400;
+    return sys_send(fd, HTTP_400, size) < 0 ? -400 : 400;
 }
 
 extern int http_404(int fd)
@@ -188,9 +181,7 @@ extern int http_404(int fd)
     if (size == 0)
         size = str_len(HTTP_404);
 
-    sys_write(fd, HTTP_404, size);
-
-    return 404;
+    return sys_send(fd, HTTP_404, size) < 0 ? -404 : 404;
 }
 
 extern int http_405(int fd)
@@ -199,9 +190,7 @@ extern int http_405(int fd)
     if (size == 0)
         size = str_len(HTTP_405);
 
-    sys_write(fd, HTTP_405, size);
-
-    return 405;
+    return sys_send(fd, HTTP_405, size) < 0 ? -405 : 405;
 }
 
 extern int http_500(int fd)
@@ -210,9 +199,7 @@ extern int http_500(int fd)
     if (size == 0)
         size = str_len(HTTP_500);
 
-    sys_write(fd, HTTP_500, size);
-
-    return 500;
+    return sys_send(fd, HTTP_500, size) < 0 ? -500 : 500;
 }
 
 extern int http_opts(int fd)
@@ -221,16 +208,17 @@ extern int http_opts(int fd)
     if (size == 0)
         size = str_len(HTTP_OPTS);
 
-    sys_write(fd, HTTP_OPTS, size);
-
-    return 200;
+    return sys_send(fd, HTTP_OPTS, size) < 0 ? -200 : 200;
 }
 
-extern void http_chunk(int fd, const void *buf, int size)
+extern int http_chunk(int fd, const void *buf, int size)
 {
     char hex[16];
     int s = str_print(hex, "%X\r\n", size);
-    sys_write(fd, hex, s);
-    sys_write(fd, buf, size);
-    sys_write(fd, "\r\n", 2);
+
+    int ok = sys_send(fd, hex, s) > 0 &&
+             sys_send(fd, buf, size) >= 0 &&
+             sys_send(fd, "\r\n", 2) > 0;
+
+    return ok ? 200 : -200;
 }

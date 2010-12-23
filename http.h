@@ -33,4 +33,4 @@ extern int http_404(int fd);
 extern int http_400(int fd);
 extern int http_200(int fd);
 extern int http_opts(int fd);
-extern void http_chunk(int fd, const void *buf, int size);
+extern int http_chunk(int fd, const void *buf, int size);

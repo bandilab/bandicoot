@@ -129,8 +129,7 @@ static void *exec_thread(void *arg)
     int exit_code = sys_proc(exec_proc, &e);
     if (exit_code == PROC_OK) {
         tx_commit(sid);
-        http_chunk(fd, NULL, 0);
-        status = 200;
+        status = http_chunk(fd, NULL, 0);
     } else {
         tx_revert(sid);
 
@@ -197,6 +196,7 @@ int main(int argc, char *argv[])
 
         env = env_new(vol_init(v));
         tx_init(env->vars.names, env->vars.len);
+        sys_signals();
 
         int sfd = sys_socket(p);
 
