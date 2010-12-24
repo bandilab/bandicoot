@@ -662,9 +662,6 @@ static Rel *r_convert(L_Rel *rel,
                     break;
                 }
             }
-            if (res == NULL)
-                yyerror("number of reads of temporary/input variable "
-                        "exceeds the maximum (%d)", MAX_VARS);
         } else if (tv_idx < 0 && rv_idx >= 0) { /* global */
             res = rel_load(env_head(genv, rel->var), rel->var);
         } else if (rv_idx < 0) {
@@ -801,9 +798,12 @@ static void append_rvars(L_Rel *rel, char *rvars[MAX_VARS], int *pos)
 
 static void count_reads(const char *name, L_Rel *rel, int *cnt)
 {
-    if (rel->node_type == LOAD && str_cmp(name, rel->var) == 0)
+    if (rel->node_type == LOAD && str_cmp(name, rel->var) == 0) {
         (*cnt)++;
-    else {
+        if (*cnt > MAX_VARS)
+            yyerror("number of reads of '%s' exceeds the maximum (%d)",
+                    name, MAX_VARS);
+    } else {
         if (rel->left != NULL)
             count_reads(name, rel->left, cnt);
         if (rel->right != NULL)
@@ -951,7 +951,6 @@ static void add_func(const char *name,
             fn->t.names[fn->t.len] = str_dup(wvar);
             fn->t.rels[fn->t.len++] = rel_tmp(body, t_clones[i], t_cnts[i]);
         }
-
     }
 
     if (res_type != NULL) {

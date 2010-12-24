@@ -50,7 +50,8 @@ test/progs/summary_common_err.b:38: use of summary with no commmon attributes (r
 test/progs/summary_def_err.b:32: invalid type of default value, expected 'int', found real
 test/progs/summary_expr_err.b:32: only constant expressions are allowed for default values
 test/progs/summary_str_err.b:32: invalid type of default value: string
-test/progs/tmp_var_max_read_err.b:40: number of reads of temporary/input variable exceeds the maximum (128)
+test/progs/tmp_var_max_read_1_err.b:40: number of reads of 'p' exceeds the maximum (128)
+test/progs/tmp_var_max_read_2_err.b:46: number of reads of 'p' exceeds the maximum (128)
 test/progs/tmp_var_redecl_err.b:39: variable 'tmp' already defined
 test/progs/tmp_var_unknown_err.b:33: unknown variable 'unknown_tmp_var'
 test/progs/union_types_err.b:17: use of union with different types (rel {x: real, y: real, } and rel {building: int, street: string, })
