@@ -183,27 +183,24 @@ extern char *str_trim(char *s)
     return s + left;
 }
 
-/* FIXME: the following fails to split: "hello\\," */
 extern char **str_split(char *buf, char delim, int *parts)
 {
     /* : get rid of str_len */
-    int esc = 0;
     int len = str_len(buf) + 1;
     char **res = 0;
+    char esc = '\\', prev = ' ';
     *parts = 0;
 
     for (int i = 0, start = 0; i < len; ++i) {
-        if (esc)
-            esc = 0;
-        else if (buf[i] == '\\')
-            esc = 1;
-        else if (buf[i] == delim || (i + 1) == len) {
+        if ((buf[i] == delim && (prev != esc)) || (i + 1) == len) {
             *parts += 1;
             res = mem_realloc(res, *parts * sizeof(char*));
             res[*parts - 1] = buf + start;
             buf[i] = '\0';
             start = i + 1;
         }
+
+        prev = (prev == esc) ? ' ' : buf[i];
     }
 
     return res;

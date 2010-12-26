@@ -270,6 +270,35 @@ static void test_split()
         fail();
 
     mem_free(s);
+    str_cpy(str, "hello\\");
+    s = str_split(str, ',', &cnt);
+
+    if (cnt != 1)
+        fail();
+    if (str_cmp("hello\\", s[0]) != 0)
+        fail();
+
+    mem_free(s);
+    str_cpy(str, "hello\\,");
+    s = str_split(str, ',', &cnt);
+
+    if (cnt != 1)
+        fail();
+    if (str_cmp("hello\\,", s[0]) != 0)
+        fail();
+
+    mem_free(s);
+    str_cpy(str, "hello\\\\,");
+    s = str_split(str, ',', &cnt);
+
+    if (cnt != 2)
+        fail();
+    if (str_cmp("hello\\\\", s[0]) != 0)
+        fail();
+    if (str_cmp("", s[1]) != 0)
+        fail();
+
+    mem_free(s);
 }
 
 int main()
