@@ -112,7 +112,7 @@ clean()
 
 dist()
 {
-    DIST_CFLAGS=$*
+    DIST_CFLAGS=$1
 
     clean
     compile $LIBS $PROGS
@@ -123,6 +123,11 @@ dist()
     d="bandicoot-$VERSION"
     mkdir -p $d
     cp LICENSE NOTICE $BIN/bandicoot $d
+    if [ -d "$2" ]
+    then
+        echo "including examples directory $2"
+        cp -r $2 $d
+    fi
 
     a="$BIN/$d.tgz"
     echo "[A] $a"
@@ -214,14 +219,21 @@ case $cmd in
         find . -regex '.*\.[chly]' -exec egrep -H -i 'fixme|todo|think' {} \;
         ;;
     dist)
-        dist "-Os $2"
+        if [ "$2" != "-m32" ] && [ "$2" != "-m64" ]
+        then
+            echo "---"
+            echo "expecting -m32 or -m64 as the first parameter"
+            exit 1
+        fi
+
+        dist "-Os $2" $3
         ;;
     src)
         src
         ;;
     *)
         echo "unknown command '$cmd', usage: ctl <command>"
-        echo "    dist - build a package for distribution"
+        echo "    dist -m32|-m64 [examles/]- build a package for distribution"
         echo "    pack - compile and prepare for running tests"
         echo "    test - execute structured tests (prereq: pack)"
         echo "    perf - execute performance tests (prereq: pack)"
