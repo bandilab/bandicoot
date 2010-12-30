@@ -55,3 +55,8 @@ static Expr *expr_false()
 {
     return expr_int(0);
 }
+
+static int val_eq(Value l, Value r)
+{
+    return val_cmp(l, r) == 0;
+}

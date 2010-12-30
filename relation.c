@@ -147,7 +147,7 @@ static void init_join(Rel *r, Args *args)
     while ((lt = rel_next(c->left)) != NULL) {
         tbuf_reset(rb);
         while ((rt = tbuf_next(rb)) != NULL)
-            if (tuple_eq(lt, rt, c->e.lpos, c->e.rpos, c->e.len)) {
+            if (tuple_cmp(lt, rt, c->e.lpos, c->e.rpos, c->e.len) == 0) {
                 Tuple *t = tuple_join(lt, rt, c->j.lpos, c->j.rpos, c->j.len);
                 tbuf_add(r->body, t);
             }
@@ -178,7 +178,7 @@ static int contains(TBuf *b, Tuple *t, int bpos[], int tpos[], int len)
 
     tbuf_reset(b);
     while ((bt = tbuf_next(b)) != NULL && !match)
-        match = tuple_eq(bt, t, bpos, tpos, len);
+        match = tuple_cmp(bt, t, bpos, tpos, len) == 0;
 
     return match;
 }
@@ -391,7 +391,7 @@ static void init_sum(Rel *r, Args *args)
 
         tbuf_reset(lb);
         while ((lt = tbuf_next(lb)) != NULL)
-            if (tuple_eq(lt, rt, c->e.lpos, c->e.rpos, c->e.len))
+            if (tuple_cmp(lt, rt, c->e.lpos, c->e.rpos, c->e.len) == 0)
                 for (int i = 0; i < scnt; ++i)
                     sum_update(c->sums[i], lt);
 

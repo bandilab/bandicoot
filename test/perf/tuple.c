@@ -35,11 +35,11 @@ static void perf_cmp(int M)
         while ((t1 = tbuf_next(buf1)) != NULL) {
             tbuf_reset(buf2);
             while ((t2 = tbuf_next(buf2)) != NULL)
-                tuple_eq(t1, t2, lpos, rpos, len);
+                tuple_cmp(t1, t2, lpos, rpos, len);
         }
     }
 
-    sys_print("tuple_eq(%dM) in %dms\n", M, sys_millis() - time);
+    sys_print("tuple_cmp(%dM) in %dms\n", M, sys_millis() - time);
 
     while ((t1 = tbuf_next(buf1)) != NULL)
         tuple_free(t1);

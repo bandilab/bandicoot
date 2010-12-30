@@ -113,14 +113,11 @@ extern Tuple *tuple_join(Tuple *l, Tuple *r, int lpos[], int rpos[], int len)
     return tuple_new(res, len);
 }
 
-extern int tuple_eq(Tuple *l, Tuple *r, int lpos[], int rpos[], int len)
+extern int tuple_cmp(Tuple *l, Tuple *r, int lpos[], int rpos[], int len)
 {
-    int res = 1;
-    for (int i = 0; i < len; ++i)
-        if (!val_eq(tuple_attr(l, lpos[i]), tuple_attr(r, rpos[i]))) {
-            res = 0;
-            break;
-        }
+    int res = 0;
+    for (int i = 0; i < len && !res; ++i)
+        res = val_cmp(tuple_attr(l, lpos[i]), tuple_attr(r, rpos[i]));
 
     return res;
 }

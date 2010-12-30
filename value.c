@@ -68,9 +68,12 @@ extern long long val_long(Value v)
     return long_dec(v.data);
 }
 
-extern int val_eq(Value l, Value r)
+extern int val_cmp(Value l, Value r)
 {
-    return (l.size == r.size) ? mem_cmp(l.data, r.data, l.size) == 0 : 0;
+    if (l.size == r.size)
+        return mem_cmp(l.data, r.data, l.size);
+
+    return l.size > r.size ? 1 : -1;
 }
 
 extern int val_bin_enc(void *mem, Value v)

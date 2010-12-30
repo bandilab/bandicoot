@@ -33,7 +33,7 @@ extern Tuple *tuple_join(Tuple *l, Tuple *r, int lpos[], int rpos[], int len);
 extern Tuple *tuple_reord(Tuple *t, int pos[], int len);
 extern Value tuple_attr(Tuple *t, int pos);
 extern void tuple_free(Tuple *t);
-extern int tuple_eq(Tuple *l, Tuple *r, int lpos[], int rpos[], int len);
+extern int tuple_cmp(Tuple *l, Tuple *r, int lpos[], int rpos[], int len);
 
 typedef struct {
     int pos;

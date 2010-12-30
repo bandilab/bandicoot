@@ -29,6 +29,6 @@ extern double val_real(Value v);
 extern char *val_str(Value v);
 extern long long val_long(Value v);
 extern int val_int(Value v);
-extern int val_eq(Value l, Value r);
+extern int val_cmp(Value l, Value r);
 extern int val_bin_enc(void *mem, Value v);
 extern int val_to_str(char *dest, Value v, Type t);

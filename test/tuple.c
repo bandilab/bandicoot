@@ -83,7 +83,7 @@ static void test_encdec()
     Tuple *t2 = tuple_dec(buf1, &dec_len1);
     if (dec_len1 != enc_len1)
         fail();
-    if (!tuple_eq(t1, t2, lpos, rpos, len))
+    if (tuple_cmp(t1, t2, lpos, rpos, len) != 0)
         fail();
 
     int enc_len2 = tuple_enc(t2, buf2);
@@ -132,6 +132,45 @@ static void test_tbuf()
     tbuf_free(b);
 }
 
+static void test_cmp(Value t1_vals[], Value t2_vals[])
+{
+    Tuple *t1 = tuple_new(t1_vals, 1);
+    Tuple *t2 = tuple_new(t2_vals, 1);
+
+    int lpos[] = {0, 1};
+    int rpos[] = {0, 1};
+
+    if (tuple_cmp(t1, t2, lpos, rpos, 1) >= 0)
+        fail();
+    if (tuple_cmp(t2, t1, rpos, lpos, 1) <= 0)
+        fail();
+
+    tuple_free(t1);
+    tuple_free(t2);
+
+    t1 = tuple_new(t1_vals + 1, 1);
+    t2 = tuple_new(t2_vals + 1, 1);
+
+    if (tuple_cmp(t1, t2, lpos, rpos, 1) >= 0)
+        fail();
+    if (tuple_cmp(t2, t1, rpos, lpos, 1) <= 0)
+        fail();
+
+    tuple_free(t1);
+    tuple_free(t2);
+
+    t1 = tuple_new(t1_vals, 2);
+    t2 = tuple_new(t2_vals, 2);
+
+    if (tuple_cmp(t1, t2, lpos, rpos, 2) >= 0)
+        fail();
+    if (tuple_cmp(t2, t1, rpos, lpos, 2) <= 0)
+        fail();
+
+    tuple_free(t1);
+    tuple_free(t2);
+}
+
 int main(void)
 {
     int v_int1 = 1, v_int2 = 2;
@@ -148,6 +187,7 @@ int main(void)
     test_reord(v1, 2);
     test_encdec();
     test_tbuf();
+    test_cmp(v1, v2);
 
     return 0;
 }

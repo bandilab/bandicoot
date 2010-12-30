@@ -185,7 +185,7 @@ extern char *str_trim(char *s)
 
 extern char **str_split(char *buf, char delim, int *parts)
 {
-    /* : get rid of str_len */
+    /* TODO: get rid of str_len */
     int len = str_len(buf) + 1;
     char **res = 0;
     char esc = '\\', prev = ' ';

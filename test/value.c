@@ -120,6 +120,34 @@ static void test_to_str()
         fail();
 }
 
+static void test_cmp()
+{
+    int i[] = {1, 137};
+    Value iv1 = val_new_int(&i[0]);
+    Value iv137 = val_new_int(&i[1]);
+
+    if (val_cmp(iv1, iv137) >= 0)
+        fail();
+    if (val_cmp(iv137, iv1) <= 0)
+        fail();
+
+    char *s[] = {"a", "b", "aa"};
+
+    Value sva = val_new_str(s[0]);
+    Value svb = val_new_str(s[1]);
+    Value svaa = val_new_str(s[2]);
+
+    if (val_cmp(sva, svb) >= 0)
+        fail();
+    if (val_cmp(svb, sva) <= 0)
+        fail();
+
+    if (val_cmp(svaa, sva) <= 0)
+        fail();
+    if (val_cmp(sva, svaa) >= 0)
+        fail();
+}
+
 int main(void)
 {
     test_int();
@@ -127,6 +155,7 @@ int main(void)
     test_string();
     test_encdec();
     test_to_str();
+    test_cmp();
 
     return 0;
 }
