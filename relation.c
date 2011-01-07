@@ -27,6 +27,7 @@ limitations under the License.
 #include "expression.h"
 #include "summary.h"
 #include "relation.h"
+#include "index.h"
 
 typedef struct {
     Rel *left;
@@ -141,21 +142,27 @@ static void init_join(Rel *r, Args *args)
 
     rel_init(c->left, args);
     rel_init(c->right, args);
-    TBuf *rb = c->right->body;
+
+    TBuf *lb = c->left->body;
+    index_sort(lb, c->e.lpos, c->e.len);
 
     Tuple *lt, *rt;
-    while ((lt = rel_next(c->left)) != NULL) {
-        tbuf_reset(rb);
-        while ((rt = tbuf_next(rb)) != NULL)
-            if (tuple_cmp(lt, rt, c->e.lpos, c->e.rpos, c->e.len) == 0) {
+    while ((rt = rel_next(c->right)) != NULL) {
+        TBuf *m = index_match(lb, rt, c->e.lpos, c->e.rpos, c->e.len);
+
+        if (m != NULL) {
+            while ((lt = tbuf_next(m)) != NULL) {
                 Tuple *t = tuple_join(lt, rt, c->j.lpos, c->j.rpos, c->j.len);
                 tbuf_add(r->body, t);
             }
 
-        tuple_free(lt);
+            tbuf_free(m);
+        }
+
+        tuple_free(rt);
     }
 
-    tbuf_clean(rb);
+    tbuf_clean(lb);
 }
 
 extern Rel *rel_join(Rel *l, Rel *r)
@@ -171,18 +178,6 @@ extern Rel *rel_join(Rel *l, Rel *r)
     return res;
 }
 
-static int contains(TBuf *b, Tuple *t, int bpos[], int tpos[], int len)
-{
-    int match = 0;
-    Tuple *bt;
-
-    tbuf_reset(b);
-    while ((bt = tbuf_next(b)) != NULL && !match)
-        match = tuple_cmp(bt, t, bpos, tpos, len) == 0;
-
-    return match;
-}
-
 static void init_union(Rel *r, Args *args)
 {
     Ctxt *c = r->ctxt;
@@ -190,11 +185,13 @@ static void init_union(Rel *r, Args *args)
 
     rel_init(c->left, args);
     rel_init(c->right, args);
+
     TBuf *rb = c->right->body;
+    index_sort(rb, c->e.rpos, c->e.len);
 
     Tuple *lt, *rt;
     while ((lt = rel_next(c->left)) != NULL)
-        if (contains(rb, lt, c->e.rpos, c->e.lpos, c->e.len))
+        if (index_has(rb, lt, c->e.rpos, c->e.lpos, c->e.len))
             tuple_free(lt);
         else
             tbuf_add(r->body, lt);
@@ -224,11 +221,13 @@ static void init_diff(Rel *r, Args *args)
 
     rel_init(c->left, args);
     rel_init(c->right, args);
+
     TBuf *rb = c->right->body;
+    index_sort(rb, c->e.rpos, c->e.len);
 
     Tuple *lt;
     while ((lt = rel_next(c->left)) != NULL)
-        if (contains(rb, lt, c->e.rpos, c->e.lpos, c->e.len))
+        if (index_has(rb, lt, c->e.rpos, c->e.lpos, c->e.len))
             tuple_free(lt);
         else
             tbuf_add(r->body, lt);
@@ -255,10 +254,11 @@ static void init_project(Rel *r, Args *args)
     r->body = tbuf_new();
 
     rel_init(c->left, args);
+    index_sort(c->left->body, c->e.lpos, c->e.len);
 
     Tuple *t;
     while ((t = rel_next(c->left)) != NULL) {
-        if (!contains(r->body, t, c->e.rpos, c->e.lpos, c->e.len))
+        if (!index_has(r->body, t, c->e.rpos, c->e.lpos, c->e.len))
             tbuf_add(r->body, tuple_reord(t, c->e.lpos, c->e.len));
 
         tuple_free(t);
@@ -384,16 +384,21 @@ static void init_sum(Rel *r, Args *args)
     int scnt = c->scnt;
 
     TBuf *lb = c->left->body;
+    index_sort(lb, c->e.lpos, c->e.len);
+
     Tuple *lt, *rt;
     while ((rt = rel_next(c->right)) != NULL) {
         for (int i = 0; i < scnt; ++i)
             sum_reset(c->sums[i]);
 
-        tbuf_reset(lb);
-        while ((lt = tbuf_next(lb)) != NULL)
-            if (tuple_cmp(lt, rt, c->e.lpos, c->e.rpos, c->e.len) == 0)
+        TBuf *m = index_match(lb, rt, c->e.lpos, c->e.rpos, c->e.len);
+        if (m != NULL) {
+            while ((lt = tbuf_next(m)) != NULL)
                 for (int i = 0; i < scnt; ++i)
                     sum_update(c->sums[i], lt);
+
+            tbuf_free(m);
+        }
 
         Value vals[scnt];
         for (int i = 0; i < scnt; ++i)
@@ -509,9 +514,11 @@ extern int rel_eq(Rel *l, Rel *r)
     int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
     int len = head_common(l->head, r->head, lpos, rpos);
 
+    index_sort(l->body, lpos, len);
+
     Tuple *rt;
     while (all_ok && (rt = rel_next(r)) != NULL) {
-        all_ok = all_ok && contains(l->body, rt, lpos, rpos, len);
+        all_ok = all_ok && index_has(l->body, rt, lpos, rpos, len);
         tuple_free(rt);
         rcnt++;
     }

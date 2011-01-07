@@ -33,6 +33,7 @@ limitations under the License.
 #include "../pack.h"
 #include "../environment.h"
 #include "../http.h"
+#include "../index.h"
 
 #define fail() fail_test(__LINE__);
 

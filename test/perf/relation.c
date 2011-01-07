@@ -253,27 +253,69 @@ static void perf_sum(int count)
     rel_free(rel);
 }
 
+static void perf_eq(int count)
+{
+    Rel *l = gen_rel(0, count);
+    Rel *r = gen_rel(0, count);
+
+    rel_init(l, NULL);
+    rel_init(r, NULL);
+
+    long time = sys_millis();
+
+    rel_eq(l, r);
+
+    sys_print("%8s %dx%d tuples in %dms\n",
+              "eq",
+              count,
+              count,
+              sys_millis() - time);
+
+    rel_free(l);
+    rel_free(r);
+}
+
 int main()
 {
     Env *env = env_new(vol_init("bin/volume"));
     tx_init(env->vars.names, env->vars.len);
 
-    perf_load_store(env, 100*1000);
-    perf_load_store(env, 1000*1000);
-    perf_join(1000);
-    perf_join(10000);
-    perf_diff(1000);
-    perf_diff(10000);
-    perf_project(1000);
-    perf_project(10000);
-    perf_select(100*1000);
-    perf_select(1000*1000);
-    perf_union(1000);
-    perf_union(10000);
-    perf_extend(100*1000);
-    perf_extend(1000*1000);
-    perf_sum(1000);
-    perf_sum(10000);
+    perf_load_store(env, 1 * 1000);
+    perf_load_store(env, 10 * 1000);
+    perf_load_store(env, 100 * 1000);
+    perf_load_store(env, 1000 * 1000);
+    perf_join(1 * 1000);
+    perf_join(10 * 1000);
+    perf_join(100 * 1000);
+    perf_join(1000 * 1000);
+    perf_diff(1 * 1000);
+    perf_diff(10 * 1000);
+    perf_diff(100 * 1000);
+    perf_diff(1000 * 1000);
+    perf_project(1 * 1000);
+    perf_project(10 * 1000);
+    perf_project(100 * 1000);
+    perf_project(1000 * 1000);
+    perf_select(1 * 1000);
+    perf_select(10 * 1000);
+    perf_select(100 * 1000);
+    perf_select(1000 * 1000);
+    perf_union(1 * 1000);
+    perf_union(10 * 1000);
+    perf_union(100 * 1000);
+    perf_union(1000 * 1000);
+    perf_extend(1 * 1000);
+    perf_extend(10 * 1000);
+    perf_extend(100 * 1000);
+    perf_extend(1000 * 1000);
+    perf_sum(1 * 1000);
+    perf_sum(10 * 1000);
+    perf_sum(100 * 1000);
+    perf_sum(1000 * 1000);
+    perf_eq(1 * 1000);
+    perf_eq(10 * 1000);
+    perf_eq(100 * 1000);
+    perf_eq(1000 * 1000);
 
     env_free(env);
 

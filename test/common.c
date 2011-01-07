@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <stdlib.h>
 #include "common.h"
 
 extern void fail_test(int line)
@@ -43,8 +44,17 @@ extern TBuf *gen_tuples(int start, int end)
         fail();
 
     TBuf *res = tbuf_new();
-    for (int i = start; i < end; ++i)
-        tbuf_add(res, gen_tuple(i));
+
+    int len = end - start;
+    int tmp[len];
+    for (int i = start, j = 0; i < end; ++i, ++j)
+        tmp[j] = i;
+
+    while (len > 0) {
+        int idx = rand() % len;
+        tbuf_add(res, gen_tuple(tmp[idx]));
+        tmp[idx] = tmp[--len];
+    }
 
     return res;
 }
