@@ -97,6 +97,7 @@ extern void sys_cpy(const char *dest, const char *src)
     int fd = sys_open(dest, CREATE | WRITE);
     sys_write(fd, buf, str_len(buf));
     sys_close(fd);
+    mem_free(buf);
 }
 
 extern int sys_read(int fd, void *buf, int size)

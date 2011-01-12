@@ -849,7 +849,7 @@ static Head *inline_rel(char *name, Head *head)
 {
     Head *res = NULL;
     if (name == NULL && head != NULL) {
-        res = head_cpy(head);
+        res = head;
     } else if (name != NULL) {
         int idx = array_scan(genv->types.names, genv->types.len, name);
         if (idx < 0)
