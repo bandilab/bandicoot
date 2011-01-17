@@ -47,6 +47,11 @@ extern Rel *gen_rel(int start, int end);
 extern Tuple *tuple_dec(void *mem, int *len);
 extern int tuple_enc(Tuple *t, void *buf);
 
+/* from transaction.c */
+extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
+                          char *wnames[], long wvers[], int wlen,
+                          Sem *s);
+
 static Expr *expr_true()
 {
     return expr_int(1);

@@ -59,3 +59,46 @@ extern void mutex_close(long m)
 
     mem_free(mutex);
 }
+
+extern Sem sem_new(int val)
+{
+    Sem l = {.lock = mutex_new(), .val = val};
+    return l;
+}
+
+extern void sem_dec(Sem *l)
+{
+    int cont = 1;
+    while (cont) {
+        mutex_lock(l->lock);
+        if (l->val > 0) {
+            l->val--;
+            cont = 0;
+        }
+        mutex_unlock(l->lock);
+        sys_yield();
+    }
+}
+
+extern void sem_inc(Sem *l)
+{
+    mutex_lock(l->lock);
+    l->val++;
+    mutex_unlock(l->lock);
+}
+
+extern void sem_wait(Sem *l, int val)
+{
+    while (val > 0) {
+        mutex_lock(l->lock);
+        if (val == l->val)
+            val = 0;
+        mutex_unlock(l->lock);
+        sys_yield();
+    }
+}
+
+extern void sem_close(Sem *l)
+{
+    mutex_close(l->lock);
+}

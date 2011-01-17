@@ -267,8 +267,11 @@ static long wait(Entry *e)
     return version;
 }
 
-extern long tx_enter(char *rnames[], long rvers[], int rlen,
-                     char *wnames[], long wvers[], int wlen)
+/* the Sem *s input parameter was introduced for testing.
+   see test/transaction.c file */
+extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
+                          char *wnames[], long wvers[], int wlen,
+                          Sem *s)
 {
     long sid;
     int i, state, rw = 0;
@@ -312,6 +315,9 @@ extern long tx_enter(char *rnames[], long rvers[], int rlen,
 
     mutex_unlock(glock);
 
+    if (s != NULL)
+        sem_inc(s);
+
     for (i = 0; i < rlen; ++i)
         rvers[i] = wait(re[i]);
 
@@ -319,6 +325,14 @@ extern long tx_enter(char *rnames[], long rvers[], int rlen,
         wvers[i] = wait(we[i]);
 
     return sid;
+}
+
+extern long tx_enter(char *rnames[], long rvers[], int rlen,
+                     char *wnames[], long wvers[], int wlen)
+{
+    return tx_enter_full(rnames, rvers, rlen,
+                         wnames, wvers, wlen,
+                         NULL);
 }
 
 extern void tx_commit(long sid)

@@ -33,6 +33,7 @@ limitations under the License.
 #include <pthread.h>
 #include <time.h>
 #include <signal.h>
+#include <sched.h>
 
 #include "config.h"
 #include "system.h"
@@ -322,4 +323,10 @@ extern int sys_empty(const char *dir)
 extern void sys_signals()
 {
     signal(SIGPIPE, SIG_IGN);
+}
+
+extern void sys_yield()
+{
+    if (sched_yield() != 0)
+        sys_die("pthread_yield() failed");
 }

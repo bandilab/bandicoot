@@ -17,25 +17,350 @@ limitations under the License.
 
 #include "common.h"
 
-/* TODO: proper tx test is required */
+typedef enum { TX_ENTER, TX_COMMIT, TX_REVERT, TX_EXIT, TX_READ, TX_CHECK,
+               TX_WRITE } Action;
+
+typedef struct {
+    Action action;
+    int value;
+    Sem write;
+    Sem read;
+    char rname[MAX_NAME];
+    char wname[MAX_NAME];
+} Proc;
+
+static Env *env;
+static Proc p1, p2, p3, cp;
+static char current_test[30];
+
+static Sem glock;
+static int seq;
+
+static void send_action(Proc *p, Action a, int value)
+{
+    p->action = a;
+    p->value = value;
+    sem_inc(&p->read);
+    sem_dec(&p->write);
+}
+
+static void enter(Proc *p)
+{
+    send_action(p, TX_ENTER, seq++);
+}
+
+static void action(Proc *p, Action a)
+{
+    send_action(p, a, -1);
+}
+
+static void check(Proc *p, int value)
+{
+    send_action(p, TX_CHECK, value);
+}
+
+static int count(Rel *r)
+{
+    int cnt = 0;
+    Tuple *t = NULL;
+    for (; (t = rel_next(r)) != NULL; ++cnt)
+        tuple_free(t);
+
+    return cnt;
+}
+
+static void *exec_thread(void *arg)
+{
+    Proc *p = arg;
+    Args r = { .len = 0 };
+    if (str_len(p->rname) > 0) {
+        r.len = 1;
+        r.names[0] = p->rname;
+    }
+
+    Args w = { .len = 0 };
+    if (str_len(p->wname) > 0) {
+        w.len = 1;
+        w.names[0] = p->wname;
+    }
+
+    Rel *rel = NULL;
+    long sid;
+
+    int action = TX_ENTER;
+    int value = -1;
+    while (action != TX_EXIT) {
+        sem_dec(&p->read);
+        action = p->action;
+        value = p->value;
+
+        if (action == TX_COMMIT)
+            tx_commit(sid);
+        else if (action == TX_REVERT)
+            tx_revert(sid);
+        else if (action == TX_READ) {
+            rel = rel_load(env_head(env, p->rname), p->rname);
+            rel_init(rel, &r);
+        } else if (action == TX_CHECK) {
+            int cnt = count(rel);
+            if (cnt != value) {
+                sys_print("%s: sid=%d, version=%d, expected=%d, got=%d\n",
+                          current_test,
+                          sid,
+                          r.vers[0],
+                          value,
+                          cnt);
+                tx_state();
+                fail();
+            }
+            rel_free(rel);
+        } else if (action == TX_WRITE) {
+            rel_store(w.names[0], w.vers[0], rel);
+            rel_free(rel);
+        }
+
+        sem_inc(&p->write);
+
+        if (action == TX_ENTER) {
+            /* This wait call is to synchronize all the concurrent TX_ENTER
+               based on the global sequence value. Every TX_ENTER action
+               has a unique sequence number assigned to it.
+               Each thread has to wait until the global lock reaches the value
+               which means the thread is suppose to enter the tx. */
+
+            sem_wait(&glock, value);
+
+            sid = tx_enter_full(r.names, r.vers, r.len,
+                                w.names, w.vers, w.len,
+                                &glock);
+        }
+    }
+
+    return NULL;
+}
+
+static void init_thread(Proc *p, char *r, char *w)
+{
+    p->write = sem_new(0);
+    p->read = sem_new(0);
+    p->action = -1;
+
+    str_cpy(p->rname, r);
+    str_cpy(p->wname, w);
+
+    sys_thread(exec_thread, (void*) p);
+}
+
+static void exit_thread(Proc *p)
+{
+    action(p, TX_EXIT);
+
+    sem_close(&p->write);
+    sem_close(&p->read);
+}
+
+static void test(char *name, int cnt)
+{
+    init_thread(&cp, name, "");
+    enter(&cp);
+    action(&cp, TX_READ);
+    check(&cp, cnt);
+    action(&cp, TX_COMMIT);
+    exit_thread(&cp);
+}
+
+static void test_reset()
+{
+    str_print(current_test, "test_reset");
+    init_thread(&p1, "tx_empty", "tx_target1");
+    init_thread(&p2, "tx_empty", "tx_target2");
+    init_thread(&p3, "tx_empty", "tx_target3");
+
+    enter(&p1);
+    action(&p1, TX_READ);
+    action(&p1, TX_WRITE);
+    action(&p1, TX_COMMIT);
+
+    enter(&p2);
+    action(&p2, TX_READ);
+    action(&p2, TX_WRITE);
+    action(&p2, TX_COMMIT);
+
+    enter(&p3);
+    action(&p3, TX_READ);
+    action(&p3, TX_WRITE);
+    action(&p3, TX_COMMIT);
+
+    test("tx_target1", 0);
+    test("tx_target2", 0);
+    test("tx_target3", 0);
+
+    exit_thread(&p1);
+    exit_thread(&p2);
+    exit_thread(&p3);
+}
+
+static void test_reads()
+{
+    test_reset();
+
+    str_print(current_test, "test_reads");
+    init_thread(&p1, "tx_empty", "");
+    init_thread(&p2, "tx_empty", "");
+
+    test("tx_empty", 0);
+
+    enter(&p1);
+    enter(&p2);
+    action(&p1, TX_READ);
+    action(&p2, TX_READ);
+    check(&p1, 0);
+    check(&p2, 0);
+    action(&p1, TX_COMMIT);
+    action(&p2, TX_COMMIT);
+
+    exit_thread(&p1);
+    exit_thread(&p2);
+}
+
+static void test_write_read_con()
+{
+    test_reset();
+
+    str_print(current_test, "test_write_read_con");
+    init_thread(&p1, "one_r1", "tx_target1");
+    init_thread(&p2, "tx_target1", "");
+
+    enter(&p1);
+    enter(&p2);
+    action(&p1, TX_READ);
+    action(&p1, TX_WRITE);
+    action(&p2, TX_READ);
+    check(&p2, 0);
+
+    action(&p1, TX_COMMIT);
+    action(&p2, TX_COMMIT);
+
+    test("tx_target1", 1);
+
+    exit_thread(&p1);
+    exit_thread(&p2);
+}
+
+static void test_overwrite_seq(Action a1)
+{
+    test_reset();
+
+    str_print(current_test, "test_overwrite_seq %s",
+              (a1 == TX_COMMIT) ? "TX_COMMIT" : "TX_REVERT");
+    init_thread(&p1, "one_r1", "tx_target1");
+    init_thread(&p2, "one_r2", "tx_target1");
+
+    enter(&p1);
+    action(&p1, TX_READ);
+    action(&p1, TX_WRITE);
+    action(&p1, a1);
+
+    test("tx_target1", (a1 == TX_COMMIT) ? 1 : 0);
+
+    enter(&p2);
+    action(&p2, TX_READ);
+    action(&p2, TX_WRITE);
+    action(&p2, TX_COMMIT);
+
+    test("tx_target1", 2);
+
+    exit_thread(&p1);
+    exit_thread(&p2);
+}
+
+static void test_overwrite_con(Action a1)
+{
+    test_reset();
+
+    str_print(current_test, "test_overwrite_con %s",
+              (a1 == TX_COMMIT) ? "TX_COMMIT" : "TX_REVERT");
+    init_thread(&p1, "one_r2", "tx_target1");
+    init_thread(&p2, "tx_target1", "tx_target1");
+
+    int cnt = (a1 == TX_COMMIT) ? 2 : 0;
+
+    enter(&p1);
+    enter(&p2);
+
+    action(&p1, TX_READ);
+    action(&p1, TX_WRITE);
+    action(&p1, a1);
+
+    test("tx_target1", cnt);
+
+    action(&p2, TX_READ);
+    action(&p2, TX_WRITE);
+    action(&p2, TX_COMMIT);
+
+    test("tx_target1", cnt);
+
+    exit_thread(&p1);
+    exit_thread(&p2);
+}
+
+static void test_chain(Action a1)
+{
+    test_reset();
+
+    str_print(current_test, "test_chain %s",
+              (a1 == TX_COMMIT) ? "TX_COMMIT" : "TX_REVERT");
+    init_thread(&p1, "one_r1", "tx_target1");
+    init_thread(&p2, "tx_target1", "tx_target2");
+    init_thread(&p3, "tx_target2", "tx_target3");
+
+    int cnt = (a1 == TX_COMMIT ? 1 : 0);
+
+    enter(&p1);
+    enter(&p2);
+    enter(&p3);
+
+    action(&p1, TX_READ);
+    action(&p1, TX_WRITE);
+    action(&p1, a1);
+
+    action(&p2, TX_READ);
+    action(&p2, TX_WRITE);
+    test("tx_target2", 0);
+    action(&p2, TX_COMMIT);
+
+    action(&p3, TX_READ);
+    action(&p3, TX_WRITE);
+    test("tx_target2", cnt);
+    test("tx_target3", 0);
+    action(&p3, TX_COMMIT);
+
+    exit_thread(&p1);
+    exit_thread(&p2);
+    exit_thread(&p3);
+
+    test("tx_target3", cnt);
+}
+
 int main(void)
 {
-    Env *env = env_new(vol_init("bin/volume"));
+    env = env_new(vol_init("bin/volume"));
     tx_init(env->vars.names, env->vars.len);
 
-    char *rnames[] = {"empty_r1", "io"}, *wnames[] = {"io"};
-    long rvers[2], wvers[1];
+    glock = sem_new(1);
+    seq = 1;
 
-    tx_revert(tx_enter(rnames, rvers, 2, wnames, wvers, 1));
+    test_reset();
+    test_reads();
+    test_write_read_con();
+    test_overwrite_seq(TX_COMMIT);
+    test_overwrite_seq(TX_REVERT);
+    test_overwrite_con(TX_COMMIT);
+    test_overwrite_con(TX_REVERT);
+    test_chain(TX_COMMIT);
+    test_chain(TX_REVERT);
 
-    long sid = tx_enter(rnames, rvers, 2, wnames, wvers, 1);
-    Rel *r = gen_rel(0, 10);
-    rel_init(r, NULL);
-    rel_store(wnames[0], wvers[0], r);
-    rel_free(r);
-    tx_commit(sid);
-
-    tx_commit(tx_enter(rnames, rvers, 2, 0, 0, 0));
+    sem_close(&glock);
 
     env_free(env);
     tx_free();

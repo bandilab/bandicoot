@@ -19,3 +19,14 @@ extern long mutex_new();
 extern void mutex_lock(long m);
 extern void mutex_unlock(long m);
 extern void mutex_close(long m);
+
+typedef struct {
+    long lock;
+    int val;
+} Sem;
+
+extern Sem sem_new(int val);
+extern void sem_dec(Sem *l);
+extern void sem_inc(Sem *l);
+extern void sem_wait(Sem *l, int val);
+extern void sem_close(Sem *l);

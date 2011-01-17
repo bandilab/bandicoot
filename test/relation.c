@@ -121,17 +121,17 @@ static void test_store()
 {
     Rel *r = load("one_r1");
 
-    char *wnames[] = {"tx_empty"};
+    char *wnames[] = {"one_r1_cpy"};
     long wvers[1];
 
     long sid = tx_enter(args.names, args.vers, args.len, wnames, wvers, 1);
     rel_init(r, &args);
 
-    rel_store("tx_empty", wvers[0], r);
+    rel_store("one_r1_cpy", wvers[0], r);
     rel_free(r);
     tx_commit(sid);
 
-    if (!equal(load("one_r1"), "tx_empty"))
+    if (!equal(load("one_r1"), "one_r1_cpy"))
         fail();
 }
 

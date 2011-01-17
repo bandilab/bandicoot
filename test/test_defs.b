@@ -6,10 +6,14 @@ rel basic_01 {
 empty_r1: basic_01;
 extend_1: basic_01;
 one_r1: basic_01;
+one_r1_cpy: basic_01;
 one_r2: basic_01;
 perf_rel: basic_01;
 two_r2: basic_01;
 tx_empty: basic_01;
+tx_target1: basic_01;
+tx_target2: basic_01;
+tx_target3: basic_01;
 compound_1: basic_01;
 compound_1_res: basic_01;
 param_1: basic_01;
@@ -290,6 +294,11 @@ fn load_one_r1(): basic_01
     return one_r1;
 }
 
+fn load_one_r1_cpy(): basic_01
+{
+    return one_r1_cpy;
+}
+
 fn load_one_r2(): basic_01
 {
     return one_r2;
@@ -440,6 +449,21 @@ fn load_tx_empty(): basic_01
     return tx_empty;
 }
 
+fn load_tx_target1(): basic_01
+{
+    return tx_target1;
+}
+
+fn load_tx_target2(): basic_01
+{
+    return tx_target2;
+}
+
+fn load_tx_target3(): basic_01
+{
+    return tx_target3;
+}
+
 fn load_union_1_l(): basic_02
 {
     return union_1_l;
@@ -562,6 +586,11 @@ fn store_join_2_res(x: basic_03)
 fn store_one_r1(x: basic_01)
 {
     one_r1 = x;
+}
+
+fn store_one_r1_cpy(x: basic_01)
+{
+    one_r1_cpy = x;
 }
 
 fn store_one_r2(x: basic_01)
@@ -712,6 +741,21 @@ fn store_two_r2(x: basic_01)
 fn store_tx_empty(x: basic_01)
 {
     tx_empty = x;
+}
+
+fn store_tx_target1(x: basic_01)
+{
+    tx_target1 = x;
+}
+
+fn store_tx_target2(x: basic_01)
+{
+    tx_target2 = x;
+}
+
+fn store_tx_target3(x: basic_01)
+{
+    tx_target3 = x;
 }
 
 fn store_union_1_l(x: basic_02)
