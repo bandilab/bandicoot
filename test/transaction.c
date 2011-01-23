@@ -85,7 +85,7 @@ static void *exec_thread(void *arg)
     }
 
     Rel *rel = NULL;
-    long sid;
+    long sid = 0L;
 
     int action = TX_ENTER;
     int value = -1;
@@ -169,6 +169,26 @@ static void test(char *name, int cnt)
     exit_thread(&cp);
 }
 
+static void test_basics()
+{
+    Args r = { .len = 1 };
+    r.names[0] = str_dup("tx_empty");
+
+    Args w = { .len = 0 };
+
+    long sid = tx_enter(r.names, r.vers, r.len,
+                        w.names, w.vers, w.len);
+    Rel *rel = rel_load(env_head(env, r.names[0]), r.names[0]);
+    rel_init(rel, &r);
+    if (count(rel) != 0)
+        fail();
+
+    rel_free(rel);
+    tx_commit(sid);
+
+    mem_free(r.names[0]);
+}
+
 static void test_reset()
 {
     str_print(current_test, "test_reset");
@@ -198,6 +218,32 @@ static void test_reset()
     exit_thread(&p1);
     exit_thread(&p2);
     exit_thread(&p3);
+}
+
+static void test_cleanup(Action a2)
+{
+    test_reset();
+
+    str_print(current_test, "test_cleanup");
+    init_thread(&p1, "tx_target1", "");
+    init_thread(&p2, "one_r1", "tx_target1");
+
+    enter(&p1);
+
+    enter(&p2);
+
+    action(&p2, TX_READ);
+    action(&p2, TX_WRITE);
+    action(&p2, a2);
+
+    action(&p1, TX_READ);
+    check(&p1, 0);
+    action(&p1, TX_COMMIT);
+
+    test("tx_target1", (a2 == TX_COMMIT) ? 1 : 0);
+
+    exit_thread(&p1);
+    exit_thread(&p2);
 }
 
 static void test_reads()
@@ -350,8 +396,13 @@ int main(void)
     glock = sem_new(1);
     seq = 1;
 
+    test_basics();
     test_reset();
     test_reads();
+
+    test_cleanup(TX_COMMIT);
+    test_cleanup(TX_REVERT);
+
     test_write_read_con();
     test_overwrite_seq(TX_COMMIT);
     test_overwrite_seq(TX_REVERT);

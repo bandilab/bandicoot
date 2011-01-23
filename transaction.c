@@ -39,12 +39,12 @@ typedef struct {
     long lock;
 } Entry;
 
-typedef struct {
-    int size;
-    Entry **elem;
-} E_Array;
+struct E_List {
+    Entry *elem;
+    struct E_List *next;
+};
 
-#define EMPTY_ARRAY {.size = 0, .elem = 0}
+typedef struct E_List E_List;
 
 #ifdef LP64
 static const long MAX_LONG = 0x7FFFFFFFFFFFFFFF;
@@ -55,16 +55,24 @@ static const long MAX_LONG = 0x7FFFFFFF;
 static char *all_vars[MAX_VARS];
 static int num_vars;
 
-static E_Array gents;
+static E_List *gents;
 static long glock;
 static long last_sid;
 
-/* FIXME: don't forget to free it */
-static void append(E_Array *dest, Entry *e)
+static E_List *next(E_List *e)
 {
-    dest->elem = (Entry**) mem_realloc(
-            dest->elem, sizeof(Entry*) * (dest->size + 1));
-    dest->elem[dest->size++] = e;
+    E_List *res = e->next;
+    mem_free(e);
+    return res;
+}
+
+static E_List *add(E_List *dest, Entry *e)
+{
+    E_List *new = mem_alloc(sizeof(E_List));
+    new->elem = e;
+    new->next = dest;
+
+    return new;
 }
 
 static Entry *add_entry(long sid,
@@ -83,18 +91,22 @@ static Entry *add_entry(long sid,
     e->lock = mutex_new();
     mutex_lock(e->lock);
 
-    append(&gents, e);
+    gents = add(gents, e);
 
     return e;
 }
 
-static void list_entries(E_Array *dest, long sid)
+static E_List *list_entries(long sid)
 {
-    for (int i = 0; i < gents.size; ++i) {
-        Entry *e = gents.elem[i];
+    E_List *dest = NULL;
+
+    for (E_List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
         if (e->sid == sid)
-            append(dest, e);
+            dest = add(dest, e);
     }
+
+    return dest;
 }
 
 static Entry *get_min_waiting(const char var[], int a_type)
@@ -102,8 +114,8 @@ static Entry *get_min_waiting(const char var[], int a_type)
     long min_sid = MAX_LONG;
     Entry *res = 0;
 
-    for (int i = 0; i < gents.size; ++i) {
-        Entry *e = gents.elem[i];
+    for (E_List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
         if (e->state == WAITING && e->sid < min_sid
                 && e->a_type == a_type && str_cmp(e->var, var) == 0)
         {
@@ -115,22 +127,40 @@ static Entry *get_min_waiting(const char var[], int a_type)
     return res;
 }
 
-static void list_waiting(E_Array *dest, long sid, const char var[], int a_type)
+/* finds if the given version (sid) of a variable is active (being read) */
+static int is_active(const char var[], long sid)
 {
-    for (int i = 0; i < gents.size; ++i) {
-        Entry *e = gents.elem[i];
+    int res = 0;
+
+    for (E_List *it = gents; !res && it != NULL; it = it->next) {
+        Entry *e = it->elem;
+        res = (e->state == RUNNABLE && e->a_type == READ
+                && e->version == sid && str_cmp(e->var, var) == 0);
+    }
+
+    return res;
+}
+
+static E_List *list_waiting(long sid, const char var[], int a_type)
+{
+    E_List *dest = NULL;
+
+    for (E_List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
         if (e->state == WAITING && e->sid <= sid
                 && e->a_type == a_type && str_cmp(e->var, var) == 0)
-            append(dest, e);
+            dest = add(dest, e);
     }
+
+    return dest;
 }
 
 static long get_wsid(const char var[])
 {
     long res = -1;
 
-    for (int i = 0; i < gents.size; ++i) {
-        Entry *e = gents.elem[i];
+    for (E_List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == RUNNABLE
                 && str_cmp(e->var, var) == 0)
         {
@@ -142,12 +172,13 @@ static long get_wsid(const char var[])
     return res;
 }
 
+/* determines a version to read */
 static long get_rsid(long sid, const char var[])
 {
     long res = -1;
 
-    for (int i = 0; i < gents.size; ++i) {
-        Entry *e = gents.elem[i];
+    for (E_List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED
                 && e->sid < sid && e->sid > res && str_cmp(e->var, var) == 0)
             res = e->sid;
@@ -161,8 +192,8 @@ static void current_state(long vers[])
     for (int i = 0; i < num_vars; ++i)
         vers[i] = 0;
 
-    for (int i = 0; i < gents.size; ++i) {
-        Entry *e = gents.elem[i];
+    for (E_List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED) {
             int idx = array_find(all_vars, num_vars, e->var);
             if (vers[idx] < e->version)
@@ -171,16 +202,62 @@ static void current_state(long vers[])
     }
 }
 
+/* removes entries from gents which are
+    * non-active, non-latest committed writes
+    * committed reads
+    * reverted reads and writes
+*/
+static void clean_up()
+{
+    E_List *it = gents, **prev = &gents;
+    int rm = 0;
+
+    while (it) {
+        Entry *e = it->elem;
+        if (e->a_type == WRITE && e->state == COMMITTED) {
+            long sid = e->sid;
+            char *var = e->var;
+
+            long rsid = get_rsid(MAX_LONG, var);
+
+            int act = is_active(var, sid);
+
+            if (sid < rsid && !act)
+                rm = 1;
+        } else if ((e->a_type == READ && e->state == COMMITTED)
+                        || e->state == REVERTED)
+        {
+            rm = 1;
+        }
+
+        if (rm) {
+            *prev = it->next;
+
+            if (e->a_type == WRITE && e->state == COMMITTED)
+                vol_remove(e->var, e->sid);
+
+            mem_free(it->elem);
+            mem_free(it);
+
+            rm = 0;
+            it = gents;
+            prev = &gents;
+        } else {
+            prev = &it->next;
+            it = it->next;
+        }
+    }
+}
+
 static void finish(int sid, int final_state)
 {
-    E_Array sid_ents = EMPTY_ARRAY;
-
     mutex_lock(glock);
 
-    list_entries(&sid_ents, sid);
+    E_List *sig = NULL; /* entries to signal (unlock) */
+    E_List *it = list_entries(sid);
 
-    for (int i = 0; i < sid_ents.size; ++i) {
-        Entry *e = sid_ents.elem[i];
+    for (; it != NULL; it = next(it)) {
+        Entry *e = it->elem;
         int prev_state = e->state;
         e->state = final_state;
 
@@ -194,31 +271,31 @@ static void finish(int sid, int final_state)
             long wsid = MAX_LONG;
             if (we != 0) {
                 we->state = RUNNABLE;
-                mutex_unlock(we->lock);
                 wsid = we->sid;
+                sig = add(sig, we);
             }
 
-            E_Array rents = EMPTY_ARRAY;
-            list_waiting(&rents, wsid, e->var, READ);
+            E_List *rents = list_waiting(wsid, e->var, READ);
             int j; 
-            for (j = 0; j < rents.size; ++j) {
-                Entry *re = rents.elem[j];
+            for (; rents != NULL; rents = next(rents)) {
+                Entry *re = rents->elem;
                 re->state = RUNNABLE;
                 re->version = rsid;
-                mutex_unlock(re->lock);
+                sig = add(sig, re);
             }
-            mem_free(rents.elem);
         }
 
         mutex_close(e->lock);
     }
-    mem_free(sid_ents.elem);
 
-    /* FIXME: what if this fails and we have already notified others
-              to proceed */
     long vers[num_vars];
     current_state(vers);
     vol_wstate(all_vars, vers, num_vars);
+
+    clean_up();
+
+    for (; sig != NULL; sig = next(sig))
+        mutex_unlock(sig->elem->lock);
 
     mutex_unlock(glock);
 }
@@ -227,12 +304,12 @@ extern void tx_free()
 {
     mutex_lock(glock);
 
-    for (int i = 0; i < gents.size; ++i)
-        mem_free(gents.elem[i]);
+    for (; gents != NULL; gents = next(gents))
+        mem_free(gents->elem);
+
     for (int i = 0; i < num_vars; ++i)
         mem_free(all_vars[i]);
 
-    mem_free(gents.elem);
 
     mutex_unlock(glock);
     mutex_close(glock);
@@ -242,8 +319,7 @@ extern void tx_init(char *vars[], int len)
 {
     glock = mutex_new();
     last_sid = 1;
-    gents.size = 0;
-    gents.elem = 0;
+    gents = NULL;
     num_vars = len;
 
     mutex_lock(glock);
@@ -267,8 +343,7 @@ static long wait(Entry *e)
     return version;
 }
 
-/* the Sem *s input parameter was introduced for testing.
-   see test/transaction.c file */
+/* the Sem *s input parameter introduced for testing (test/transaction.c) */
 extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
                           char *wnames[], long wvers[], int wlen,
                           Sem *s)
@@ -351,8 +426,8 @@ extern void tx_state()
 
     sys_print("%-8s %-32s %-5s %-8s %-9s\n",
               "SID", "VARIABLE", "ATYPE", "ASID", "STATE");
-    for (int i = 0; i < gents.size; ++i) {
-        Entry *e = gents.elem[i];
+    for (E_List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
         char *a_type = "READ";
         if (e->a_type == WRITE)
             a_type = "WRITE";

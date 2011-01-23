@@ -132,13 +132,6 @@ static void fpath(char *res, const char *var, long sid)
     sid_to_str(res, sid);
 }
 
-static void remove(char *var, long sid)
-{
-    char file[MAX_PATH];
-    fpath(file, var, sid);
-    sys_remove(file);
-}
-
 static void cleanup()
 {
     long vers[MAX_VARS];
@@ -153,7 +146,7 @@ static void cleanup()
         int idx = array_scan(vars, len, rel);
 
         if (sid > 0 && idx > -1 && vers[idx] != sid)
-            remove(rel, sid);
+            vol_remove(rel, sid);
     }
 
     for (int i = 0; i < len; ++i)
@@ -251,7 +244,7 @@ extern void vol_deploy(const char *p, const char *new_src)
 
     for (int i = 0; i < old_len; ++i)
         if (array_scan(new_vars, new_len, old_vars[i]) < 0)
-            remove(old_vars[i], 1);
+            vol_remove(old_vars[i], 1);
 
     for (int i = 0; i < new_len; ++i) {
         new_vers[i] = 1;
@@ -272,4 +265,11 @@ extern int vol_open(const char *name, long version, int mode)
     fpath(file, name, version);
 
     return sys_open(file, mode);
+}
+
+extern void vol_remove(const char *name, long version)
+{
+    char file[MAX_PATH];
+    fpath(file, name, version);
+    sys_remove(file);
 }

@@ -18,4 +18,5 @@ limitations under the License.
 extern char *vol_init(const char *p);
 extern void vol_deploy(const char *p, const char *new_src);
 extern int vol_open(const char *name, long version, int mode);
+extern void vol_remove(const char *name, long version);
 extern void vol_wstate(char *names[], long sids[], int len);
