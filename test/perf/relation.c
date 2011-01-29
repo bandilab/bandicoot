@@ -318,6 +318,7 @@ int main()
     perf_eq(1000 * 1000);
 
     env_free(env);
+    tx_free();
 
     return 0;
 }

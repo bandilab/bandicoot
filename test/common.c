@@ -46,7 +46,7 @@ extern TBuf *gen_tuples(int start, int end)
     TBuf *res = tbuf_new();
 
     int len = end - start;
-    int tmp[len];
+    int *tmp = mem_alloc(sizeof(int) * len);
     for (int i = start, j = 0; i < end; ++i, ++j)
         tmp[j] = i;
 
@@ -55,6 +55,7 @@ extern TBuf *gen_tuples(int start, int end)
         tbuf_add(res, gen_tuple(tmp[idx]));
         tmp[idx] = tmp[--len];
     }
+    mem_free(tmp);
 
     return res;
 }
