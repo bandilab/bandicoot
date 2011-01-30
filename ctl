@@ -14,7 +14,7 @@ LEX="flex -I"
 [ "Linux" = `uname` ] && CC="$CC -pthread"
 [ "SunOS" = `uname` ] && CC="$CC -lsocket"
 
-LIBS="array% expression% head% http% index% memory% mutex% pack% relation%"
+LIBS="array% expression% head% http% index% memory% monitor% pack% relation%"
 LIBS="$LIBS string% summary% system% tuple% transaction% value% version%"
 LIBS="$LIBS volume% test/common% lex.yy% y.tab%"
 STRUCT_TESTS="test/array% test/expression% test/head% test/http% test/index%"

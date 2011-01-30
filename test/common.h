@@ -26,7 +26,7 @@ limitations under the License.
 #include "../tuple.h"
 #include "../expression.h"
 #include "../summary.h"
-#include "../mutex.h"
+#include "../monitor.h"
 #include "../volume.h"
 #include "../transaction.h"
 #include "../relation.h"
@@ -50,7 +50,7 @@ extern int tuple_enc(Tuple *t, void *buf);
 /* from transaction.c */
 extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
                           char *wnames[], long wvers[], int wlen,
-                          Sem *s);
+                          Mon *m);
 
 static Expr *expr_true()
 {

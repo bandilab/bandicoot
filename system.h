@@ -44,7 +44,6 @@ extern char sys_proc(void (*fn)(void *arg), void *arg);
 extern void sys_thread(void *(*fn)(void *arg), void *arg);
 extern void sys_exit(char status);
 extern void sys_die(const char *msg, ...);
-extern void sys_yield();
 
 /* networking */
 extern int sys_socket(int port);

@@ -15,18 +15,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-extern long mutex_new();
-extern void mutex_lock(long m);
-extern void mutex_unlock(long m);
-extern void mutex_close(long m);
-
 typedef struct {
-    long lock;
-    int val;
-} Sem;
+    int value;
+    void *mutex;
+    void *cond;
+} Mon;
 
-extern Sem sem_new(int val);
-extern void sem_dec(Sem *l);
-extern void sem_inc(Sem *l);
-extern void sem_wait(Sem *l, int val);
-extern void sem_close(Sem *l);
+extern Mon *mon_new();
+extern void mon_lock(Mon *m);
+extern void mon_unlock(Mon *m);
+extern void mon_wait(Mon *m);
+extern void mon_signal(Mon *m);
+extern void mon_free(Mon *m);

@@ -23,7 +23,7 @@ limitations under the License.
 #include "head.h"
 #include "transaction.h"
 #include "volume.h"
-#include "mutex.h"
+#include "monitor.h"
 
 #define RUNNABLE 1
 #define WAITING 2
@@ -36,7 +36,7 @@ typedef struct {
     int a_type;
     long version;
     int state;
-    long lock;
+    Mon *mon;
 } Entry;
 
 struct E_List {
@@ -56,7 +56,7 @@ static char *all_vars[MAX_VARS];
 static int num_vars;
 
 static E_List *gents;
-static long glock;
+static Mon *gmon;
 static long last_sid;
 
 static E_List *next(E_List *e)
@@ -88,8 +88,7 @@ static Entry *add_entry(long sid,
     e->a_type = a_type;
     e->version = version;
     e->state = state;
-    e->lock = mutex_new();
-    mutex_lock(e->lock);
+    e->mon = mon_new();
 
     gents = add(gents, e);
 
@@ -251,7 +250,7 @@ static void clean_up()
 
 static void finish(int sid, int final_state)
 {
-    mutex_lock(glock);
+    mon_lock(gmon);
 
     E_List *sig = NULL; /* entries to signal (unlock) */
     E_List *it = list_entries(sid);
@@ -269,23 +268,20 @@ static void finish(int sid, int final_state)
             Entry *we = get_min_waiting(e->var, WRITE);
 
             long wsid = MAX_LONG;
-            if (we != 0) {
-                we->state = RUNNABLE;
+            if (we != NULL) {
                 wsid = we->sid;
                 sig = add(sig, we);
             }
 
             E_List *rents = list_waiting(wsid, e->var, READ);
-            int j; 
             for (; rents != NULL; rents = next(rents)) {
                 Entry *re = rents->elem;
-                re->state = RUNNABLE;
                 re->version = rsid;
                 sig = add(sig, re);
             }
         }
 
-        mutex_close(e->lock);
+        mon_free(e->mon);
     }
 
     long vers[num_vars];
@@ -294,15 +290,20 @@ static void finish(int sid, int final_state)
 
     clean_up();
 
-    for (; sig != NULL; sig = next(sig))
-        mutex_unlock(sig->elem->lock);
+    for (; sig != NULL; sig = next(sig)) {
+        Entry *e = sig->elem;
+        mon_lock(e->mon);
+        e->state = RUNNABLE;
+        mon_signal(e->mon);
+        mon_unlock(e->mon);
+    }
 
-    mutex_unlock(glock);
+    mon_unlock(gmon);
 }
 
 extern void tx_free()
 {
-    mutex_lock(glock);
+    mon_lock(gmon);
 
     for (; gents != NULL; gents = next(gents))
         mem_free(gents->elem);
@@ -310,50 +311,51 @@ extern void tx_free()
     for (int i = 0; i < num_vars; ++i)
         mem_free(all_vars[i]);
 
-
-    mutex_unlock(glock);
-    mutex_close(glock);
+    mon_unlock(gmon);
+    mon_free(gmon);
 }
 
 extern void tx_init(char *vars[], int len)
 {
-    glock = mutex_new();
+    gmon = mon_new();
     last_sid = 1;
     gents = NULL;
     num_vars = len;
 
-    mutex_lock(glock);
+    mon_lock(gmon);
     for (int i = 0; i < num_vars; ++i) {
         all_vars[i] = str_dup(vars[i]);
 
         Entry *e = add_entry(1, all_vars[i], WRITE, 1, COMMITTED);
-        mutex_unlock(e->lock);
-        mutex_close(e->lock);
+        mon_free(e->mon);
     }
     array_sort(all_vars, num_vars, 0);
-    mutex_unlock(glock);
+    mon_unlock(gmon);
 }
 
 static long wait(Entry *e)
 {
-    mutex_lock(e->lock);
+    mon_lock(e->mon);
+    while (e->state == WAITING)
+        mon_wait(e->mon);
+
     long version = e->version;
-    mutex_unlock(e->lock);
+    mon_unlock(e->mon);
 
     return version;
 }
 
-/* the Sem *s input parameter introduced for testing (test/transaction.c) */
+/* the m input parameter is for testing purposes (test/transaction.c) */
 extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
                           char *wnames[], long wvers[], int wlen,
-                          Sem *s)
+                          Mon *m)
 {
     long sid;
     int i, state, rw = 0;
     const char *var;
     Entry *re[rlen], *we[wlen];
 
-    mutex_lock(glock);
+    mon_lock(gmon);
 
     sid = ++last_sid;
     for (i = 0; i < wlen; ++i) {
@@ -363,10 +365,6 @@ extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
             state = RUNNABLE;
 
         we[i] = add_entry(sid, var, WRITE, sid, state);
-
-        if (state == RUNNABLE)
-            mutex_unlock(we[i]->lock);
-
         rw = 1;
     }
     for (i = 0; i < rlen; ++i) {
@@ -383,15 +381,16 @@ extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
         }
 
         re[i] = add_entry(sid, var, READ, rsid, state);
-
-        if (state == RUNNABLE)
-            mutex_unlock(re[i]->lock);
     }
 
-    mutex_unlock(glock);
+    mon_unlock(gmon);
 
-    if (s != NULL)
-        sem_inc(s);
+    if (m != NULL) {
+        mon_lock(m);
+        m->value++;
+        mon_signal(m);
+        mon_unlock(m);
+    }
 
     for (i = 0; i < rlen; ++i)
         rvers[i] = wait(re[i]);
@@ -422,7 +421,7 @@ extern void tx_revert(long sid)
 
 extern void tx_state()
 {
-    mutex_lock(glock);
+    mon_lock(gmon);
 
     sys_print("%-8s %-32s %-5s %-8s %-9s\n",
               "SID", "VARIABLE", "ATYPE", "ASID", "STATE");
@@ -447,5 +446,5 @@ extern void tx_state()
 
     }
 
-    mutex_unlock(glock);
+    mon_unlock(gmon);
 }

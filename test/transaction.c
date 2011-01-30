@@ -17,14 +17,14 @@ limitations under the License.
 
 #include "common.h"
 
-typedef enum { TX_ENTER, TX_COMMIT, TX_REVERT, TX_EXIT, TX_READ, TX_CHECK,
-               TX_WRITE } Action;
+typedef enum { TX_ENTER, TX_COMMIT, TX_REVERT, TX_EXIT,
+               TX_READ, TX_CHECK, TX_WRITE } Action;
 
 typedef struct {
     Action action;
     int value;
-    Sem write;
-    Sem read;
+    Mon *write;
+    Mon *read;
     char rname[MAX_NAME];
     char wname[MAX_NAME];
 } Proc;
@@ -32,16 +32,40 @@ typedef struct {
 static Env *env;
 static Proc p1, p2, p3, cp;
 static char current_test[30];
-
-static Sem glock;
+static Mon *gmon;
 static int seq;
+
+static void sem_inc(Mon *m)
+{
+    mon_lock(m);
+    m->value++;
+    mon_signal(m);
+    mon_unlock(m);
+}
+
+static void sem_dec(Mon *m)
+{
+    mon_lock(m);
+    while (m->value < 1)
+        mon_wait(m);
+    m->value--;
+    mon_unlock(m);
+}
+
+static void sem_wait(Mon *m, int val)
+{
+    mon_lock(m);
+    while (m->value != val)
+        mon_wait(m);
+    mon_unlock(m);
+}
 
 static void send_action(Proc *p, Action a, int value)
 {
     p->action = a;
     p->value = value;
-    sem_inc(&p->read);
-    sem_dec(&p->write);
+    sem_inc(p->read);
+    sem_dec(p->write);
 }
 
 static void enter(Proc *p)
@@ -90,7 +114,7 @@ static void *exec_thread(void *arg)
     int action = TX_ENTER;
     int value = -1;
     while (action != TX_EXIT) {
-        sem_dec(&p->read);
+        sem_dec(p->read);
         action = p->action;
         value = p->value;
 
@@ -119,7 +143,7 @@ static void *exec_thread(void *arg)
             rel_free(rel);
         }
 
-        sem_inc(&p->write);
+        sem_inc(p->write);
 
         if (action == TX_ENTER) {
             /* This wait call is to synchronize all the concurrent TX_ENTER
@@ -128,11 +152,11 @@ static void *exec_thread(void *arg)
                Each thread has to wait until the global lock reaches the value
                which means the thread is suppose to enter the tx. */
 
-            sem_wait(&glock, value);
+            sem_wait(gmon, value);
 
             sid = tx_enter_full(r.names, r.vers, r.len,
                                 w.names, w.vers, w.len,
-                                &glock);
+                                gmon);
         }
     }
 
@@ -141,22 +165,22 @@ static void *exec_thread(void *arg)
 
 static void init_thread(Proc *p, char *r, char *w)
 {
-    p->write = sem_new(0);
-    p->read = sem_new(0);
+    p->write = mon_new();
+    p->read = mon_new();
     p->action = -1;
 
     str_cpy(p->rname, r);
     str_cpy(p->wname, w);
 
-    sys_thread(exec_thread, (void*) p);
+    sys_thread(exec_thread, p);
 }
 
 static void exit_thread(Proc *p)
 {
     action(p, TX_EXIT);
 
-    sem_close(&p->write);
-    sem_close(&p->read);
+    mon_free(p->write);
+    mon_free(p->read);
 }
 
 static void test(char *name, int cnt)
@@ -393,7 +417,8 @@ int main(void)
     env = env_new(vol_init("bin/volume"));
     tx_init(env->vars.names, env->vars.len);
 
-    glock = sem_new(1);
+    gmon = mon_new();
+    gmon->value = 1;
     seq = 1;
 
     test_basics();
@@ -411,7 +436,7 @@ int main(void)
     test_chain(TX_COMMIT);
     test_chain(TX_REVERT);
 
-    sem_close(&glock);
+    mon_free(gmon);
 
     env_free(env);
     tx_free();

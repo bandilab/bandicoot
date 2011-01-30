@@ -17,30 +17,22 @@ limitations under the License.
 
 #include "common.h"
 
-#define NUM_MUTEX_TESTS 10000
+#define TESTS 1000
 
-static void test_mutex()
+static void test_monitor()
 {
-    int i;
+    Mon *ms[TESTS];
+    for (int i = 0; i < TESTS; ++i)
+        ms[i] = mon_new();
 
-    long m = mutex_new();
-    for (i = 0; i < NUM_MUTEX_TESTS; ++i) {
-        mutex_lock(m);
-        mutex_unlock(m);
-    }
-    mutex_close(m);
+    for (int i = 0; i < TESTS; ++i)
+        mon_lock(ms[i]);
 
-    long ms[NUM_MUTEX_TESTS];
-    for (i = 0; i < NUM_MUTEX_TESTS; ++i) {
-        ms[i] = mutex_new();
-        mutex_lock(ms[i]);
-    }
+    for (int i = 0; i < TESTS; ++i)
+        mon_unlock(ms[i]);
 
-    for (i = 0; i < NUM_MUTEX_TESTS; ++i)
-        mutex_unlock(ms[i]);
-
-    for (i = 0; i < NUM_MUTEX_TESTS; ++i)
-        mutex_close(ms[i]);
+    for (int i = 0; i < TESTS; ++i)
+        mon_free(ms[i]);
 }
 
 static void proc_a(void *arg)
@@ -115,7 +107,7 @@ static void test_exit()
 int main(void)
 {
     test_thread();
-    test_mutex();
+    test_monitor();
     test_proc();
     test_exit();
 
