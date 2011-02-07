@@ -11,10 +11,7 @@ CC="gcc -g -std=c99 $WARN $YACC_FLAGS"
 YACC="yacc -d"
 LEX="flex -I"
 
-[ "Linux" = `uname` ] && CC="$CC -pthread"
-[ "SunOS" = `uname` ] && CC="$CC -lsocket"
-
-LIBS="array% expression% head% http% index% memory% monitor% pack% relation%"
+LIBS="array% expression% head% http% index% memory% pack% relation%"
 LIBS="$LIBS string% summary% system% tuple% transaction% value% version%"
 LIBS="$LIBS volume% test/common% lex.yy% y.tab%"
 STRUCT_TESTS="test/array% test/expression% test/head% test/http% test/index%"
@@ -27,6 +24,16 @@ PERF_TESTS="$PERF_TESTS test/perf/number% test/perf/relation%"
 PERF_TESTS="$PERF_TESTS test/perf/system% test/perf/tuple%"
 PROGS="bandicoot%"
 
+[ "Linux" = `uname` ] && CC="$CC -pthread"
+[ "SunOS" = `uname` ] && CC="$CC -lsocket"
+
+if [ -z `uname | grep -i CYGWIN` ]
+then
+    LIBS="$LIBS system_posix%"
+else
+    LIBS="$LIBS system_win32%"
+fi
+
 ALL_VARS=`ls test/data`
 
 create_out_dirs()
@@ -38,7 +45,7 @@ create_out_dirs()
 
 check_lp64()
 {
-    lp64=`mktemp lp64-XXXX`
+    lp64=`mktemp $BIN/lp64-XXXX`
     echo 'int main() { return sizeof(long); }' \
         | $CC $DIST_CFLAGS -o $lp64 -x c -
 
@@ -50,8 +57,6 @@ check_lp64()
     else
         echo '[=] ILP32'
     fi
-
-    rm -f $lp64
 }
 
 prepare_lang()
@@ -108,7 +113,7 @@ clean()
     find . -name '*.o' -exec rm {} \;
     find . -name '*.log' -exec rm {} \;
     rm -rf version.c y.tab.[ch] lex.yy.c $BIN
-    rm -rf "bandicoot-$VERSION" "bandicoot-src-$VERSION"
+    rm -rf "bandicoot-$VERSION"
 }
 
 dist()
@@ -123,27 +128,13 @@ dist()
 
     d="bandicoot-$VERSION"
     mkdir -p $d
-    cp LICENSE NOTICE $BIN/bandicoot $d
+
+    cp LICENSE NOTICE $BIN/bandicoot* $d
     if [ -d "$2" ]
     then
         echo "including examples directory $2"
         cp -r $2 $d
     fi
-
-    a="$BIN/$d.tgz"
-    echo "[A] $a"
-    tar cfz $a $d
-}
-
-src()
-{
-    clean 
-    create_out_dirs
-
-    d="bandicoot-src-$VERSION"
-    mkdir -p $d
-    git clone -q . $d
-    rm -rf $d/.git
 
     a="$BIN/$d.tgz"
     echo "[A] $a"
@@ -224,18 +215,15 @@ case $cmd in
         if [ "$2" != "-m32" ] && [ "$2" != "-m64" ]
         then
             echo "---"
-            echo "expecting -m32 or -m64 as the first parameter"
+            echo "expecting -m32|-m64 as the first parameter"
             exit 1
         fi
 
-        dist "-Os $2" $3
-        ;;
-    src)
-        src
+        dist "-Os $2" $4
         ;;
     *)
         echo "unknown command '$cmd', usage: ctl <command>"
-        echo "    dist -m32|-m64 [examles/]- build a package for distribution"
+        echo "    dist -m32|-m64 [examles/] - build a package for distribution"
         echo "    pack - compile and prepare for running tests"
         echo "    test - execute structured tests (prereq: pack)"
         echo "    perf - execute performance tests (prereq: pack)"

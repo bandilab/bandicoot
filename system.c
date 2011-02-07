@@ -15,24 +15,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <errno.h>
 #include <string.h>
 #include <unistd.h>
-#include <dirent.h>
-#include <pthread.h>
 #include <time.h>
-#include <signal.h>
 
 #include "config.h"
 #include "system.h"
@@ -59,6 +53,12 @@ extern int sys_open(const char *path, int mode)
         sys_die("sys: cannot open %s\n", path);
 
     return fd;
+}
+
+extern void sys_close(int fd)
+{
+    if (close(fd) < 0)
+        sys_die("sys: cannot close file descriptor\n");
 }
 
 extern int sys_exists(const char *path)
@@ -144,10 +144,15 @@ extern void sys_write(int fd, const void *buf, int size)
         sys_die("sys: cannot write data\n");
 }
 
-extern void sys_close(int fd)
+
+extern int sys_empty(const char *dir)
 {
-    if (close(fd) < 0)
-        sys_die("sys: cannot close file descriptor\n");
+    int num_files;
+    char **files = sys_list(dir, &num_files);
+    int res = num_files == 0;
+    mem_free(files);
+
+    return res;
 }
 
 extern char **sys_list(const char *path, int *len)
@@ -212,6 +217,11 @@ extern void sys_time(char *buf)
     strftime(buf, 32, "%Y-%m-%d %H:%M:%S UTC", gmtime(&t));
 }
 
+extern void sys_exit(char status)
+{
+    exit(status);
+}
+
 extern void sys_die(const char *msg, ...)
 {
     va_list ap;
@@ -226,77 +236,6 @@ extern void sys_die(const char *msg, ...)
     exit(PROC_FAIL);
 }
 
-extern char sys_proc(void (*fn)(void *arg), void *arg)
-{
-    pid_t pid;
-    if ((pid = fork()) == 0) {
-        fn(arg);
-        sys_exit(PROC_OK);
-    }
-
-    if (pid == -1)
-        sys_die("sys: cannot create a new process\n");
-
-    int res, status;
-    do {
-        res = waitpid(pid, &status, WUNTRACED | WCONTINUED);
-    } while (res == -1 && errno == EINTR);
-
-    if (res == -1)
-        sys_die("sys: wait for child pid %d failed\n", pid);
-
-    return WIFEXITED(status) ? WEXITSTATUS(status) : PROC_FAIL;
-}
-
-extern void sys_exit(char status)
-{
-    exit(status);
-}
-
-extern void sys_thread(void *(*fn)(void *arg), void *arg)
-{
-    pthread_t t;
-    if (pthread_create(&t, 0, fn, arg) != 0)
-        sys_die("sys: cannot create a thread\n");
-
-    if (pthread_detach(t) != 0)
-        sys_die("sys: cannot detach from a thread\n");
-}
-
-extern int sys_socket(int port)
-{
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd == -1)
-        sys_die("sys: cannot create a socket\n");
-
-    int on = 1;
-    if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
-        sys_die("sys: cannot setsockopt(SO_REUSEADDR)\n");
-
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(sfd, (struct sockaddr*) &addr, sizeof(addr)) == -1)
-        sys_die("sys: cannot bind a socket to port %d\n", port);
-
-    int backlog = 128;
-    if (listen(sfd, backlog) == -1)
-        sys_die("sys: cannot listen (backlog: %d)\n", backlog);
-
-    return sfd;
-}
-
-extern int sys_accept(int socket)
-{
-    int res = accept(socket, NULL, NULL);
-    if (res == -1)
-        sys_die("sys: cannot accept incoming connection\n");
-
-    return res;
-}
-
 extern int sys_send(int fd, const void *buf, int size)
 {
     int w = write(fd, buf, size);
@@ -307,19 +246,4 @@ extern int sys_send(int fd, const void *buf, int size)
 extern int sys_recv(int fd, void *buf, int size)
 {
     return read(fd, buf, size);
-}
-
-extern int sys_empty(const char *dir)
-{
-    int num_files;
-    char **files = sys_list(dir, &num_files);
-    int res = num_files == 0;
-    mem_free(files);
-
-    return res;
-}
-
-extern void sys_signals()
-{
-    signal(SIGPIPE, SIG_IGN);
 }

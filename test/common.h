@@ -26,7 +26,6 @@ limitations under the License.
 #include "../tuple.h"
 #include "../expression.h"
 #include "../summary.h"
-#include "../monitor.h"
 #include "../volume.h"
 #include "../transaction.h"
 #include "../relation.h"

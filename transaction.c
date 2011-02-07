@@ -23,7 +23,6 @@ limitations under the License.
 #include "head.h"
 #include "transaction.h"
 #include "volume.h"
-#include "monitor.h"
 
 #define RUNNABLE 1
 #define WAITING 2

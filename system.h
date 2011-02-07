@@ -57,3 +57,17 @@ extern long sys_millis(); /* suitable for quick time measures only (long might
                              not be enough on 32bit systems) */
 extern void sys_time(char *buf);
 extern void sys_signals(); /* sets the required signal dispositions */
+
+/* monitor */
+typedef struct {
+    int value;
+    void *mutex;
+    void *cond;
+} Mon;
+
+extern Mon *mon_new();
+extern void mon_lock(Mon *m);
+extern void mon_unlock(Mon *m);
+extern void mon_wait(Mon *m);
+extern void mon_signal(Mon *m);
+extern void mon_free(Mon *m);
