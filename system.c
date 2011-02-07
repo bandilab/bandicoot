@@ -281,7 +281,7 @@ extern int sys_socket(int port)
     if (bind(sfd, (struct sockaddr*) &addr, sizeof(addr)) == -1)
         sys_die("sys: cannot bind a socket to port %d\n", port);
 
-    int backlog = 50;
+    int backlog = 128;
     if (listen(sfd, backlog) == -1)
         sys_die("sys: cannot listen (backlog: %d)\n", backlog);
 

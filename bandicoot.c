@@ -30,10 +30,12 @@ limitations under the License.
 #include "relation.h"
 #include "environment.h"
 #include "pack.h"
+#include "monitor.h"
 
 extern const char *VERSION;
 
-static Env *env = NULL;
+#define QUEUE_LEN 128
+#define THREADS 8
 
 typedef struct {
     int fd;
@@ -42,6 +44,48 @@ typedef struct {
     long rvers[MAX_VARS];
     long wvers[MAX_VARS];
 } Exec;
+
+struct {
+    int pos;
+    int fds[QUEUE_LEN];
+    int len;
+    Mon *mon;
+} queue;
+
+static void queue_init()
+{
+    queue.pos = -1;
+    queue.len = QUEUE_LEN;
+    queue.mon = mon_new();
+}
+
+static void queue_put(int fd)
+{
+    mon_lock(queue.mon);
+    while (queue.pos >= queue.len)
+        mon_wait(queue.mon);
+
+    queue.pos++;
+    queue.fds[queue.pos] = fd;
+
+    mon_signal(queue.mon);
+    mon_unlock(queue.mon);
+}
+
+static int queue_get()
+{
+    mon_lock(queue.mon);
+    while (queue.pos < 0)
+        mon_wait(queue.mon);
+
+    int fd = queue.fds[queue.pos];
+    queue.pos--;
+
+    mon_signal(queue.mon);
+    mon_unlock(queue.mon);
+
+    return fd;
+}
 
 static void exec_proc(void *arg)
 {
@@ -100,60 +144,63 @@ static void exec_proc(void *arg)
 
 static void *exec_thread(void *arg)
 {
-    int status = -1, fd = (long) arg;
-    long time = sys_millis(), sid = 0;
+    Env *env = arg;
+    for (;;) {
+        int status = -1, fd = queue_get();
+        long time = sys_millis(), sid = 0;
 
-    Http_Req *req = http_parse(fd);
-    if (req == NULL) {
-        status = http_400(fd);
-        goto exit;
-    }
-
-    if (req->method == OPTIONS) {
-        status = http_opts(fd);
-        goto exit;
-    }
-
-    /* FIXME: concurrent calls to env_func */
-    Func *fn = env_func(env, req->path + 1);
-    if (fn == NULL) {
-        status = http_404(fd);
-        goto exit;
-    }
-
-    Exec e = {.fd = fd, .fn = fn, .req = req};
-    /* FIXME: concurrent access of fn */
-    sid = tx_enter(fn->r.vars, e.rvers, fn->r.len,
-                   fn->w.vars, e.wvers, fn->w.len);
-
-    int exit_code = sys_proc(exec_proc, &e);
-    if (exit_code == PROC_OK) {
-        tx_commit(sid);
-        status = http_chunk(fd, NULL, 0);
-    } else {
-        tx_revert(sid);
-
-        if (exit_code == PROC_400)
+        Http_Req *req = http_parse(fd);
+        if (req == NULL) {
             status = http_400(fd);
-        else if (exit_code == PROC_404)
+            goto exit;
+        }
+
+        if (req->method == OPTIONS) {
+            status = http_opts(fd);
+            goto exit;
+        }
+
+        Func *fn = env_func(env, req->path + 1);
+        if (fn == NULL) {
             status = http_404(fd);
-        else if (exit_code == PROC_405)
-            status = http_405(fd);
-        else
-            status = http_500(fd);
-    }
+            goto exit;
+        }
+
+        Exec e = {.fd = fd, .fn = fn, .req = req};
+        sid = tx_enter(fn->r.vars, e.rvers, fn->r.len,
+                       fn->w.vars, e.wvers, fn->w.len);
+
+        int exit_code = sys_proc(exec_proc, &e);
+        if (exit_code == PROC_OK) {
+            tx_commit(sid);
+            status = http_chunk(fd, NULL, 0);
+        } else {
+            tx_revert(sid);
+
+            if (exit_code == PROC_400)
+                status = http_400(fd);
+            else if (exit_code == PROC_404)
+                status = http_404(fd);
+            else if (exit_code == PROC_405)
+                status = http_405(fd);
+            else
+                status = http_500(fd);
+        }
 
 exit:
-    sys_print("[%016X] method '%c', path '%s', time %dms - %3d\n",
-              sid,
-              (req == NULL) ? '?' : req->method,
-              (req == NULL) ? "malformed" : req->path,
-              sys_millis() - time,
-              status);
+        sys_print("[%016X] method '%c', path '%s', time %dms - %3d\n",
+                  sid,
+                  (req == NULL) ? '?' : req->method,
+                  (req == NULL) ? "malformed" : req->path,
+                  sys_millis() - time,
+                  status);
 
-    if (req != NULL)
-        mem_free(req);
-    sys_close(fd);
+        if (req != NULL)
+            mem_free(req);
+
+        sys_close(fd);
+    }
+    env_free(env);
 
     return NULL;
 }
@@ -171,7 +218,6 @@ int main(int argc, char *argv[])
 {
     int e = -1, p = 0;
     char *v = NULL, *s = NULL;
-
     if (argc < 2)
         usage(argv[0]);
 
@@ -194,9 +240,16 @@ int main(int argc, char *argv[])
         if (e || p < 1 || p > 65535)
             sys_die("invalid port '%d'\n", p);
 
-        env = env_new(vol_init(v));
-        tx_init(env->vars.names, env->vars.len);
+        char *src = vol_init(v);
+        queue_init();
         sys_signals();
+
+        Env *env = env_new(src);
+        tx_init(env->vars.names, env->vars.len);
+        env_free(env);
+
+        for (int i = 0; i < THREADS; ++i)
+            sys_thread(exec_thread, env_new(src));
 
         int sfd = sys_socket(p);
 
@@ -206,11 +259,11 @@ int main(int argc, char *argv[])
 
         for (;;) {
             long cfd = sys_accept(sfd);
-            sys_thread(exec_thread, (void*) cfd);
+            queue_put(cfd);
         }
 
         tx_free();
-        env_free(env);
+        mon_free(queue.mon);
     } else
         usage(argv[0]);
 

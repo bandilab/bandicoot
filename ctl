@@ -172,7 +172,7 @@ case $cmd in
 
         for v in $ALL_VARS
         do
-            curl -s --data-binary @test/data/$v http://localhost:$PORT/store_$v
+            curl -s --data-binary @test/data/$v http://127.0.0.1:$PORT/store_$v
         done
         kill $pid
         ;;
@@ -184,7 +184,7 @@ case $cmd in
         do
             for v in $ALL_VARS
             do
-                curl -s http://localhost:$PORT/load_$v -o /dev/null
+                curl -s http://127.0.0.1:$PORT/load_$v -o /dev/null
                 if [ "$?" != "0" ]
                 then
                     exit
@@ -198,7 +198,7 @@ case $cmd in
             for v in $ALL_VARS
             do
                 curl -s --data-binary @test/data/$v \
-                    http://localhost:$PORT/store_$v -o /dev/null
+                    http://127.0.0.1:$PORT/store_$v -o /dev/null
                 if [ "$?" != "0" ]
                 then
                     exit
