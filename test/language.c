@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
         test_summary();
         test_literal();
     } else {
-        char log[MAX_PATH];
+        char log[MAX_FILE_PATH];
         str_print(log, "%s.log", argv[1]);
 
         sys_close(2);

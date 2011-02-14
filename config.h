@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#define MAX_PATH 256
+#define MAX_FILE_PATH 256
 
 /* maximum number of named relational type declarations */
 #define MAX_TYPES 128

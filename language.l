@@ -152,7 +152,7 @@ extern Env *env_new(const char *file)
 
 extern void yyerror(const char *msg, ...)
 {
-    char m[MAX_PATH + str_len(msg)];
+    char m[MAX_FILE_PATH + str_len(msg)];
     str_print(m, "%s:%d: %s\n", src_path, line, msg);
 
     va_list ap;

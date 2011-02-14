@@ -14,6 +14,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+#include <windows.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <errno.h>
@@ -41,7 +42,11 @@ extern char sys_wait(int pid)
 
 extern void sys_thread(void *(*fn)(void *arg), void *arg)
 {
-    sys_die("sys_thread: to be implemented\n");
+    DWORD id;
+    HANDLE h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)fn, arg, 0, &id);
+ 
+    if (h == NULL)
+        sys_die("sys: cannot create a thread\n");
 }
 
 extern int sys_socket(int *port)
@@ -64,36 +69,53 @@ extern int sys_accept(int socket)
 
 extern void sys_signals()
 {
-    sys_die("sys_signals: to be implemented\n");
 }
 
 extern Mon *mon_new()
 {
-    sys_die("mon_new: to be implemented\n");
-    return NULL;
+    Mon *res = mem_alloc(sizeof(Mon));
+    res->value = 0;
+    res->mutex = mem_alloc(sizeof(CRITICAL_SECTION));
+
+    if (!InitializeCriticalSectionAndSpinCount(res->mutex, 0))
+        sys_die("monitor: initialize critical section failed\n");
+
+    res->cond = CreateEvent(NULL, 1, 0, NULL);
+    if (res->cond == NULL)
+        sys_die("monitor: create event failed\n");
+
+    return res;
 }
 
 extern void mon_lock(Mon *m)
 {
-    sys_die("mon_lock: to be implemented\n");
+    EnterCriticalSection(m->mutex);
 }
 
 extern void mon_unlock(Mon *m)
 {
-    sys_die("mon_unlock: to be implemented\n");
+    LeaveCriticalSection(m->mutex);
 }
 
 extern void mon_wait(Mon *m)
 {
-    sys_die("mon_wait: to be implemented\n");
+    if (!ResetEvent(m->cond))
+        sys_die("monitor: reset failed\n");
+    LeaveCriticalSection(m->mutex);
+    if (WAIT_OBJECT_0 != WaitForSingleObject(m->cond, INFINITE))
+        sys_die("monitor: wait failed\n");
+    EnterCriticalSection(m->mutex);
 }
 
 extern void mon_signal(Mon *m)
 {
-    sys_die("mon_signal: to be implemented\n");
+    if (!SetEvent(m->cond))
+        sys_die("monitor: signal failed\n");
 }
 
 extern void mon_free(Mon *m)
 {
-    sys_die("mon_free: to be implemented\n");
+    CloseHandle(m->cond);
+    DeleteCriticalSection(m->mutex);
+    mem_free(m);
 }

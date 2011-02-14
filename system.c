@@ -63,15 +63,15 @@ extern void sys_close(int fd)
 
 extern int sys_exists(const char *path)
 {
-    int fd = open(path, O_RDONLY);
-    if (fd == -1) {
+    struct stat st;
+
+    int res = stat(path, &st);
+    if (res == -1) {
         if (errno == ENOENT)
             return 0;
         else
             sys_die("sys: cannot check %s existance\n", path);
     }
-
-    sys_close(fd);
 
     return 1;
 }
@@ -157,7 +157,7 @@ extern int sys_empty(const char *dir)
 
 extern char **sys_list(const char *path, int *len)
 {
-    char *mem = mem_alloc(MAX_PATH);
+    char *mem = mem_alloc(MAX_FILE_PATH);
     int n = 0, off = 0, *offs = mem_alloc(sizeof(int));
     offs[0] = 0;
 
@@ -171,7 +171,7 @@ extern char **sys_list(const char *path, int *len)
             off += str_cpy(mem + off, e->d_name) + 1;
             n++;
 
-            mem = mem_realloc(mem, off + MAX_PATH);
+            mem = mem_realloc(mem, off + MAX_FILE_PATH);
             offs = mem_realloc(offs, (n + 1) * sizeof(int));
             offs[n] = off;
         }

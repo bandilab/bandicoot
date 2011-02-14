@@ -47,8 +47,8 @@ typedef struct {
 
 typedef struct {
     Env *env;
-    char exe[MAX_PATH];
-    char vol[MAX_PATH];
+    char exe[MAX_FILE_PATH];
+    char vol[MAX_FILE_PATH];
 } Exec;
 
 struct {

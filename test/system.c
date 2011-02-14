@@ -55,13 +55,13 @@ int main(void)
         fail();
     mem_free(txt);
 
-    sys_remove("tmp_file1");
-    sys_remove("tmp_file2");
-
     sys_close(rfd1);
     sys_close(rfd2);
     sys_close(wfd1);
     sys_close(wfd2);
+
+    sys_remove("tmp_file1");
+    sys_remove("tmp_file2");
 
     if (sys_exists("doesnotexist"))
         fail();

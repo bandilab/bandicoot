@@ -19,7 +19,7 @@ limitations under the License.
 
 static Http_Req* parse(const char *test)
 {
-    char path[MAX_PATH];
+    char path[MAX_FILE_PATH];
     str_print(path, "test/reqs/%s", test);
     int fd = sys_open(path, READ | WRITE);
 

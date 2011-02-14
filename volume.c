@@ -30,10 +30,10 @@ limitations under the License.
 #include "relation.h"
 #include "environment.h"
 
-static char path[MAX_PATH];
-static char source[MAX_PATH];
-static char state[MAX_PATH];
-static char state_bak[MAX_PATH];
+static char path[MAX_FILE_PATH];
+static char source[MAX_FILE_PATH];
+static char state[MAX_FILE_PATH];
+static char state_bak[MAX_FILE_PATH];
 
 static int SID_LEN = 17;
 static char SID_TO_STR[] = {
@@ -151,8 +151,8 @@ static void cleanup()
 
     for (int i = 0; i < len; ++i)
         if (vers[i] > 1) {
-            char from[MAX_PATH];
-            char to[MAX_PATH];
+            char from[MAX_FILE_PATH];
+            char to[MAX_FILE_PATH];
             fpath(from, vars[i], vers[i]);
             fpath(to, vars[i], 1);
 
@@ -191,7 +191,7 @@ extern void vol_wstate(char *names[], long vers[], int len)
 
 static void init(const char *p)
 {
-    if (str_len(p) > MAX_PATH)
+    if (str_len(p) > MAX_FILE_PATH)
         sys_die("volume path '%s' is too long\n", p);
 
     int plen = str_cpy(path, p) - 1;
@@ -262,7 +262,7 @@ extern void vol_deploy(const char *p, const char *new_src)
 
 extern int vol_open(const char *name, long version, int mode)
 {
-    char file[MAX_PATH];
+    char file[MAX_FILE_PATH];
     fpath(file, name, version);
 
     return sys_open(file, mode);
@@ -270,7 +270,7 @@ extern int vol_open(const char *name, long version, int mode)
 
 extern void vol_remove(const char *name, long version)
 {
-    char file[MAX_PATH];
+    char file[MAX_FILE_PATH];
     fpath(file, name, version);
     sys_remove(file);
 }
