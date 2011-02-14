@@ -277,7 +277,7 @@ static void perf_eq(int count)
 
 int main()
 {
-    Env *env = env_new(vol_init("bin/volume"));
+    Env *env = env_new(vol_init("bin/volume", 1));
     tx_init(env->vars.names, env->vars.len);
 
     perf_load_store(env, 1 * 1000);

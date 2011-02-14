@@ -35,15 +35,23 @@ static void test_monitor()
         mon_free(ms[i]);
 }
 
-static void proc_a(void *arg)
+static void proc_check(char *env[], char exit_code)
 {
-    sys_exit(37);
+    int pid = sys_exec(env);
+    char ret = sys_wait(pid);
+    if (ret != exit_code)
+        fail();
 }
 
-static void test_proc()
+static void test_proc(char *exe)
 {
-    if (sys_proc(proc_a, 0) != 37)
-        fail();
+    char *test_ok[] = {exe, "PROC_OK", NULL};
+    char *test_fail[] = {exe, "PROC_FAIL", NULL};
+    char *test_cust[] = {exe, "PROC_CUST", NULL};
+
+    proc_check(test_ok, PROC_OK);
+    proc_check(test_fail, PROC_FAIL);
+    proc_check(test_cust, 'T');
 }
 
 static void *thread_a(void *arg)
@@ -59,57 +67,23 @@ static void test_thread()
     sys_thread(thread_a, (void*) 0x75L);
 }
 
-static void proc_exit_normal(void *arg)
+int main(int argc, char *argv[])
 {
-}
+    int exit = 0;
 
-static void proc_exit_ok(void *arg)
-{
-    sys_exit(PROC_OK);
-}
+    if (argc == 1) {
+        test_thread();
+        test_monitor();
+        test_proc(argv[0]);
+    } else if (argc == 2) {
+        /* child process exit codes */
+        if (str_cmp(argv[1], "PROC_OK") == 0)
+            exit = PROC_OK;
+        else if (str_cmp(argv[1], "PROC_FAIL") == 0)
+            exit = PROC_FAIL;
+        else if (str_cmp(argv[1], "PROC_CUST") == 0)
+            exit = 'T';
+    }
 
-static void proc_exit_fail(void *arg)
-{
-    sys_exit(PROC_FAIL);
-}
-
-static void proc_exit_400(void *arg)
-{
-    sys_exit(PROC_400);
-}
-
-static void proc_exit_404(void *arg)
-{
-    sys_exit(PROC_404);
-}
-
-static void proc_exit_405(void *arg)
-{
-    sys_exit(PROC_405);
-}
-
-static void test_exit()
-{
-    if (PROC_OK != sys_proc(proc_exit_normal, NULL))
-        fail();
-    if (PROC_OK != sys_proc(proc_exit_ok, NULL))
-        fail();
-    if (PROC_FAIL != sys_proc(proc_exit_fail, NULL))
-        fail();
-    if (PROC_400 != sys_proc(proc_exit_400, NULL))
-        fail();
-    if (PROC_404 != sys_proc(proc_exit_404, NULL))
-        fail();
-    if (PROC_405 != sys_proc(proc_exit_405, NULL))
-        fail();
-}
-
-int main(void)
-{
-    test_thread();
-    test_monitor();
-    test_proc();
-    test_exit();
-
-    return 0;
+    return exit;
 }

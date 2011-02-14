@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-extern char *vol_init(const char *p);
+extern char *vol_init(const char *p, int clean);
 extern void vol_deploy(const char *p, const char *new_src);
 extern int vol_open(const char *name, long version, int mode);
 extern void vol_remove(const char *name, long version);

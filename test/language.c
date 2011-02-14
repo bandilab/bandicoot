@@ -17,20 +17,19 @@ limitations under the License.
 
 #include "common.h"
 
-static void env(void *file)
+static char *exe;
+
+static char run(char *file)
 {
-    char log[MAX_PATH];
-    str_print(log, "%s.log", file);
+    char *argv[] = {exe, file, NULL};
+    int pid = sys_exec(argv);
+    char ret = sys_wait(pid);
 
-    sys_close(2);
-    sys_open(log, CREATE | WRITE);
-
-    env_new(file);
-    sys_exit(0);
+    return ret;
 }
 
-#define OK(f) do { if (sys_proc(env, "test/progs/" f)) fail(); } while (0)
-#define FAIL(f) do { if (!sys_proc(env, "test/progs/" f)) fail(); } while (0)
+#define OK(f) do { if (run("test/progs/" f)) fail(); } while (0)
+#define FAIL(f) do { if (!run("test/progs/" f)) fail(); } while (0)
 
 static void test_basics()
 {
@@ -153,6 +152,9 @@ static void test_compat()
         fail();
     if (env_compat(e1, e2))
         fail();
+
+    env_free(e1);
+    env_free(e2);
 }
 
 static void test_tmp_var()
@@ -184,25 +186,39 @@ static void test_literal()
     FAIL("literal_long_overflow_neg_err.b");
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    test_basics();
-    test_rel_types();
-    test_rel_vars();
-    test_func();
-    test_load();
-    test_join();
-    test_union();
-    test_semidiff();
-    test_project();
-    test_rename();
-    test_primitive_exprs();
-    test_assign();
-    test_params();
-    test_compat();
-    test_tmp_var();
-    test_summary();
-    test_literal();
+    exe = argv[0];
 
-    return 0;
+    int ret = 0;
+    if (argc == 1) {
+        test_basics();
+        test_rel_types();
+        test_rel_vars();
+        test_func();
+        test_load();
+        test_join();
+        test_union();
+        test_semidiff();
+        test_project();
+        test_rename();
+        test_primitive_exprs();
+        test_assign();
+        test_params();
+        test_compat();
+        test_tmp_var();
+        test_summary();
+        test_literal();
+    } else {
+        char log[MAX_PATH];
+        str_print(log, "%s.log", argv[1]);
+
+        sys_close(2);
+        sys_open(log, CREATE | WRITE);
+
+        env_new(argv[1]);
+        ret = PROC_OK;
+    }
+
+    return ret;
 }

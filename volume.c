@@ -210,10 +210,11 @@ static void init(const char *p)
         STR_TO_SID[i] = i - 'a' + 10;
 }
 
-extern char *vol_init(const char *p)
+extern char *vol_init(const char *p, int clean)
 {
     init(p);
-    cleanup();
+    if (clean)
+        cleanup();
 
     return source;
 }

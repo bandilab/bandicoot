@@ -17,8 +17,8 @@ limitations under the License.
 
 #include "../common.h"
 
+static char *exe;
 static void *thread(void *arg) { return 0; }
-static void proc(void *arg) { }
 
 static void perf_thread(int count)
 {
@@ -31,24 +31,32 @@ static void perf_thread(int count)
 
 static void perf_fork(int count)
 {
+    char *argv[] = {exe, "test_arg", NULL};
+
     long time = sys_millis();
-    for (int i = 0; i < count; ++i)
-        if (0 != sys_proc(proc, 0))
+    for (int i = 0; i < count; ++i) {
+        int pid = sys_exec(argv);
+        if (0 != sys_wait(pid))
             fail();
+    }
 
     sys_print("fork/wait of %d processes - %dms\n", count, sys_millis() - time);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    void *mem = mem_alloc(1024 * 1024);
+    exe = argv[0];
 
-    perf_fork(1000);
-    perf_fork(10000);
-    perf_thread(1000);
-    perf_thread(10000);
+    if (argc == 1) {
+        void *mem = mem_alloc(1024 * 1024);
 
-    mem_free(mem);
+        perf_fork(1000);
+        perf_fork(10000);
+        perf_thread(1000);
+        perf_thread(10000);
+
+        mem_free(mem);
+    }
 
     return 0;
 }

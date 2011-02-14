@@ -53,6 +53,7 @@ int main(void)
     txt = sys_load("tmp_file2");
     if (str_cmp(txt, str) != 0)
         fail();
+    mem_free(txt);
 
     sys_remove("tmp_file1");
     sys_remove("tmp_file2");

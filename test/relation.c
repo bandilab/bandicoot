@@ -355,7 +355,7 @@ static void test_compound()
 
 int main()
 {
-    env = env_new(vol_init("bin/volume"));
+    env = env_new(vol_init("bin/volume", 1));
     tx_init(env->vars.names, env->vars.len);
 
     char **files = sys_list("test/data", &args.len);

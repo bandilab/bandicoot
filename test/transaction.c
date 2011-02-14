@@ -414,7 +414,7 @@ static void test_chain(Action a1)
 
 int main(void)
 {
-    env = env_new(vol_init("bin/volume"));
+    env = env_new(vol_init("bin/volume", 1));
     tx_init(env->vars.names, env->vars.len);
 
     gmon = mon_new();

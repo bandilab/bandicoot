@@ -36,18 +36,17 @@ extern int sys_empty(const char *dir);
 /* [multi]proc */
 static const char PROC_OK = 0x00;
 static const char PROC_FAIL = 0x01;
-static const char PROC_400 = 0x02;
-static const char PROC_404 = 0x03;
-static const char PROC_405 = 0x04;
 
-extern char sys_proc(void (*fn)(void *arg), void *arg);
+extern int sys_exec(char *const argv[]);
+extern char sys_wait(int pid);
 extern void sys_thread(void *(*fn)(void *arg), void *arg);
 extern void sys_exit(char status);
 extern void sys_die(const char *msg, ...);
 
 /* networking */
-extern int sys_socket(int port);
+extern int sys_socket(int *port);
 extern int sys_accept(int socket);
+extern int sys_connect(int port);
 extern int sys_send(int fd, const void *buf, int size);
 extern int sys_recv(int fd, void *buf, int size);
 

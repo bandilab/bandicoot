@@ -211,19 +211,19 @@ static int tuple_unpack(char *dest, Tuple *t, int len, Type type[])
 
 /* TODO: returning a single buf is too much, consider returning chunks,
          or may be directly writing to the output stream in chunks */
-extern char *rel_unpack(Rel *rel, int *size)
+extern char *rel_unpack(Head *head, TBuf *body, int *size)
 {
-    int len = rel->head->len;
-    Type *types = rel->head->types;
+    int len = head->len;
+    Type *types = head->types;
 
     int tsize = len * MAX_STRING + len;
     int unpack_step = tsize * 16;
     int buf_size = unpack_step;
     char *buf = mem_alloc(buf_size);
-    int off = head_unpack(buf, rel->head);
+    int off = head_unpack(buf, head);
 
     Tuple *t;
-    while ((t = rel_next(rel)) != NULL) {
+    while ((t = tbuf_next(body)) != NULL) {
         off += tuple_unpack(buf + off, t, len, types);
         buf[off++] = '\n';
 

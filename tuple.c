@@ -176,8 +176,10 @@ extern TBuf *tbuf_read(int fd)
 
     while (sys_readn(fd, size_buf, sizeof(int)) == sizeof(int)) {
         int size = int_dec(size_buf);
-        char *p = data_buf;
+        if (size == 0)
+            break;
 
+        char *p = data_buf;
         if (sys_readn(fd, p, size) != size)
             sys_die("tuple: cannot read data\n");
 
@@ -217,7 +219,13 @@ extern int tbuf_write(TBuf *b, int fd)
     used = p - data_buf;
     int_enc(size_buf, used);
     sys_write(fd, size_buf, sizeof(int));
-    sys_write(fd, data_buf, used);
+
+    if (used > 0) {
+        sys_write(fd, data_buf, used);
+
+        int_enc(size_buf, 0);
+        sys_write(fd, size_buf, sizeof(int));
+    }
 
     return count;
 }

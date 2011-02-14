@@ -28,6 +28,7 @@ static Rel *pack_init(char *str)
         res = rel_param(h, "input");
 
         rel_init(res, &args);
+        mem_free(h);
     }
 
     return res;
@@ -153,7 +154,7 @@ static void test_unpack()
     str_cpy(str, data);
 
     Rel *rel = pack_init(str);
-    char *unpacked = rel_unpack(rel, &size);
+    char *unpacked = rel_unpack(rel->head, rel->body, &size);
 
     if (str_cmp(data, unpacked) != 0)
         fail();
@@ -174,7 +175,7 @@ static void test_unpack()
     str_cpy(str, data2);
 
     rel = pack_init(str);
-    unpacked = rel_unpack(rel, &size);
+    unpacked = rel_unpack(rel->head, rel->body, &size);
     if (str_cmp(data2, unpacked) != 0)
         fail();
 

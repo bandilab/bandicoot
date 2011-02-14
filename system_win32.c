@@ -27,10 +27,16 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
-extern char sys_proc(void (*fn)(void *arg), void *arg)
+extern int sys_exec(char *const argv[])
 {
-    sys_die("sys_proc: to be implemented\n");
+    sys_die("sys_exec: to be implemented\n");
     return '0';
+}
+
+extern char sys_wait(int pid)
+{
+    sys_die("sys_wait: to be implemented\n");
+    return 0;
 }
 
 extern void sys_thread(void *(*fn)(void *arg), void *arg)
@@ -38,10 +44,15 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
     sys_die("sys_thread: to be implemented\n");
 }
 
-
-extern int sys_socket(int port)
+extern int sys_socket(int *port)
 {
     sys_die("sys_socket: to be implemented\n");
+    return 0;
+}
+
+extern int sys_connect(int port)
+{
+    sys_die("sys_connect: to be implemented\n");
     return 0;
 }
 

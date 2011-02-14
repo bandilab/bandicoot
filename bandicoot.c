@@ -37,11 +37,18 @@ extern const char *VERSION;
 #define THREADS 8
 
 typedef struct {
-    int fd;
-    Func *fn;
-    Http_Req *req;
-    long rvers[MAX_VARS];
-    long wvers[MAX_VARS];
+    char func[MAX_NAME];
+    struct {
+        char vars[MAX_VARS][MAX_NAME];
+        long vers[MAX_VARS];
+        int len;
+    } r, w;
+} Call;
+
+typedef struct {
+    Env *env;
+    char exe[MAX_PATH];
+    char vol[MAX_PATH];
 } Exec;
 
 struct {
@@ -86,105 +93,109 @@ static int queue_get()
     return fd;
 }
 
-static void exec_proc(void *arg)
-{
-    Exec *e = arg;
-    Func *fn = e->fn;
-    Http_Req *req = e->req;
-
-    if ((fn->p.len == 1 && req->method != POST) ||
-        (fn->p.len == 0 && req->method == POST))
-        sys_exit(PROC_405);
-
-    int idx = 0;
-    Args args = {.len = fn->r.len + fn->p.len};
-    if (fn->p.len == 1) {
-        args.names[0] = fn->p.names[0];
-
-        Head *head;
-        TBuf *tbuf = rel_pack_sep(req->body, &head);
-
-        if (tbuf == NULL || !head_eq(head, fn->p.rels[0]->head))
-            sys_exit(PROC_400);
-
-        args.tbufs[0] = tbuf;
-        idx++;
-    }
-
-    for (int i = 0; i < fn->r.len; ++i, ++idx) {
-        args.names[idx] = fn->r.vars[i];
-        args.vers[idx] = e->rvers[i];
-    }
-
-    for (int i = 0; i < fn->p.len; ++i)
-        rel_init(fn->p.rels[i], &args);
-
-    for (int i = 0; i < fn->t.len; ++i)
-        rel_init(fn->t.rels[i], &args);
-
-    for (int i = 0; i < fn->w.len; ++i) {
-        rel_init(fn->w.rels[i], &args);
-        rel_store(fn->w.vars[i], e->wvers[i], fn->w.rels[i]);
-    }
-
-    if (fn->ret != NULL) {
-        rel_init(fn->ret, &args);
-
-        int size;
-        char *res = rel_unpack(fn->ret, &size);
-
-        http_200(e->fd);
-        http_chunk(e->fd, res, size);
-
-        mem_free(res);
-    } else
-        http_200(e->fd);
-}
-
 static void *exec_thread(void *arg)
 {
-    Env *env = arg;
-    for (;;) {
-        int status = -1, fd = queue_get();
-        long time = sys_millis(), sid = 0;
+    Exec *x = arg;
+    int p = 0, sfd = sys_socket(&p);
+    char port[16];
+    str_print(port, "%d", p);
+    char *argv[] = {x->exe, "executor", "-v", x->vol, "-p", port, NULL};
 
-        Http_Req *req = http_parse(fd);
+    for (;;) {
+        int status = -1, pid = -1;
+        int cfd = queue_get(), pfd = -1;
+        long sid = 0, time = sys_millis();
+        TBuf *param = NULL, *ret = NULL;
+
+        Http_Req *req = http_parse(cfd);
         if (req == NULL) {
-            status = http_400(fd);
+            status = http_400(cfd);
             goto exit;
         }
 
         if (req->method == OPTIONS) {
-            status = http_opts(fd);
+            status = http_opts(cfd);
             goto exit;
         }
 
-        Func *fn = env_func(env, req->path + 1);
+        Func *fn = env_func(x->env, req->path + 1);
         if (fn == NULL) {
-            status = http_404(fd);
+            status = http_404(cfd);
             goto exit;
         }
 
-        Exec e = {.fd = fd, .fn = fn, .req = req};
-        sid = tx_enter(fn->r.vars, e.rvers, fn->r.len,
-                       fn->w.vars, e.wvers, fn->w.len);
-
-        int exit_code = sys_proc(exec_proc, &e);
-        if (exit_code == PROC_OK) {
-            tx_commit(sid);
-            status = http_chunk(fd, NULL, 0);
-        } else {
-            tx_revert(sid);
-
-            if (exit_code == PROC_400)
-                status = http_400(fd);
-            else if (exit_code == PROC_404)
-                status = http_404(fd);
-            else if (exit_code == PROC_405)
-                status = http_405(fd);
-            else
-                status = http_500(fd);
+        if ((fn->p.len == 1 && req->method != POST) ||
+            (fn->p.len == 0 && req->method == POST))
+        {
+            status = http_405(cfd);
+            goto exit;
         }
+
+        if (fn->p.len == 1) {
+            Head *head = NULL;
+            param = rel_pack_sep(req->body, &head);
+
+            int eq = 0;
+            if (head != NULL) {
+                eq = head_eq(head, fn->p.rels[0]->head);
+                mem_free(head);
+            }
+
+            if (param == NULL || !eq) {
+                status = http_400(cfd);
+                goto exit;
+            }
+        }
+
+        Call call = {.r.len = fn->r.len, .w.len = fn->w.len};
+        str_cpy(call.func, req->path + 1);
+        for (int i = 0; i < call.r.len; ++i)
+            str_cpy(call.r.vars[i], fn->r.vars[i]);
+        for (int i = 0; i < call.w.len; ++i)
+            str_cpy(call.w.vars[i], fn->w.vars[i]);
+
+        /* FIXME: usage of sys_{read,write} over the sockets!
+                  by replacing these ops with sys_{send,recv}
+                  we should also cover the child process
+                  failures */
+
+        /* FIXME: what if an executor never connects? */
+
+        pid = sys_exec(argv);
+        pfd = sys_accept(sfd);
+        sid = tx_enter(fn->r.vars, call.r.vers, call.r.len,
+                       fn->w.vars, call.w.vers, call.w.len);
+
+        sys_write(pfd, &call, sizeof(Call));
+        if (fn->p.len == 1) {
+            tbuf_write(param, pfd);
+            tbuf_free(param);
+            param = NULL;
+        }
+
+        ret = (fn->ret == NULL) ? NULL : tbuf_read(pfd);
+
+        int failed = -1;
+        sys_readn(pfd, &failed, sizeof(int));
+        if (failed) {
+            tx_revert(sid);
+            status = http_500(cfd);
+            goto exit;
+        }
+
+        http_200(cfd);
+        if (ret != NULL) {
+            int size;
+            char *res = rel_unpack(fn->ret->head, ret, &size);
+            http_chunk(cfd, res, size);
+
+            mem_free(res);
+            tbuf_free(ret);
+            ret = NULL;
+        }
+
+        tx_commit(sid);
+        status = http_chunk(cfd, NULL, 0);
 
 exit:
         sys_print("[%016X] method '%c', path '%s', time %dms - %3d\n",
@@ -194,12 +205,28 @@ exit:
                   sys_millis() - time,
                   status);
 
+        if (ret != NULL) {
+            tbuf_clean(ret);
+            tbuf_free(ret);
+        }
+        if (param != NULL) {
+            tbuf_clean(param);
+            tbuf_free(param);
+        }
         if (req != NULL)
             mem_free(req);
+        if (pid != -1)
+            sys_wait(pid);
+        if (pfd != -1)
+            sys_close(pfd);
 
-        sys_close(fd);
+        sys_close(cfd);
     }
-    env_free(env);
+
+    sys_close(sfd);
+    env_free(x->env);
+    mem_free(x);
+    mem_free(arg);
 
     return NULL;
 }
@@ -215,31 +242,33 @@ static void usage(char *p)
 
 int main(int argc, char *argv[])
 {
-    int e = -1, p = 0;
+    int p = 0;
     char *v = NULL, *s = NULL;
     if (argc < 2)
         usage(argv[0]);
 
     for (int i = 2; (i + 1) < argc; i += 2)
-        if (str_cmp(argv[i], "-p") == 0)
+        if (str_cmp(argv[i], "-p") == 0) {
+            int e = -1;
             p = str_int(argv[i + 1], &e);
-        else if (str_cmp(argv[i], "-v") == 0)
+            if (e || p < 1 || p > 65535)
+                sys_die("invalid port '%d'\n", p);
+        } else if (str_cmp(argv[i], "-v") == 0)
             v = argv[i + 1];
         else if (str_cmp(argv[i], "-s") == 0)
             s = argv[i + 1];
         else
             usage(argv[0]);
 
-    if (str_cmp(argv[1], "deploy") == 0 && s != NULL && v != NULL && e == -1) {
+    if (str_cmp(argv[1], "deploy") == 0 &&
+        s != NULL && v != NULL && p == 0)
+    {
         vol_deploy(v, s);
         sys_print("deployed: %s -> %s\n", s, v);
     } else if (str_cmp(argv[1], "start") == 0 &&
-               s == NULL && v != NULL && e != -1)
+               s == NULL && v != NULL && p != 0)
     {
-        if (e || p < 1 || p > 65535)
-            sys_die("invalid port '%d'\n", p);
-
-        char *src = vol_init(v);
+        char *src = vol_init(v, 1);
         queue_init();
         sys_signals();
 
@@ -247,10 +276,16 @@ int main(int argc, char *argv[])
         tx_init(env->vars.names, env->vars.len);
         env_free(env);
 
-        for (int i = 0; i < THREADS; ++i)
-            sys_thread(exec_thread, env_new(src));
+        for (int i = 0; i < THREADS; ++i) {
+            Exec *e = mem_alloc(sizeof(Exec));
+            e->env = env_new(src);
+            str_cpy(e->vol, v);
+            str_cpy(e->exe, argv[0]);
 
-        int sfd = sys_socket(p);
+            sys_thread(exec_thread, e);
+        }
+
+        int sfd = sys_socket(&p);
 
         char tmp[32];
         sys_time(tmp);
@@ -263,6 +298,54 @@ int main(int argc, char *argv[])
 
         tx_free();
         mon_free(queue.mon);
+    } else if (str_cmp(argv[1], "executor") == 0 &&
+               s == NULL && v != NULL && p != 0)
+    {
+        char *src = vol_init(v, 0);
+        Env *env = env_new(src);
+
+        int fd = sys_connect(p);
+
+        Call call;
+        sys_readn(fd, &call, sizeof(Call));
+
+        int idx = 0;
+        Func *fn = env_func(env, call.func);
+        Args args = {.len = fn->r.len + fn->p.len};
+
+        if (fn->p.len == 1) {
+            args.names[0] = fn->p.names[0];
+            args.tbufs[0] = tbuf_read(fd);
+            idx++;
+        }
+
+        for (int i = 0; i < call.r.len; ++i, ++idx) {
+            args.names[idx] = call.r.vars[i];
+            args.vers[idx] = call.r.vers[i];
+        }
+
+        for (int i = 0; i < fn->p.len; ++i)
+            rel_init(fn->p.rels[i], &args);
+
+        for (int i = 0; i < fn->t.len; ++i)
+            rel_init(fn->t.rels[i], &args);
+
+        for (int i = 0; i < fn->w.len; ++i) {
+            rel_init(fn->w.rels[i], &args);
+            /* FIXME: potential mismatch in call/fn vars/rels */
+            rel_store(call.w.vars[i], call.w.vers[i], fn->w.rels[i]);
+        }
+
+        if (fn->ret != NULL) {
+            rel_init(fn->ret, &args);
+            tbuf_write(fn->ret->body, fd);
+        }
+
+        int failed = 0;
+        sys_write(fd, &failed, sizeof(int));
+
+        sys_close(fd);
+        env_free(env);
     } else
         usage(argv[0]);
 
