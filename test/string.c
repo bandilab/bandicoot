@@ -137,23 +137,27 @@ static void test_long()
 static void test_real()
 {
     int error;
-    double d = str_real("+12.34", &error);
-    if (error || d != 12.34)
+    double d0 = str_real("+12.34", &error);
+    double d1 = 12.34;
+    if (error || d0 != d1)
         fail();
 
-    d = str_real("-12.34", &error);
-    if (error || d != -12.34)
+    d0 = str_real("-12.34", &error);
+    d1 = -12.34;
+    if (error || d0 != d1)
         fail();
 
-    d = str_real(".3", &error);
-    if (error || d != .3)
+    d0 = str_real(".3", &error);
+    d1 = .3;
+    if (error || d0 != d1)
         fail();
 
-    d = str_real("12345", &error);
-    if (error || d != 12345)
+    d0 = str_real("12345", &error);
+    d1 = 12345;
+    if (error || d0 != d1)
         fail();
 
-    d = str_real("", &error);
+    double d = str_real("", &error);
     if (!error)
         fail();
 

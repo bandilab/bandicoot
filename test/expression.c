@@ -94,6 +94,9 @@ static void test_cmp_ops()
 
 static void test_arithmetic()
 {
+    double d0 = 0.0;
+    double d1 = 0.0;
+
     Expr *e_isum = expr_sum(expr_int(2), expr_int(2));
     Expr *e_lsum = expr_sum(expr_long(2), expr_long(2));
     Expr *e_rsum = expr_sum(expr_real(2.2), expr_real(2.2));
@@ -114,28 +117,40 @@ static void test_arithmetic()
         fail();
     if (4LL != val_long(expr_new_val(e_lsum, NULL)))
         fail();
-    if (4.4 != val_real(expr_new_val(e_rsum, NULL)))
+
+    d0 = val_real(expr_new_val(e_rsum, NULL));
+    d1 = 4.4;
+    if (d1 != d0)
         fail();
 
     if (-4 != val_int(expr_new_val(e_isub, NULL)))
         fail();
     if (-4LL != val_long(expr_new_val(e_lsub, NULL)))
         fail();
-    if (1.0 != val_real(expr_new_val(e_rsub, NULL)))
+
+    d0 = val_real(expr_new_val(e_rsub, NULL));
+    d1 = 1.0;
+    if (d1 != d0)
         fail();
 
     if (2 != val_int(expr_new_val(e_idiv, NULL)))
         fail();
     if (2LL != val_long(expr_new_val(e_ldiv, NULL)))
         fail();
-    if (30 != val_real(expr_new_val(e_rdiv, NULL)))
+
+    d0 = val_real(expr_new_val(e_rdiv, NULL));
+    d1 = 30;
+    if (d1 != d0)
         fail();
 
     if (25 != val_int(expr_new_val(e_imul, NULL)))
         fail();
     if (25 != val_long(expr_new_val(e_lmul, NULL)))
         fail();
-    if (2.5 != val_real(expr_new_val(e_rmul, NULL)))
+
+    d0 = val_real(expr_new_val(e_rmul, NULL));
+    d1 = 2.5;
+    if (d1 != d0)
         fail();
 
     expr_free(e_isum);
