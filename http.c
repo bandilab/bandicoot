@@ -81,6 +81,7 @@ extern Http_Req *http_parse(int fd)
     char *buf, *head, *line, *p, path[MAX_NAME], method[MAX_NAME];
     int read = 0, body_start = 0, head_off = 0, off = 0;
 
+    /* FIXME: we should read until '\n' or until the buffer is exhausted */
     buf = mem_alloc(8192);
     read = sys_recv(fd, buf, 8191);
     if (read < 0)

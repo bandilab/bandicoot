@@ -174,14 +174,17 @@ extern TBuf *tbuf_read(int fd)
     char size_buf[sizeof(int)];
     char data_buf[MAX_BLOCK];
 
-    while (sys_readn(fd, size_buf, sizeof(int)) == sizeof(int)) {
+    for (;;) {
+        if (sys_recvn(fd, size_buf, sizeof(int)) != sizeof(int))
+            goto failure;
+
         int size = int_dec(size_buf);
         if (size == 0)
-            break;
+            goto success;
 
         char *p = data_buf;
-        if (sys_readn(fd, p, size) != size)
-            sys_die("tuple: cannot read data\n");
+        if (sys_recvn(fd, p, size) != size)
+            goto failure;
 
         while (p - data_buf < size) {
             int len = 0;
@@ -191,6 +194,14 @@ extern TBuf *tbuf_read(int fd)
         }
     }
 
+failure:
+    if (b != NULL) {
+        tbuf_clean(b);
+        tbuf_free(b);
+        b = NULL;
+    }
+
+success:
     return b;
 }
 
@@ -206,8 +217,10 @@ extern int tbuf_write(TBuf *b, int fd)
         used = p - data_buf;
         if (MAX_BLOCK - used < t->size) {
             int_enc(size_buf, used);
-            sys_write(fd, size_buf, sizeof(int));
-            sys_write(fd, data_buf, used);
+            if (sys_send(fd, size_buf, sizeof(int)) < 0 ||
+                sys_send(fd, data_buf, used) < 0)
+                goto failure;
+
             p = data_buf;
         }
 
@@ -218,14 +231,23 @@ extern int tbuf_write(TBuf *b, int fd)
 
     used = p - data_buf;
     int_enc(size_buf, used);
-    sys_write(fd, size_buf, sizeof(int));
+    if (sys_send(fd, size_buf, sizeof(int)) < 0)
+        goto failure;
 
     if (used > 0) {
-        sys_write(fd, data_buf, used);
+        if (sys_send(fd, data_buf, used) < 0)
+            goto failure;
 
         int_enc(size_buf, 0);
-        sys_write(fd, size_buf, sizeof(int));
+        if (sys_send(fd, size_buf, sizeof(int)) < 0)
+            goto failure;
     }
 
     return count;
+
+failure:
+    while ((t = tbuf_next(b)) != NULL)
+        tuple_free(t);
+
+    return -1;
 }

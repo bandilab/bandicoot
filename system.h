@@ -49,6 +49,7 @@ extern int sys_accept(int socket);
 extern int sys_connect(int port);
 extern int sys_send(int fd, const void *buf, int size);
 extern int sys_recv(int fd, void *buf, int size);
+extern int sys_recvn(int fd, void *buf, int size);
 
 /* misc */
 extern void sys_print(const char *msg, ...);

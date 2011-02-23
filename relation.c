@@ -103,6 +103,9 @@ static void init_load(Rel *r, Args *args)
     int pos = array_scan(args->names, args->len, c->name);
     int fd = vol_open(c->name, args->vers[pos], READ);
     r->body = tbuf_read(fd);
+    if (r->body == NULL)
+        sys_die("rel: failed to load '%s'\n", c->name);
+
     sys_close(fd);
 }
 
@@ -498,7 +501,8 @@ extern Rel *rel_sum_unary(Rel *r,
 extern int rel_store(const char *name, long vers, Rel *r)
 {
     int res = 0, fd = vol_open(name, vers, CREATE | WRITE);
-    tbuf_write(r->body, fd);
+    if (tbuf_write(r->body, fd) < 0)
+        sys_die("rel: failed to store '%s'\n", name);
     sys_close(fd);
 
     return res;

@@ -154,11 +154,6 @@ static void *exec_thread(void *arg)
         for (int i = 0; i < call.w.len; ++i)
             str_cpy(call.w.vars[i], fn->w.vars[i]);
 
-        /* FIXME: usage of sys_{read,write} over the sockets!
-                  by replacing these ops with sys_{send,recv}
-                  we should also cover the child process
-                  failures */
-
         /* FIXME: what if an executor never connects? */
 
         pid = sys_exec(argv);
@@ -166,28 +161,40 @@ static void *exec_thread(void *arg)
         sid = tx_enter(fn->r.vars, call.r.vers, call.r.len,
                        fn->w.vars, call.w.vers, call.w.len);
 
-        sys_write(pfd, &call, sizeof(Call));
+        if (sys_send(pfd, &call, sizeof(Call)) < 0) {
+            status = http_500(cfd);
+            goto exit;
+        }
+
         if (fn->p.len == 1) {
-            tbuf_write(param, pfd);
+            if (tbuf_write(param, pfd) < 0) {
+                status = http_500(cfd);
+                goto exit;
+            }
             tbuf_free(param);
             param = NULL;
         }
 
-        ret = (fn->ret == NULL) ? NULL : tbuf_read(pfd);
+        if (fn->ret != NULL) {
+            ret = tbuf_read(pfd);
+            if (ret == NULL) {
+                status = http_500(cfd);
+                goto exit;
+            }
+        }
 
         int failed = -1;
-        sys_readn(pfd, &failed, sizeof(int));
-        if (failed) {
+        if (sys_recvn(pfd, &failed, sizeof(int)) != sizeof(int) || failed) {
             tx_revert(sid);
             status = http_500(cfd);
             goto exit;
         }
 
-        http_200(cfd);
+        status = http_200(cfd);
         if (ret != NULL) {
             int size;
             char *res = rel_unpack(fn->ret->head, ret, &size);
-            http_chunk(cfd, res, size);
+            status = http_chunk(cfd, res, size);
 
             mem_free(res);
             tbuf_free(ret);
@@ -316,6 +323,9 @@ int main(int argc, char *argv[])
         if (fn->p.len == 1) {
             args.names[0] = fn->p.names[0];
             args.tbufs[0] = tbuf_read(fd);
+            if (args.tbufs[0] == NULL)
+                sys_die("%s: failed to retrieve the parameter\n", call.func);
+
             idx++;
         }
 
@@ -338,7 +348,8 @@ int main(int argc, char *argv[])
 
         if (fn->ret != NULL) {
             rel_init(fn->ret, &args);
-            tbuf_write(fn->ret->body, fd);
+            if (tbuf_write(fn->ret->body, fd) < 0)
+                sys_die("%s: failed to transmit the result\n", call.func);
         }
 
         int failed = 0;

@@ -109,15 +109,23 @@ extern int sys_read(int fd, void *buf, int size)
     return res;
 }
 
-extern int sys_readn(int fd, void *buf, int size)
+static int readn(int fd,
+                 void *buf,
+                 int size,
+                 int (*rfn)(int, void*, int))
 {
     int r, idx = 0;
     do {
-        r = sys_read(fd, buf + idx, size - idx);
+        r = rfn(fd, buf + idx, size - idx);
         idx += r;
     } while (idx < size && r > 0);
 
     return idx;
+}
+
+extern int sys_readn(int fd, void *buf, int size)
+{
+    return readn(fd, buf, size, sys_read);
 }
 
 extern char *sys_load(const char *path)
@@ -246,4 +254,9 @@ extern int sys_send(int fd, const void *buf, int size)
 extern int sys_recv(int fd, void *buf, int size)
 {
     return read(fd, buf, size);
+}
+
+extern int sys_recvn(int fd, void *buf, int size)
+{
+    return readn(fd, buf, size, sys_recv);
 }

@@ -28,7 +28,7 @@ limitations under the License.
 #include "summary.h"
 #include "relation.h"
 
-static char DELIM=',';
+static char DELIM = ',';
 
 static int valid_id(const char *id)
 {
