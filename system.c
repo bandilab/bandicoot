@@ -33,7 +33,7 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
-extern int sys_open(const char *path, int mode)
+extern int _sys_open(const char *path, int mode, int binary)
 {
     int flags = 0;
     if ((mode & READ) && (mode & WRITE))
@@ -48,7 +48,7 @@ extern int sys_open(const char *path, int mode)
     if (mode & CREATE)
         flags |= O_CREAT;
 
-    int fd = open(path, flags, S_IRUSR | S_IWUSR);
+    int fd = open(path, flags | binary, S_IRUSR | S_IWUSR);
     if (fd < 0)
         sys_die("sys: cannot open %s\n", path);
 

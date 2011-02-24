@@ -38,6 +38,13 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
+extern int _sys_open(const char *path, int mode, int binary);
+
+extern int sys_open(const char *path, int mode)
+{
+    return _sys_open(path, mode, 0x0);
+}
+
 extern int sys_exec(char *const argv[])
 {
     pid_t pid;

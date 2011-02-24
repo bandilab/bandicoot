@@ -18,6 +18,7 @@ limitations under the License.
 #include <sys/time.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -27,6 +28,13 @@ limitations under the License.
 #include "system.h"
 #include "memory.h"
 #include "string.h"
+
+extern int _sys_open(const char *path, int mode, int binary);
+
+extern int sys_open(const char *path, int mode)
+{
+    return _sys_open(path, mode, O_BINARY);
+}
 
 extern int sys_exec(char *const argv[])
 {
