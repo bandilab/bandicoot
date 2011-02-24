@@ -195,7 +195,7 @@ static void init(const char *p)
         sys_die("volume path '%s' is too long\n", p);
 
     int plen = str_cpy(path, p) - 1;
-    for (; path[plen] == '/' && plen > 0; --plen)
+    for (; plen > 0 && path[plen] == '/'; --plen)
         path[plen] = '\0';
 
     str_print(source, "%s/.source", path);
