@@ -38,6 +38,8 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
+#include "system_net.c"
+
 extern void sys_die(const char *msg, ...)
 {
     va_list ap;
@@ -52,11 +54,11 @@ extern void sys_die(const char *msg, ...)
     exit(PROC_FAIL);
 }
 
-extern int _sys_open(const char *path, int mode, int binary);
+extern IO *_sys_open(const char *path, int mode, int binary);
 
-extern int sys_open(const char *path, int mode)
+extern IO *sys_open(const char *path, int mode)
 {
-    return _sys_open(path, mode, 0x0);
+    return _sys_open(path, mode, 0);
 }
 
 extern int sys_exec(char *const argv[])
@@ -93,10 +95,10 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
         sys_die("sys: cannot detach from a thread\n");
 }
 
-static int socket_new()
+extern int net_open()
 {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd == -1)
+    if (fd < 0)
         sys_die("sys: cannot create a socket\n");
 
     int on = 1;
@@ -106,81 +108,20 @@ static int socket_new()
     return fd;
 }
 
-extern int sys_socket(int *port)
+extern void net_close(IO *io)
 {
-    int sfd = socket_new();
-
-    struct sockaddr_in addr;
-    unsigned int size = sizeof(addr);
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(*port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(sfd, (struct sockaddr*) &addr, size) == -1)
-        sys_die("sys: cannot bind a socket to port %d\n", *port);
-
-    int backlog = 128;
-    if (listen(sfd, backlog) == -1)
-        sys_die("sys: cannot listen (backlog: %d)\n", backlog);
-
-    if (getsockname(sfd, (struct sockaddr*) &addr, &size) == -1)
-        sys_die("sys: cannot lookup the socket details\n");
-
-    *port = ntohs(addr.sin_port);
-
-    return sfd;
-}
-
-extern int sys_connect(int port)
-{
-    int fd = socket_new();
-
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-    if (connect(fd, (struct sockaddr*) &addr, sizeof(addr)) == -1)
-        sys_die("sys: cannot connect to port %d\n", port);
-
-    return fd;
-}
-
-extern void sys_close_socket(int fd)
-{
-    if (close(fd) < 0)
+    if (close(io->fd) < 0)
         sys_die("sys: cannot close socket\n");
 }
 
-extern int sys_accept(int socket)
+extern int net_port(int fd)
 {
-    int res = accept(socket, NULL, NULL);
-    if (res == -1)
-        sys_die("sys: cannot accept incoming connection\n");
+    struct sockaddr_in addr;
+    unsigned int size = sizeof(addr);
+    if (getsockname(fd, (struct sockaddr*) &addr, &size) == -1)
+        sys_die("sys: cannot lookup the socket details\n");
 
-    return res;
-}
-
-extern int readn(int fd,
-                 void *buf,
-                 int size,
-                 int (*rfn)(int, void*, int));
-
-extern int sys_recv(int fd, void *buf, int size)
-{
-    return read(fd, buf, size);
-}
-
-extern int sys_recvn(int fd, void *buf, int size)
-{
-    return readn(fd, buf, size, sys_recv);
-}
-
-extern int sys_send(int fd, const void *buf, int size)
-{
-    int w = write(fd, buf, size);
-
-    return (w < 0 || w != size) ? -1 : w;
+    return ntohs(addr.sin_port);
 }
 
 extern void sys_signals()

@@ -16,20 +16,28 @@ limitations under the License.
 */
 
 /* input/output */
+struct IO {
+    int fd;
+    int (*read)(struct IO *io, void *buf, int size);
+    int (*write)(struct IO *io, const void *buf, int size);
+    void (*close)(struct IO *io);
+};
+typedef struct IO IO;
+
 static const int CREATE = 0x01;
 static const int READ = 0x02;
 static const int WRITE = 0x04;
 
-extern int sys_open(const char *path, int mode);
+extern IO *sys_open(const char *path, int mode);
+extern int sys_read(IO *io, void *buf, int size);
+extern int sys_readn(IO *io, void *buf, int size);
+extern int sys_write(IO *io, const void *buf, int size);
+extern void sys_close(IO *io);
+
 extern int sys_exists(const char *path);
-extern int sys_read(int fd, void *buf, int size);
-extern int sys_readn(int fd, void *buf, int size);
-extern int sys_write(int fd, const void *buf, int size);
 extern void sys_move(const char *dest, const char *src);
 extern void sys_cpy(const char *dest, const char *src);
 extern void sys_remove(const char *path);
-extern void sys_close(int fd);
-extern void sys_close_socket(int fd);
 extern char *sys_load(const char *path);
 extern char **sys_list(const char *dir, int *len);
 extern int sys_empty(const char *dir);
@@ -45,12 +53,9 @@ extern void sys_exit(char status);
 extern void sys_die(const char *msg, ...);
 
 /* networking */
-extern int sys_socket(int *port);
-extern int sys_accept(int socket);
-extern int sys_connect(int port);
-extern int sys_send(int fd, const void *buf, int size);
-extern int sys_recv(int fd, void *buf, int size);
-extern int sys_recvn(int fd, void *buf, int size);
+extern IO *sys_socket(int *port);
+extern IO *sys_accept(IO *socket);
+extern IO *sys_connect(int port);
 
 /* misc */
 extern void sys_print(const char *msg, ...);

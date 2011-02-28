@@ -101,12 +101,12 @@ static void init_load(Rel *r, Args *args)
 {
     Ctxt *c = r->ctxt;
     int pos = array_scan(args->names, args->len, c->name);
-    int fd = vol_open(c->name, args->vers[pos], READ);
-    r->body = tbuf_read(fd, sys_read);
+    IO *io = vol_open(c->name, args->vers[pos], READ);
+    r->body = tbuf_read(io);
     if (r->body == NULL)
         sys_die("rel: failed to load '%s'\n", c->name);
 
-    sys_close(fd);
+    sys_close(io);
 }
 
 extern Rel *rel_load(Head *head, const char *name)
@@ -500,10 +500,11 @@ extern Rel *rel_sum_unary(Rel *r,
 
 extern int rel_store(const char *name, long vers, Rel *r)
 {
-    int res = 0, fd = vol_open(name, vers, CREATE | WRITE);
-    if (tbuf_write(r->body, fd, sys_write) < 0)
+    int res = 0;
+    IO *io = vol_open(name, vers, CREATE | WRITE);
+    if (tbuf_write(r->body, io) < 0)
         sys_die("rel: failed to store '%s'\n", name);
-    sys_close(fd);
+    sys_close(io);
 
     return res;
 }

@@ -65,3 +65,5 @@ static int val_eq(Value l, Value r)
 {
     return val_cmp(l, r) == 0;
 }
+
+extern void change_stderr(const char *path);

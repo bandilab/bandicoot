@@ -16,6 +16,7 @@ limitations under the License.
 */
 
 #include "config.h"
+#include "system.h"
 #include "array.h"
 #include "string.h"
 #include "memory.h"
@@ -23,7 +24,6 @@ limitations under the License.
 #include "value.h"
 #include "tuple.h"
 #include "volume.h"
-#include "system.h"
 #include "expression.h"
 #include "summary.h"
 #include "relation.h"

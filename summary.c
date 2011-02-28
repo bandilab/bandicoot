@@ -16,6 +16,7 @@ limitations under the License.
 */
 
 #include "config.h"
+#include "system.h"
 #include "memory.h"
 #include "string.h"
 #include "head.h"

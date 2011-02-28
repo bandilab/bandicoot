@@ -28,30 +28,30 @@ int main(void)
 
     for (i = 0; i < num_files; i++) {
         for (j = 0; j < num_blocks; j++) {
-            int x, wfd, rfd, b = block[j];
+            int x, b = block[j];
             int blocks = (file_mb[i] * 1000 * 1000) / b;
             char buf[b], fname[32];
 
             str_print(fname, "io_perf_%dMB_%dB", file_mb[i], b);
             mem_set(buf, 1 + i * j, b);
 
-            wfd = sys_open(fname, CREATE | WRITE);
-            rfd = sys_open(fname, READ);
+            IO *wio = sys_open(fname, CREATE | WRITE);
+            IO *rio = sys_open(fname, READ);
 
             long t = sys_millis();
             for (x = 0; x < blocks; x++)
-                sys_write(wfd, buf, b);
+                sys_write(wio, buf, b);
             sys_print("w %dMB - %dms, block: %dB\n",
                     file_mb[i], sys_millis() - t, b);
 
             t = sys_millis();
             for (x = 0; x < blocks; x++)
-                sys_readn(rfd, buf, b);
+                sys_readn(rio, buf, b);
             sys_print("r %dMB - %dms, block: %dB\n",
-                    file_mb[i], sys_millis() - t, b);
+                      file_mb[i], sys_millis() - t, b);
 
-            sys_close(wfd);
-            sys_close(rfd);
+            sys_close(wio);
+            sys_close(rio);
             sys_remove(fname);
         }
     }

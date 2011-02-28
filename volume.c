@@ -16,11 +16,11 @@ limitations under the License.
 */
 
 #include "config.h"
+#include "system.h"
 #include "array.h"
 #include "memory.h"
 #include "string.h"
 #include "number.h"
-#include "system.h"
 #include "head.h"
 #include "volume.h"
 #include "value.h"
@@ -180,9 +180,9 @@ extern void vol_wstate(char *names[], long vers[], int len)
         off += str_print(buf + off, "%s,%s\n", names[i], sid);
     }
 
-    int fd = sys_open(state, CREATE | WRITE);
-    sys_write(fd, buf, off);
-    sys_close(fd);
+    IO *io = sys_open(state, CREATE | WRITE);
+    sys_write(io, buf, off);
+    sys_close(io);
 
     mem_free(buf);
 
@@ -223,11 +223,11 @@ extern void vol_deploy(const char *p, const char *new_src)
 {
     init(p);
     if (sys_empty(path)) {
-        int fd = sys_open(source, CREATE | WRITE);
-        sys_close(fd);
+        IO *io = sys_open(source, CREATE | WRITE);
+        sys_close(io);
 
-        fd = sys_open(state, CREATE | WRITE);
-        sys_close(fd);
+        io = sys_open(state, CREATE | WRITE);
+        sys_close(io);
     } else
         cleanup();
 
@@ -260,7 +260,7 @@ extern void vol_deploy(const char *p, const char *new_src)
     env_free(old_env);
 }
 
-extern int vol_open(const char *name, long version, int mode)
+extern IO *vol_open(const char *name, long version, int mode)
 {
     char file[MAX_FILE_PATH];
     fpath(file, name, version);

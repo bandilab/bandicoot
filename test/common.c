@@ -16,6 +16,7 @@ limitations under the License.
 */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include "common.h"
 
 extern void fail_test(int line)
@@ -78,4 +79,10 @@ extern Rel *gen_rel(int start, int end)
     res->body = gen_tuples(start, end);
 
     return res;
+}
+
+extern void change_stderr(const char *path)
+{
+    if (freopen(path, "wb", stderr) == NULL)
+        fail();
 }

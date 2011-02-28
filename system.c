@@ -33,7 +33,45 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
-extern int _sys_open(const char *path, int mode, int binary)
+extern IO *new_io(int fd,
+                  int (*read)(struct IO *io, void *buf, int size),
+                  int (*write)(struct IO *io, const void *buf, int size),
+                  void (*close)(struct IO *io))
+{
+    IO *io = mem_alloc(sizeof(IO));
+    io->fd = fd;
+    io->read = read;
+    io->write = write;
+    io->close = close;
+
+    return io;
+}
+
+static int fs_read(IO *io, void *buf, int size)
+{
+    int res = read(io->fd, buf, size);
+    if (res < 0)
+        sys_die("sys: cannot read %d bytes from file %d\n", size, io->fd);
+
+    return res;
+}
+
+static int fs_write(IO *io, const void *buf, int size)
+{
+    int w = write(io->fd, buf, size);
+    if (w != size)
+        sys_die("sys: cannot write %d bytes to file %d\n", size, io->fd);
+
+    return w;
+}
+
+static void fs_close(IO *io)
+{
+    if (close(io->fd) < 0)
+        sys_die("sys: cannot close file descriptor\n");
+}
+
+extern IO *_sys_open(const char *path, int mode, int binary)
 {
     int flags = 0;
     if ((mode & READ) && (mode & WRITE))
@@ -52,13 +90,34 @@ extern int _sys_open(const char *path, int mode, int binary)
     if (fd < 0)
         sys_die("sys: cannot open %s\n", path);
 
-    return fd;
+    return new_io(fd, fs_read, fs_write, fs_close);
 }
 
-extern void sys_close(int fd)
+extern int sys_read(IO *io, void *buf, int size)
 {
-    if (close(fd) < 0)
-        sys_die("sys: cannot close file descriptor\n");
+    return io->read(io, buf, size);
+}
+
+extern int sys_readn(IO *io, void *buf, int size)
+{
+    int r, idx = 0;
+    do {
+        r = io->read(io, buf + idx, size - idx);
+        idx += r;
+    } while (idx < size && r > 0);
+
+    return idx;
+}
+
+extern int sys_write(IO *io, const void *buf, int size)
+{
+    return io->write(io, buf, size);
+}
+
+extern void sys_close(IO *io)
+{
+    io->close(io);
+    mem_free(io);
 }
 
 extern int sys_exists(const char *path)
@@ -94,64 +153,29 @@ extern void sys_cpy(const char *dest, const char *src)
     if (sys_exists(dest))
         sys_remove(dest);
 
-    int fd = sys_open(dest, CREATE | WRITE);
-    sys_write(fd, buf, str_len(buf));
-    sys_close(fd);
+    IO *io = sys_open(dest, CREATE | WRITE);
+    sys_write(io, buf, str_len(buf));
+    sys_close(io);
     mem_free(buf);
-}
-
-extern int sys_read(int fd, void *buf, int size)
-{
-    int res = read(fd, buf, size);
-    if (res < 0)
-        sys_die("sys: cannot read %d bytes from fd:%d\n", size, fd);
-
-    return res;
-}
-
-extern int readn(int fd,
-                 void *buf,
-                 int size,
-                 int (*rfn)(int, void*, int))
-{
-    int r, idx = 0;
-    do {
-        r = rfn(fd, buf + idx, size - idx);
-        idx += r;
-    } while (idx < size && r > 0);
-
-    return idx;
-}
-
-extern int sys_readn(int fd, void *buf, int size)
-{
-    return readn(fd, buf, size, sys_read);
 }
 
 extern char *sys_load(const char *path)
 {
-    int len = 0, read = 0, fd = sys_open(path, READ);
+    int len = 0, read = 0;
+    IO *io = sys_open(path, READ);
     char buf[4096], *res = mem_alloc(1);
 
     res[0] = '\0';
-    while ((read = sys_readn(fd, buf, 4096)) > 0) {
+    while ((read = sys_readn(io, buf, 4096)) > 0) {
         res = mem_realloc(res, len + read + 1);
         mem_cpy(res + len, buf, read);
         len += read;
         res[len] = '\0';
     }
-    sys_close(fd);
+    sys_close(io);
 
     return res;
 }
-
-extern int sys_write(int fd, const void *buf, int size)
-{
-    int w = write(fd, buf, size);
-
-    return (w < 0 || w != size) ? -1 : w;
-}
-
 
 extern int sys_empty(const char *dir)
 {

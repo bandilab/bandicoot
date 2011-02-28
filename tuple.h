@@ -43,10 +43,10 @@ typedef struct {
 } TBuf;
 
 extern TBuf *tbuf_new();
-extern TBuf *tbuf_read(int fd, int (*rfn)(int, void*, int));
+extern TBuf *tbuf_read(IO *io);
+extern int tbuf_write(TBuf *b, IO *io);
 extern Tuple *tbuf_next(TBuf *b);
 extern void tbuf_add(TBuf *b, Tuple *t);
 extern void tbuf_reset(TBuf *b);
 extern void tbuf_free(TBuf *b);
 extern void tbuf_clean(TBuf *b);
-extern int tbuf_write(TBuf *b, int fd, int (*wfn)(int, const void*, int));

@@ -213,8 +213,7 @@ int main(int argc, char *argv[])
         char log[MAX_FILE_PATH];
         str_print(log, "%s.log", argv[1]);
 
-        sys_close(2);
-        sys_open(log, CREATE | WRITE);
+        change_stderr(log);
 
         env_new(argv[1]);
         ret = PROC_OK;

@@ -21,11 +21,11 @@ static Http_Req* parse(const char *test)
 {
     char path[MAX_FILE_PATH];
     str_print(path, "test/reqs/%s", test);
-    int fd = sys_open(path, READ | WRITE);
+    IO *io = sys_open(path, READ | WRITE);
 
-    Http_Req *req = http_parse(fd);
+    Http_Req *req = http_parse(io);
 
-    sys_close(fd);
+    sys_close(io);
 
     return req;
 }
@@ -71,18 +71,23 @@ int main()
     headers > 8192
     */
 
-    if (http_200(512) != -200)
+    int p = 0;
+    IO *bad_io = sys_socket(&p);
+
+    if (http_200(bad_io) != -200)
         fail();
-    if (http_404(512) != -404)
+    if (http_404(bad_io) != -404)
         fail();
-    if (http_405(512) != -405)
+    if (http_405(bad_io) != -405)
         fail();
-    if (http_500(512) != -500)
+    if (http_500(bad_io) != -500)
         fail();
-    if (http_chunk(512, NULL, 0) != -200)
+    if (http_chunk(bad_io, NULL, 0) != -200)
         fail();
-    if (http_opts(512) != -200)
+    if (http_opts(bad_io) != -200)
         fail();
+
+    sys_close(bad_io);
 
     return 0;
 }

@@ -23,23 +23,23 @@ int main(void)
     int len = str_len(str);
     char buf[len];
 
-    int wfd1 = sys_open("tmp_file1", CREATE | WRITE);
-    int wfd2 = sys_open("tmp_file2", CREATE | WRITE);
-    int rfd1 = sys_open("tmp_file1", READ);
-    int rfd2 = sys_open("tmp_file2", READ);
+    IO *wio1 = sys_open("tmp_file1", CREATE | WRITE);
+    IO *wio2 = sys_open("tmp_file2", CREATE | WRITE);
+    IO *rio1 = sys_open("tmp_file1", READ);
+    IO *rio2 = sys_open("tmp_file2", READ);
 
-    if (wfd1 < 0 || rfd1 < 0 || wfd2 < 0 || rfd2 < 0)
+    if (wio1 == NULL || rio1 == NULL || wio2 == NULL || rio2 == NULL)
         fail();
 
-    sys_write(wfd1, str, len);
-    if (sys_readn(rfd1, buf, len) != len)
+    sys_write(wio1, str, len);
+    if (sys_readn(rio1, buf, len) != len)
         fail();
 
     if (mem_cmp(buf, str, len) != 0)
         fail();
 
-    sys_write(wfd2, str, len);
-    if (sys_read(rfd2, buf, len) != len)
+    sys_write(wio2, str, len);
+    if (sys_readn(rio2, buf, len) != len)
         fail();
 
     if (mem_cmp(buf, str, len) != 0)
@@ -55,10 +55,10 @@ int main(void)
         fail();
     mem_free(txt);
 
-    sys_close(rfd1);
-    sys_close(rfd2);
-    sys_close(wfd1);
-    sys_close(wfd2);
+    sys_close(rio1);
+    sys_close(rio2);
+    sys_close(wio1);
+    sys_close(wio2);
 
     sys_remove("tmp_file1");
     sys_remove("tmp_file2");

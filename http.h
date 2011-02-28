@@ -25,12 +25,12 @@ typedef struct {
     char *body;
 } Http_Req;
 
-extern Http_Req *http_parse(int fd);
+extern Http_Req *http_parse(IO *io);
 
-extern int http_500(int fd);
-extern int http_405(int fd);
-extern int http_404(int fd);
-extern int http_400(int fd);
-extern int http_200(int fd);
-extern int http_opts(int fd);
-extern int http_chunk(int fd, const void *buf, int size);
+extern int http_500(IO *io);
+extern int http_405(IO *io);
+extern int http_404(IO *io);
+extern int http_400(IO *io);
+extern int http_200(IO *io);
+extern int http_opts(IO *io);
+extern int http_chunk(IO *io, const void *buf, int size);

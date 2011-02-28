@@ -75,7 +75,7 @@ static char *next(char *buf, const char *sep, int *off)
     return str_trim(res);
 }
 
-extern Http_Req *http_parse(int fd)
+extern Http_Req *http_parse(IO *io)
 {
     Http_Req *req = NULL;
     char *buf, *head, *line, *p, path[MAX_NAME], method[MAX_NAME];
@@ -83,7 +83,7 @@ extern Http_Req *http_parse(int fd)
 
     /* FIXME: we should read until '\n' or until the buffer is exhausted */
     buf = mem_alloc(8192);
-    read = sys_recv(fd, buf, 8191);
+    read = sys_read(io, buf, 8191);
     if (read < 0)
         goto exit;
 
@@ -128,8 +128,9 @@ extern Http_Req *http_parse(int fd)
         if (remaining > 0) {
             buf = mem_realloc(buf, read + remaining);
 
+            /* FIXME: replace the below loop with sys_readn */
             off = read;
-            while ((read = sys_recv(fd, buf + off, remaining)) > 0) {
+            while ((read = sys_read(io, buf + off, remaining)) > 0) {
                 off += read;
                 remaining -= read;
             }
@@ -158,68 +159,68 @@ exit:
     return req;
 }
 
-extern int http_200(int fd)
+extern int http_200(IO *io)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_200);
 
-    return sys_send(fd, HTTP_200, size) < 0 ? -200 : 200;
+    return sys_write(io, HTTP_200, size) < 0 ? -200 : 200;
 }
 
-extern int http_400(int fd)
+extern int http_400(IO *io)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_400);
 
-    return sys_send(fd, HTTP_400, size) < 0 ? -400 : 400;
+    return sys_write(io, HTTP_400, size) < 0 ? -400 : 400;
 }
 
-extern int http_404(int fd)
+extern int http_404(IO *io)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_404);
 
-    return sys_send(fd, HTTP_404, size) < 0 ? -404 : 404;
+    return sys_write(io, HTTP_404, size) < 0 ? -404 : 404;
 }
 
-extern int http_405(int fd)
+extern int http_405(IO *io)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_405);
 
-    return sys_send(fd, HTTP_405, size) < 0 ? -405 : 405;
+    return sys_write(io, HTTP_405, size) < 0 ? -405 : 405;
 }
 
-extern int http_500(int fd)
+extern int http_500(IO *io)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_500);
 
-    return sys_send(fd, HTTP_500, size) < 0 ? -500 : 500;
+    return sys_write(io, HTTP_500, size) < 0 ? -500 : 500;
 }
 
-extern int http_opts(int fd)
+extern int http_opts(IO *io)
 {
     static int size;
     if (size == 0)
         size = str_len(HTTP_OPTS);
 
-    return sys_send(fd, HTTP_OPTS, size) < 0 ? -200 : 200;
+    return sys_write(io, HTTP_OPTS, size) < 0 ? -200 : 200;
 }
 
-extern int http_chunk(int fd, const void *buf, int size)
+extern int http_chunk(IO *io, const void *buf, int size)
 {
     char hex[16];
     int s = str_print(hex, "%X\r\n", size);
 
-    int ok = sys_send(fd, hex, s) > 0 &&
-             sys_send(fd, buf, size) >= 0 &&
-             sys_send(fd, "\r\n", 2) > 0;
+    int ok = sys_write(io, hex, s) > 0 &&
+             sys_write(io, buf, size) >= 0 &&
+             sys_write(io, "\r\n", 2) > 0;
 
     return ok ? 200 : -200;
 }

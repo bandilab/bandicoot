@@ -30,18 +30,20 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
+#include "system_net.c"
+
 extern void sys_die(const char *msg, ...)
 {
 
     DWORD dw = GetLastError();
-    LPVOID lpMsgBuf;
+    LPSTR lpMsgBuf = NULL;
     FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | 
                   FORMAT_MESSAGE_FROM_SYSTEM |
                   FORMAT_MESSAGE_IGNORE_INSERTS,
                   NULL,
                   dw,
                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                  (LPTSTR) &lpMsgBuf,
+                  (LPSTR) &lpMsgBuf,
                   0,
                   NULL);
 
@@ -56,9 +58,9 @@ extern void sys_die(const char *msg, ...)
     exit(PROC_FAIL);
 }
 
-extern int _sys_open(const char *path, int mode, int binary);
+extern IO *_sys_open(const char *path, int mode, int binary);
 
-extern int sys_open(const char *path, int mode)
+extern IO *sys_open(const char *path, int mode)
 {
     return _sys_open(path, mode, O_BINARY);
 }
@@ -111,12 +113,12 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
         sys_die("sys: cannot create a thread\n");
 }
 
-static int socket_new()
+extern int net_open()
 {
     static int init;
     if (init == 0) {
-        WSADATA wsaData;
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData))
+        WSADATA wsa_data;
+        if (WSAStartup(MAKEWORD(2, 2), &wsa_data))
             sys_die("sys: cannot initialise winsock2\n");
     }
 
@@ -131,86 +133,20 @@ static int socket_new()
     return fd;
 }
 
-extern int sys_socket(int *port)
+extern void net_close(IO *io)
 {
-    int sfd = socket_new();
-
-    struct sockaddr_in addr;
-    unsigned int size = sizeof(addr);
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(*port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(sfd, (struct sockaddr*) &addr, size) == -1)
-        sys_die("sys: cannot bind a socket to port %d\n", *port);
-
-    int backlog = 128;
-    if (listen(sfd, backlog) == -1)
-        sys_die("sys: cannot listen (backlog: %d)\n", backlog);
-
-    int sz = sizeof(addr);
-    if (getsockname(sfd, (struct sockaddr*) &addr, &sz) == -1)
-        sys_die("sys: cannot lookup the socket details\n");
-
-    *port = ntohs(addr.sin_port);
-
-    return sfd;
-}
-
-extern int sys_connect(int port)
-{
-    int fd = socket_new();
-
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-    if (connect(fd, (struct sockaddr*) &addr, sizeof(addr)) == -1)
-        sys_die("sys: cannot connect to port %d\n", port);
-
-    return fd;
-}
-
-extern void sys_close_socket(int fd)
-{
-    if (closesocket(fd) != 0)
+    if (closesocket(io->fd) != 0)
         sys_die("sys: cannot close socket\n");
 }
 
-extern int sys_recv(int fd, void *buf, int size)
+extern int net_port(int fd)
 {
-    int r = recv(fd, buf, size, 0);
+    struct sockaddr_in addr;
+    int size = sizeof(addr);
+    if (getsockname(fd, (struct sockaddr*) &addr, &size) == -1)
+        sys_die("sys: cannot lookup the socket details\n");
 
-    return (r == SOCKET_ERROR) ? -1 : r;
-}
-
-extern int sys_recvn(int fd, void *buf, int size)
-{
-    int r, idx = 0;
-    do {
-        r = recv(fd, buf + idx, size - idx, 0);
-        idx += r;
-    } while (idx < size && r != SOCKET_ERROR);
-
-    return idx;
-}
-
-extern int sys_send(int fd, const void *buf, int size)
-{
-    int w = send(fd, buf, size, 0);
-
-    return (w == SOCKET_ERROR || w != size) ? -1 : w;
-}
-
-
-extern int sys_accept(int socket)
-{
-    unsigned int res = accept(socket, NULL, NULL);
-    if (res == INVALID_SOCKET)
-        sys_die("sys: cannot accept incoming connection\n");
-
-    return res;
+    return ntohs(addr.sin_port);
 }
 
 extern void sys_signals()

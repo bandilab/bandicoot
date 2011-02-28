@@ -53,8 +53,8 @@ typedef struct {
 
 struct {
     int pos;
-    int fds[QUEUE_LEN];
     int len;
+    IO *ios[QUEUE_LEN];
     Mon *mon;
 } queue;
 
@@ -65,69 +65,71 @@ static void queue_init()
     queue.mon = mon_new();
 }
 
-static void queue_put(int fd)
+static void queue_put(IO *io)
 {
     mon_lock(queue.mon);
     while (queue.pos >= queue.len)
         mon_wait(queue.mon);
 
     queue.pos++;
-    queue.fds[queue.pos] = fd;
+    queue.ios[queue.pos] = io;
 
     mon_signal(queue.mon);
     mon_unlock(queue.mon);
 }
 
-static int queue_get()
+static IO *queue_get()
 {
     mon_lock(queue.mon);
     while (queue.pos < 0)
         mon_wait(queue.mon);
 
-    int fd = queue.fds[queue.pos];
+    IO *io = queue.ios[queue.pos];
     queue.pos--;
 
     mon_signal(queue.mon);
     mon_unlock(queue.mon);
 
-    return fd;
+    return io;
 }
 
 static void *exec_thread(void *arg)
 {
     Exec *x = arg;
-    int p = 0, sfd = sys_socket(&p);
-    char port[16];
+    int p = 0;
+    IO *sio = sys_socket(&p);
+    char port[8];
     str_print(port, "%d", p);
     char *argv[] = {x->exe, "executor", "-v", x->vol, "-p", port, NULL};
 
     for (;;) {
         int status = -1, pid = -1;
-        int cfd = queue_get(), pfd = -1;
+        IO *cio = queue_get();
+        IO *pio = NULL;
         long sid = 0, time = sys_millis();
         TBuf *param = NULL, *ret = NULL;
 
-        Http_Req *req = http_parse(cfd);
+        Http_Req *req = http_parse(cio);
         if (req == NULL) {
-            status = http_400(cfd);
+            status = http_400(cio);
             goto exit;
         }
 
         if (req->method == OPTIONS) {
-            status = http_opts(cfd);
+            status = http_opts(cio);
             goto exit;
         }
 
         Func *fn = env_func(x->env, req->path + 1);
         if (fn == NULL) {
-            status = http_404(cfd);
+            status = http_404(cio);
             goto exit;
         }
 
         if ((fn->p.len == 1 && req->method != POST) ||
             (fn->p.len == 0 && req->method == POST))
         {
-            status = http_405(cfd);
+            status = http_405(cio);
             goto exit;
         }
 
@@ -142,7 +144,7 @@ static void *exec_thread(void *arg)
             }
 
             if (param == NULL || !eq) {
-                status = http_400(cfd);
+                status = http_400(cio);
                 goto exit;
             }
         }
@@ -157,18 +159,18 @@ static void *exec_thread(void *arg)
         /* FIXME: what if an executor never connects? */
 
         pid = sys_exec(argv);
-        pfd = sys_accept(sfd);
+        pio = sys_accept(sio);
         sid = tx_enter(fn->r.vars, call.r.vers, call.r.len,
                        fn->w.vars, call.w.vers, call.w.len);
 
-        if (sys_send(pfd, &call, sizeof(Call)) < 0) {
-            status = http_500(cfd);
+        if (sys_write(pio, &call, sizeof(Call)) < 0) {
+            status = http_500(cio);
             goto exit;
         }
 
         if (fn->p.len == 1) {
-            if (tbuf_write(param, pfd, sys_send) < 0) {
-                status = http_500(cfd);
+            if (tbuf_write(param, pio) < 0) {
+                status = http_500(cio);
                 goto exit;
             }
             tbuf_free(param);
@@ -176,25 +178,25 @@ static void *exec_thread(void *arg)
         }
 
         if (fn->ret != NULL) {
-            ret = tbuf_read(pfd, sys_recvn);
+            ret = tbuf_read(pio);
             if (ret == NULL) {
-                status = http_500(cfd);
+                status = http_500(cio);
                 goto exit;
             }
         }
 
         int failed = -1;
-        if (sys_recvn(pfd, &failed, sizeof(int)) != sizeof(int) || failed) {
+        if (sys_readn(pio, &failed, sizeof(int)) != sizeof(int) || failed) {
             tx_revert(sid);
-            status = http_500(cfd);
+            status = http_500(cio);
             goto exit;
         }
 
-        status = http_200(cfd);
+        status = http_200(cio);
         if (ret != NULL) {
             int size;
             char *res = rel_unpack(fn->ret->head, ret, &size);
-            status = http_chunk(cfd, res, size);
+            status = http_chunk(cio, res, size);
 
             mem_free(res);
             tbuf_free(ret);
@@ -202,7 +204,7 @@ static void *exec_thread(void *arg)
         }
 
         tx_commit(sid);
-        status = http_chunk(cfd, NULL, 0);
+        status = http_chunk(cio, NULL, 0);
 
 exit:
         sys_print("[%016X] method '%c', path '%s', time %dms - %3d\n",
@@ -224,13 +226,14 @@ exit:
             mem_free(req);
         if (pid != -1)
             sys_wait(pid);
-        if (pfd != -1)
-            sys_close_socket(pfd);
 
-        sys_close_socket(cfd);
+        if (pio != NULL)
+            sys_close(pio);
+
+        sys_close(cio);
     }
 
-    sys_close_socket(sfd);
+    sys_close(sio);
     env_free(x->env);
     mem_free(x);
     mem_free(arg);
@@ -292,15 +295,15 @@ int main(int argc, char *argv[])
             sys_thread(exec_thread, e);
         }
 
-        int sfd = sys_socket(&p);
+        IO *sio = sys_socket(&p);
 
         char tmp[32];
         sys_time(tmp);
         sys_print("started: %s, volume=%s, port=%d\n--\n", tmp, v, p);
 
         for (;;) {
-            long cfd = sys_accept(sfd);
-            queue_put(cfd);
+            IO *cio = sys_accept(sio);
+            queue_put(cio);
         }
 
         tx_free();
@@ -311,10 +314,10 @@ int main(int argc, char *argv[])
         char *src = vol_init(v, 0);
         Env *env = env_new(src);
 
-        int fd = sys_connect(p);
+        IO *io = sys_connect(p);
 
         Call call;
-        if (sys_recvn(fd, &call, sizeof(Call)) != sizeof(Call))
+        if (sys_readn(io, &call, sizeof(Call)) != sizeof(Call))
             sys_die("executor: failed to retrieve function details\n");
 
         int idx = 0;
@@ -323,7 +326,7 @@ int main(int argc, char *argv[])
 
         if (fn->p.len == 1) {
             args.names[0] = fn->p.names[0];
-            args.tbufs[0] = tbuf_read(fd, sys_recvn);
+            args.tbufs[0] = tbuf_read(io);
             if (args.tbufs[0] == NULL)
                 sys_die("%s: failed to retrieve the parameter\n", call.func);
 
@@ -349,15 +352,15 @@ int main(int argc, char *argv[])
 
         if (fn->ret != NULL) {
             rel_init(fn->ret, &args);
-            if (tbuf_write(fn->ret->body, fd, sys_send) < 0)
+            if (tbuf_write(fn->ret->body, io) < 0)
                 sys_die("%s: failed to transmit the result\n", call.func);
         }
 
         int failed = 0;
-        if (sys_send(fd, &failed, sizeof(int)) < 0)
+        if (sys_write(io, &failed, sizeof(int)) < 0)
             sys_die("%s: failed to transmit the result flag\n", call.func);
 
-        sys_close_socket(fd);
+        sys_close(io);
         env_free(env);
     } else
         usage(argv[0]);
