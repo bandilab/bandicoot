@@ -52,6 +52,24 @@ int main()
         fail();
     mem_free(req);
 
+    req = parse("post_gt_8192");
+    if (req == NULL)
+        fail();
+    if (req->method != POST)
+        fail();
+    if (str_cmp(req->path, "/store_storage_r1") != 0)
+        fail();
+
+    Head *h = NULL;
+    TBuf *b = rel_pack_sep(req->body, &h);
+    if (b == NULL || h == NULL)
+        fail();
+
+    tbuf_clean(b);
+    tbuf_free(b);
+    mem_free(h);
+    mem_free(req);
+
     FAIL("malformed_1");
     FAIL("malformed_2");
     FAIL("bad_method");
@@ -72,6 +90,7 @@ int main()
     */
 
     int p = 0;
+    sys_signals();
     IO *bad_io = sys_socket(&p);
 
     if (http_200(bad_io) != -200)

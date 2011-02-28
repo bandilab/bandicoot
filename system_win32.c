@@ -53,7 +53,7 @@ extern void sys_die(const char *msg, ...)
     vprintf(msg, ap);
     va_end(ap);
 
-    printf("[system error: '%s']\n", lpMsgBuf);
+    printf("[system error: '%s']\n", str_trim(lpMsgBuf));
 
     exit(PROC_FAIL);
 }

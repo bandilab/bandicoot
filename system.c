@@ -104,7 +104,7 @@ extern int sys_readn(IO *io, void *buf, int size)
     do {
         r = io->read(io, buf + idx, size - idx);
         idx += r;
-    } while (idx < size && r > 0);
+    } while (r > 0 && idx < size);
 
     return idx;
 }

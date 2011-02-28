@@ -108,6 +108,10 @@ run()
     do
         echo "[T] $e"
         $BIN/$e
+        if [ "$?" != "0" ]
+        then
+            echo "    failed"
+        fi
     done
 }
 

@@ -127,17 +127,9 @@ extern Http_Req *http_parse(IO *io)
         int remaining = size - read + body_start;
         if (remaining > 0) {
             buf = mem_realloc(buf, read + remaining);
-
-            /* FIXME: replace the below loop with sys_readn */
-            off = read;
-            while ((read = sys_read(io, buf + off, remaining)) > 0) {
-                off += read;
-                remaining -= read;
-            }
+            if (sys_readn(io, buf + read, remaining) != remaining)
+                goto exit;
         }
-
-        if (read < 0 || remaining > 0)
-            goto exit;
     } else if (str_cmp(method, "GET") == 0) {
         m = GET;
     } else if (str_cmp(method, "OPTIONS") == 0) {
