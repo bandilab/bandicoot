@@ -168,14 +168,14 @@ extern void tbuf_free(TBuf *b)
     mem_free(b);
 }
 
-extern TBuf *tbuf_read(int fd)
+extern TBuf *tbuf_read(int fd, int (*rfn)(int, void*, int))
 {
     TBuf *b = tbuf_new();
     char size_buf[sizeof(int)];
     char data_buf[MAX_BLOCK];
 
     for (;;) {
-        if (sys_recvn(fd, size_buf, sizeof(int)) != sizeof(int))
+        if (rfn(fd, size_buf, sizeof(int)) != sizeof(int))
             goto failure;
 
         int size = int_dec(size_buf);
@@ -183,7 +183,7 @@ extern TBuf *tbuf_read(int fd)
             goto success;
 
         char *p = data_buf;
-        if (sys_recvn(fd, p, size) != size)
+        if (rfn(fd, p, size) != size)
             goto failure;
 
         while (p - data_buf < size) {
@@ -205,7 +205,7 @@ success:
     return b;
 }
 
-extern int tbuf_write(TBuf *b, int fd)
+extern int tbuf_write(TBuf *b, int fd, int (*wfn)(int, const void*, int))
 {
     char size_buf[sizeof(int)];
     char data_buf[MAX_BLOCK];
@@ -217,8 +217,8 @@ extern int tbuf_write(TBuf *b, int fd)
         used = p - data_buf;
         if (MAX_BLOCK - used < t->size) {
             int_enc(size_buf, used);
-            if (sys_send(fd, size_buf, sizeof(int)) < 0 ||
-                sys_send(fd, data_buf, used) < 0)
+            if (wfn(fd, size_buf, sizeof(int)) < 0 ||
+                wfn(fd, data_buf, used) < 0)
                 goto failure;
 
             p = data_buf;
@@ -231,15 +231,15 @@ extern int tbuf_write(TBuf *b, int fd)
 
     used = p - data_buf;
     int_enc(size_buf, used);
-    if (sys_send(fd, size_buf, sizeof(int)) < 0)
+    if (wfn(fd, size_buf, sizeof(int)) < 0)
         goto failure;
 
     if (used > 0) {
-        if (sys_send(fd, data_buf, used) < 0)
+        if (wfn(fd, data_buf, used) < 0)
             goto failure;
 
         int_enc(size_buf, 0);
-        if (sys_send(fd, size_buf, sizeof(int)) < 0)
+        if (wfn(fd, size_buf, sizeof(int)) < 0)
             goto failure;
     }
 

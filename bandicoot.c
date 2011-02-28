@@ -167,7 +167,7 @@ static void *exec_thread(void *arg)
         }
 
         if (fn->p.len == 1) {
-            if (tbuf_write(param, pfd) < 0) {
+            if (tbuf_write(param, pfd, sys_send) < 0) {
                 status = http_500(cfd);
                 goto exit;
             }
@@ -176,7 +176,7 @@ static void *exec_thread(void *arg)
         }
 
         if (fn->ret != NULL) {
-            ret = tbuf_read(pfd);
+            ret = tbuf_read(pfd, sys_recvn);
             if (ret == NULL) {
                 status = http_500(cfd);
                 goto exit;
@@ -225,12 +225,12 @@ exit:
         if (pid != -1)
             sys_wait(pid);
         if (pfd != -1)
-            sys_close(pfd);
+            sys_close_socket(pfd);
 
-        sys_close(cfd);
+        sys_close_socket(cfd);
     }
 
-    sys_close(sfd);
+    sys_close_socket(sfd);
     env_free(x->env);
     mem_free(x);
     mem_free(arg);
@@ -314,7 +314,8 @@ int main(int argc, char *argv[])
         int fd = sys_connect(p);
 
         Call call;
-        sys_readn(fd, &call, sizeof(Call));
+        if (sys_recvn(fd, &call, sizeof(Call)) != sizeof(Call))
+            sys_die("executor: failed to retrieve function details\n");
 
         int idx = 0;
         Func *fn = env_func(env, call.func);
@@ -322,7 +323,7 @@ int main(int argc, char *argv[])
 
         if (fn->p.len == 1) {
             args.names[0] = fn->p.names[0];
-            args.tbufs[0] = tbuf_read(fd);
+            args.tbufs[0] = tbuf_read(fd, sys_recvn);
             if (args.tbufs[0] == NULL)
                 sys_die("%s: failed to retrieve the parameter\n", call.func);
 
@@ -348,14 +349,15 @@ int main(int argc, char *argv[])
 
         if (fn->ret != NULL) {
             rel_init(fn->ret, &args);
-            if (tbuf_write(fn->ret->body, fd) < 0)
+            if (tbuf_write(fn->ret->body, fd, sys_send) < 0)
                 sys_die("%s: failed to transmit the result\n", call.func);
         }
 
         int failed = 0;
-        sys_write(fd, &failed, sizeof(int));
+        if (sys_send(fd, &failed, sizeof(int)) < 0)
+            sys_die("%s: failed to transmit the result flag\n", call.func);
 
-        sys_close(fd);
+        sys_close_socket(fd);
         env_free(env);
     } else
         usage(argv[0]);

@@ -109,7 +109,7 @@ extern int sys_read(int fd, void *buf, int size)
     return res;
 }
 
-static int readn(int fd,
+extern int readn(int fd,
                  void *buf,
                  int size,
                  int (*rfn)(int, void*, int))
@@ -145,11 +145,11 @@ extern char *sys_load(const char *path)
     return res;
 }
 
-extern void sys_write(int fd, const void *buf, int size)
+extern int sys_write(int fd, const void *buf, int size)
 {
     int w = write(fd, buf, size);
-    if (w < 0 || w != size)
-        sys_die("sys: cannot write data\n");
+
+    return (w < 0 || w != size) ? -1 : w;
 }
 
 
@@ -228,35 +228,4 @@ extern void sys_time(char *buf)
 extern void sys_exit(char status)
 {
     exit(status);
-}
-
-extern void sys_die(const char *msg, ...)
-{
-    va_list ap;
-
-    va_start(ap, msg);
-    vprintf(msg, ap);
-    va_end(ap);
-
-    if (errno)
-        printf("[system error: '%s']\n", strerror(errno));
-
-    exit(PROC_FAIL);
-}
-
-extern int sys_send(int fd, const void *buf, int size)
-{
-    int w = write(fd, buf, size);
-
-    return (w < 0 || w != size) ? -1 : w;
-}
-
-extern int sys_recv(int fd, void *buf, int size)
-{
-    return read(fd, buf, size);
-}
-
-extern int sys_recvn(int fd, void *buf, int size)
-{
-    return readn(fd, buf, size, sys_recv);
 }

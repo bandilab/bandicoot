@@ -38,6 +38,20 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
+extern void sys_die(const char *msg, ...)
+{
+    va_list ap;
+
+    va_start(ap, msg);
+    vprintf(msg, ap);
+    va_end(ap);
+
+    if (errno)
+        printf("[system error: '%s']\n", strerror(errno));
+
+    exit(PROC_FAIL);
+}
+
 extern int _sys_open(const char *path, int mode, int binary);
 
 extern int sys_open(const char *path, int mode)
@@ -131,6 +145,13 @@ extern int sys_connect(int port)
 
     return fd;
 }
+
+extern void sys_close_socket(int fd)
+{
+    if (close(fd) < 0)
+        sys_die("sys: cannot close socket\n");
+}
+
 extern int sys_accept(int socket)
 {
     int res = accept(socket, NULL, NULL);
@@ -138,6 +159,28 @@ extern int sys_accept(int socket)
         sys_die("sys: cannot accept incoming connection\n");
 
     return res;
+}
+
+extern int readn(int fd,
+                 void *buf,
+                 int size,
+                 int (*rfn)(int, void*, int));
+
+extern int sys_recv(int fd, void *buf, int size)
+{
+    return read(fd, buf, size);
+}
+
+extern int sys_recvn(int fd, void *buf, int size)
+{
+    return readn(fd, buf, size, sys_recv);
+}
+
+extern int sys_send(int fd, const void *buf, int size)
+{
+    int w = write(fd, buf, size);
+
+    return (w < 0 || w != size) ? -1 : w;
 }
 
 extern void sys_signals()

@@ -7,6 +7,7 @@ PORT=12345
 
 YACC_FLAGS="-DYYERROR_VERBOSE" # for bison
 WARN="-W -Wall -Wextra -Wredundant-decls -Wno-unused"
+LINK=""
 CC="gcc -g -std=c99 $WARN $YACC_FLAGS"
 YACC="yacc -d"
 LEX="flex -I"
@@ -33,6 +34,7 @@ then
     LIBS="$LIBS system_posix%"
 else
     LIBS="$LIBS system_win32%"
+    LINK="-lws2_32"
 fi
 
 ALL_VARS=`ls test/data`
@@ -96,7 +98,7 @@ link()
     do
         e=`echo $BIN/$obj | sed 's/\.o//g'`
         echo "[L] $e"
-        $CC $DIST_CFLAGS -o $e $libs $obj
+        $CC $DIST_CFLAGS -o $e $libs $obj $LINK
     done
 }
 

@@ -14,14 +14,14 @@ int main(int argc, char *argv[])
         int fd = sys_accept(sfd);
 
         char buf[16];
-        sys_recv(fd, buf, 6);
+        int read = sys_recv(fd, buf, 6);
 
         if (str_cmp(buf, "hello") != 0)
             fail();
 
         sys_wait(pid);
-        sys_close(fd);
-        sys_close(sfd);
+        sys_close_socket(fd);
+        sys_close_socket(sfd);
     } else if (argc == 2) {
         int e = 0;
         int p = str_int(argv[1], &e);
@@ -29,8 +29,8 @@ int main(int argc, char *argv[])
             fail();
 
         int fd = sys_connect(p);
-        sys_send(fd, "hello", 6);
-        sys_close(fd);
+        int sent = sys_send(fd, "hello", 6);
+        sys_close_socket(fd);
     } else
         fail();
 

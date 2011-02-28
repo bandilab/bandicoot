@@ -38,8 +38,8 @@ int main(void)
     if (mem_cmp(buf, str, len) != 0)
         fail();
 
-    sys_send(wfd2, str, len);
-    if (sys_recv(rfd2, buf, len) != len)
+    sys_write(wfd2, str, len);
+    if (sys_read(rfd2, buf, len) != len)
         fail();
 
     if (mem_cmp(buf, str, len) != 0)
