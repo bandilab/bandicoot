@@ -166,6 +166,7 @@ case $cmd in
 
         for v in $ALL_VARS
         do
+            curl -s http://127.0.0.1:$PORT/load_$v > /dev/null
             curl -s --data-binary @test/data/$v http://127.0.0.1:$PORT/store_$v
         done
         kill $pid

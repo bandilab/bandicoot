@@ -64,9 +64,10 @@ extern IO *sys_open(const char *path, int mode)
 extern int sys_exec(char *const argv[])
 {
     pid_t pid;
-    if ((pid = fork()) == 0)
+    if ((pid = fork()) == 0) {
         execv(argv[0], argv);
-    else if (pid == -1)
+        sys_die("sys: execv of %s failed\n", argv[0]);
+    } else if (pid == -1)
         sys_die("sys: cannot create a child process\n");
 
     return pid;

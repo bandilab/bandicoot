@@ -36,7 +36,8 @@ typedef struct Args Args;
 
 static void rel_init(Rel *r, Args *args)
 {
-    r->init(r, args);
+    if (r->init != NULL)
+        r->init(r, args);
     if (r->body != NULL)
         tbuf_reset(r->body);
 }
@@ -55,6 +56,8 @@ static Tuple *rel_next(Rel *r)
 {
     return tbuf_next(r->body);
 }
+
+extern Rel *rel_empty();
 
 extern Rel *rel_param(Head *head, const char *name);
 extern Rel *rel_tmp(Rel *r, Rel *clones[], int cnt);

@@ -120,6 +120,15 @@ extern Rel *rel_load(Head *head, const char *name)
     return res;
 }
 
+extern Rel *rel_empty()
+{
+    Rel *res = alloc(NULL);
+    res->head = head_new(NULL, NULL, 0);
+    res->body = tbuf_new();
+
+    return res;
+}
+
 static void init_param(Rel *r, Args *args)
 {
     Ctxt *c = r->ctxt;

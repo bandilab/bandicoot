@@ -249,8 +249,14 @@ extern void vol_deploy(const char *p, const char *new_src)
 
     for (int i = 0; i < new_len; ++i) {
         new_vers[i] = 1;
-        if (array_scan(old_vars, old_len, new_vars[i]) < 0)
-            sys_close(vol_open(new_vars[i], 1, CREATE | WRITE));
+        if (array_scan(old_vars, old_len, new_vars[i]) < 0) {
+            long ver = 1;
+            sys_close(vol_open(new_vars[i], ver, CREATE | WRITE));
+
+            Rel *empty = rel_empty();
+            rel_store(new_vars[i], ver, empty);
+            rel_free(empty);
+        }
     }
 
     vol_wstate(new_vars, new_vers, new_len);
