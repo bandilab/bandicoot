@@ -90,7 +90,7 @@ int main()
     */
 
     int p = 0;
-    sys_signals();
+    sys_init();
     IO *bad_io = sys_socket(&p);
 
     if (http_200(bad_io) != -200)

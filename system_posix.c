@@ -23,6 +23,7 @@ limitations under the License.
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -39,7 +40,12 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
-#include "system_net.c"
+#include "system.c"
+
+extern void sys_init()
+{
+    signal(SIGPIPE, SIG_IGN);
+}
 
 extern void sys_die(const char *msg, ...)
 {
@@ -54,8 +60,6 @@ extern void sys_die(const char *msg, ...)
 
     exit(PROC_FAIL);
 }
-
-extern IO *_sys_open(const char *path, int mode, int binary);
 
 extern IO *sys_open(const char *path, int mode)
 {
@@ -124,11 +128,6 @@ extern int net_port(int fd)
         sys_die("sys: cannot lookup the socket details\n");
 
     return ntohs(addr.sin_port);
-}
-
-extern void sys_signals()
-{
-    signal(SIGPIPE, SIG_IGN);
 }
 
 extern Mon *mon_new()

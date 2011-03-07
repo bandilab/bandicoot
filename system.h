@@ -15,6 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/* system initialisation: signal disposition, errno etc. */
+extern void sys_init();
+
 /* input/output */
 struct IO {
     int fd;
@@ -63,7 +66,6 @@ extern void sys_print(const char *msg, ...);
 extern long sys_millis(); /* suitable for quick time measures only (long might
                              not be enough on 32bit systems) */
 extern void sys_time(char *buf);
-extern void sys_signals(); /* sets the required signal dispositions */
 
 /* monitor */
 typedef struct {

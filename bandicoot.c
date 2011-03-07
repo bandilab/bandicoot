@@ -259,6 +259,8 @@ int main(int argc, char *argv[])
 {
     int p = 0;
     char *v = NULL, *s = NULL;
+
+    sys_init();
     if (argc < 2)
         usage(argv[0]);
 
@@ -285,7 +287,6 @@ int main(int argc, char *argv[])
     {
         char *src = vol_init(v, 1);
         queue_init();
-        sys_signals();
 
         Env *env = env_new(src);
         tx_init(env->vars.names, env->vars.len);

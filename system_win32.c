@@ -18,8 +18,10 @@ limitations under the License.
 #include <winsock.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -30,7 +32,12 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 
-#include "system_net.c"
+#include "system.c"
+
+extern void sys_init()
+{
+    SetLastError(0);
+}
 
 extern void sys_die(const char *msg, ...)
 {
@@ -53,12 +60,11 @@ extern void sys_die(const char *msg, ...)
     vprintf(msg, ap);
     va_end(ap);
 
-    printf("[system error: '%s']\n", str_trim(lpMsgBuf));
+    if (dw)
+        printf("[system error: '%s']\n", str_trim(lpMsgBuf));
 
     exit(PROC_FAIL);
 }
-
-extern IO *_sys_open(const char *path, int mode, int binary);
 
 extern IO *sys_open(const char *path, int mode)
 {
@@ -148,10 +154,6 @@ extern int net_port(int fd)
         sys_die("sys: cannot lookup the socket details\n");
 
     return ntohs(addr.sin_port);
-}
-
-extern void sys_signals()
-{
 }
 
 extern Mon *mon_new()

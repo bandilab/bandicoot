@@ -15,25 +15,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <time.h>
+/* defined in system_posix.c or system_win32.c */
+static int net_open();
+static void net_close(IO *io);
+static int net_port(int fd);
 
-#include "config.h"
-#include "system.h"
-#include "memory.h"
-#include "string.h"
-
-extern IO *new_io(int fd,
+static IO *new_io(int fd,
                   int (*read)(struct IO *io, void *buf, int size),
                   int (*write)(struct IO *io, const void *buf, int size),
                   void (*close)(struct IO *io))
@@ -71,7 +58,19 @@ static void fs_close(IO *io)
         sys_die("sys: cannot close file descriptor\n");
 }
 
-extern IO *_sys_open(const char *path, int mode, int binary)
+static int net_read(IO *io, void *buf, int size)
+{
+    int r = recv(io->fd, buf, size, 0);
+    return r < 0 ? -1 : r;
+}
+
+static int net_write(IO *io, const void *buf, int size)
+{
+    int w = send(io->fd, buf, size, 0);
+    return w != size ? -1 : w;
+}
+
+static IO *_sys_open(const char *path, int mode, int binary)
 {
     int flags = 0;
     if ((mode & READ) && (mode & WRITE))
@@ -118,6 +117,67 @@ extern void sys_close(IO *io)
 {
     io->close(io);
     mem_free(io);
+}
+
+extern int sys_iready(IO *io, int sec)
+{
+    struct timeval tv = {.tv_sec = sec, .tv_usec = 0};
+
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(io->fd, &rfds);
+
+    int ready = select(io->fd + 1, &rfds, NULL, NULL, &tv);
+    if (ready < 0 && errno != EINTR)
+        sys_die("sys: select failed\n");
+
+    return ready == 1 && FD_ISSET(io->fd, &rfds);
+}
+
+extern IO *sys_socket(int *port)
+{
+    int sfd = net_open();
+
+    struct sockaddr_in addr;
+    unsigned int size = sizeof(addr);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(*port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sfd, (struct sockaddr*) &addr, size) == -1)
+        sys_die("sys: cannot bind a socket to port %d\n", *port);
+
+    int backlog = 128;
+    if (listen(sfd, backlog) == -1)
+        sys_die("sys: cannot listen (backlog: %d)\n", backlog);
+
+    *port = net_port(sfd);
+
+    return new_io(sfd, net_read, net_write, net_close);
+}
+
+extern IO *sys_accept(IO *sock)
+{
+    int fd = accept(sock->fd, NULL, NULL);
+    if (fd < 0)
+        sys_die("sys: cannot accept incoming connection\n");
+
+    return new_io(fd, net_read, net_write, net_close);
+}
+
+extern IO *sys_connect(int port)
+{
+    int fd = net_open();
+
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    if (connect(fd, (struct sockaddr*) &addr, sizeof(addr)) == -1)
+        sys_die("sys: cannot connect to port %d\n", port);
+
+    return new_io(fd, net_read, net_write, net_close);
 }
 
 extern int sys_exists(const char *path)
