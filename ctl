@@ -26,15 +26,19 @@ PERF_TESTS="$PERF_TESTS test/perf/number% test/perf/relation%"
 PERF_TESTS="$PERF_TESTS test/perf/system% test/perf/tuple%"
 PROGS="bandicoot%"
 
-[ "Linux" = `uname` ] && CC="$CC -pthread"
-[ "SunOS" = `uname` ] && CC="$CC -lsocket"
-
-if [ -z `uname | grep -i CYGWIN` ]
+if [ ! "`uname | grep -i CYGWIN`" = "" ]
 then
-    LIBS="$LIBS system_posix%"
-else
     LIBS="$LIBS system_win32%"
     LINK="-lws2_32"
+else
+    LIBS="$LIBS system_posix%"
+    if [ `uname` = "SunOS" ]
+    then
+        LINK="-lnsl -lsocket"
+    elif [ `uname` = "Linux" ]
+    then
+        CC="$CC -pthread"
+    fi
 fi
 
 ALL_VARS=`ls test/data`

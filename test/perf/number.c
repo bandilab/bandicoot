@@ -50,5 +50,5 @@ int main(void)
                                             inline calls */
     mem_free(buf);
 
-    return x;
+    return x + 461932736;
 }

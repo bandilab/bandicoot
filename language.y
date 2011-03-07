@@ -629,25 +629,23 @@ static Expr *p_convert(Head *h, L_Expr *e, L_Expr_Type parent_type)
     return res;
 }
 
-static Rel *r_convert(L_Rel *rel,
-                      L_Stmts stmts,
-                      int pos,
-                      Rel *clones[MAX_STMTS][MAX_VARS])
+static Rel *r_convert_node(L_Rel *rel,
+                           Rel *l,
+                           Rel *r,
+                           L_Stmts stmts,
+                           int pos,
+                           Rel *clones[MAX_STMTS][MAX_VARS])
 {
+    Rel *res = NULL;
     char lhstr[MAX_HEAD_STR_LEN], rhstr[MAX_HEAD_STR_LEN];
-    Rel *res = NULL, *l = NULL, *r = NULL;
-    L_Attrs attrs;
 
-    if (rel->left != NULL) {
-        l = r_convert(rel->left, stmts, pos, clones);
+    if (l != NULL)
         print_head(lhstr, l->head);
-    }
-    if (rel->right != NULL) {
-        r = r_convert(rel->right, stmts, pos, clones);
-        print_head(rhstr, r->head);
-    }
 
-    attrs = rel->attrs;
+    if (r != NULL)
+        print_head(rhstr, r->head);
+
+    L_Attrs attrs = rel->attrs;
     L_Rel_Type t = rel->node_type;
     if (t == LOAD) {
         int tv_idx = array_scan(stmts.names, pos, rel->var);
@@ -784,6 +782,20 @@ static Rel *r_convert(L_Rel *rel,
             res = rel_sum(l, r, attrs.names, attrs.types, sums, attrs.len);
     }
     return res;
+}
+
+static Rel *r_convert(L_Rel *rel,
+                      L_Stmts stmts,
+                      int pos,
+                      Rel *clones[MAX_STMTS][MAX_VARS])
+{
+    if (rel == NULL)
+        return NULL;
+
+    Rel *l = r_convert(rel->left, stmts, pos, clones);
+    Rel *r = r_convert(rel->right, stmts, pos, clones);
+
+    return r_convert_node(rel, l, r, stmts, pos, clones);
 }
 
 static void append_rvars(L_Rel *rel, char *rvars[MAX_VARS], int *pos)
