@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VERSION="v1"
+VERSION="v2"
 
 BIN="bin"
 PORT=12345
@@ -140,14 +140,14 @@ dist()
     d="bandicoot-$VERSION"
     mkdir -p $d
 
-    cp LICENSE NOTICE $BIN/bandicoot* $d
+    cp LICENSE NOTICE README $BIN/bandicoot* $d
     if [ -d "$2" ]
     then
         echo "including examples directory $2"
         cp -r $2 $d
     fi
 
-    a="$BIN/$d.tgz"
+    a="$BIN/$d.tar.gz"
     echo "[A] $a"
     tar cfz $a $d
 }
