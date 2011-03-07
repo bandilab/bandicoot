@@ -32,6 +32,7 @@ limitations under the License.
 #include <pthread.h>
 #include <time.h>
 #include <signal.h>
+#include <poll.h>
 
 #include "config.h"
 #include "system.h"
@@ -65,7 +66,7 @@ extern int sys_exec(char *const argv[])
 {
     pid_t pid;
     if ((pid = fork()) == 0) {
-        execv(argv[0], argv);
+        execvp(argv[0], argv);
         sys_die("sys: execv of %s failed\n", argv[0]);
     } else if (pid == -1)
         sys_die("sys: cannot create a child process\n");

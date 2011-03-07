@@ -56,6 +56,7 @@ extern void sys_die(const char *msg, ...);
 extern IO *sys_socket(int *port);
 extern IO *sys_accept(IO *socket);
 extern IO *sys_connect(int port);
+extern int sys_iready(IO *io, int millis);
 
 /* misc */
 extern void sys_print(const char *msg, ...);

@@ -231,7 +231,7 @@ case $cmd in
             exit 1
         fi
 
-        dist "-Os $2" $4
+        dist "-Os $2" $3
         ;;
     *)
         echo "unknown command '$cmd', usage: ctl <command>"

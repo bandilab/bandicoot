@@ -75,10 +75,11 @@ extern int sys_exec(char *const a[])
     si.cb = sizeof(si);
 
     char c[1024] = "";
+    str_print(c, "\"%s\" ", a[0]);
     for (int i = 1; a[i] != NULL; ++i)
         str_print(c, "%s %s", c, a[i]);
 
-    if (!CreateProcess(a[0], c, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) 
+    if (!CreateProcess(NULL, c, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
         sys_die("sys: cannot create process\n");
 
     CloseHandle(pi.hProcess);
@@ -108,7 +109,7 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
 {
     DWORD id;
     HANDLE h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)fn, arg, 0, &id);
- 
+
     if (h == NULL)
         sys_die("sys: cannot create a thread\n");
 }

@@ -35,6 +35,7 @@ extern const char *VERSION;
 
 #define QUEUE_LEN 128
 #define THREADS 8
+#define PROC_WAIT_SEC 5
 
 typedef struct {
     char func[MAX_NAME];
@@ -156,9 +157,13 @@ static void *exec_thread(void *arg)
         for (int i = 0; i < call.w.len; ++i)
             str_cpy(call.w.vars[i], fn->w.vars[i]);
 
-        /* FIXME: what if an executor never connects? */
-
         pid = sys_exec(argv);
+        if (!sys_iready(sio, PROC_WAIT_SEC)) {
+            status = http_500(cio);
+            goto exit;
+        }
+
+        /* FIXME: sys_accept might fail (and cause sys_die). */
         pio = sys_accept(sio);
         sid = tx_enter(fn->r.vars, call.r.vers, call.r.len,
                        fn->w.vars, call.w.vers, call.w.len);

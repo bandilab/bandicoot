@@ -83,3 +83,18 @@ extern IO *sys_connect(int port)
 
     return new_io(fd, net_read, net_write, net_close);
 }
+
+extern int sys_iready(IO *io, int sec)
+{
+    struct timeval tv = {.tv_sec = sec, .tv_usec = 0};
+
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(io->fd, &rfds);
+
+    int ready = select(io->fd + 1, &rfds, NULL, NULL, &tv);
+    if (ready < 0 && errno != EINTR)
+        sys_die("sys: select failed\n");
+
+    return ready == 1 && FD_ISSET(io->fd, &rfds);
+}
