@@ -19,6 +19,7 @@ limitations under the License.
 #include "system.h"
 #include "memory.h"
 #include "string.h"
+#include "fs.h"
 #include "volume.h"
 #include "head.h"
 #include "http.h"
@@ -277,24 +278,22 @@ int main(int argc, char *argv[])
         else
             usage(argv[0]);
 
+    fs_init(v);
     if (str_cmp(argv[1], "deploy") == 0 &&
         s != NULL && v != NULL && p == 0)
     {
-        vol_deploy(v, s);
+        tx_deploy(s);
         sys_print("deployed: %s -> %s\n", s, v);
     } else if (str_cmp(argv[1], "start") == 0 &&
                s == NULL && v != NULL && p != 0)
     {
-        char *src = vol_init(v, 1);
+        tx_init();
+        vol_init();
         queue_init();
-
-        Env *env = env_new(src);
-        tx_init(env->vars.names, env->vars.len);
-        env_free(env);
 
         for (int i = 0; i < THREADS; ++i) {
             Exec *e = mem_alloc(sizeof(Exec));
-            e->env = env_new(src);
+            e->env = env_new(fs_source);
             str_cpy(e->vol, v);
             str_cpy(e->exe, argv[0]);
 
@@ -317,8 +316,7 @@ int main(int argc, char *argv[])
     } else if (str_cmp(argv[1], "executor") == 0 &&
                s == NULL && v != NULL && p != 0)
     {
-        char *src = vol_init(v, 0);
-        Env *env = env_new(src);
+        Env *env = env_new(fs_source);
 
         IO *io = sys_connect(p);
 

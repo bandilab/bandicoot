@@ -368,8 +368,10 @@ static void test_compound()
 
 int main()
 {
-    env = env_new(vol_init("bin/volume", 1));
-    tx_init(env->vars.names, env->vars.len);
+    fs_init("bin/volume");
+    tx_init();
+    vol_init();
+    env = env_new(fs_source);
 
     char **files = sys_list("test/data", &args.len);
     for (int i = 0; i < args.len; ++i)

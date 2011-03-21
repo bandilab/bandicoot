@@ -20,9 +20,16 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 #include "system.h"
+#include "fs.h"
 #include "head.h"
 #include "transaction.h"
 #include "volume.h"
+#include "value.h"
+#include "tuple.h"
+#include "expression.h"
+#include "summary.h"
+#include "relation.h"
+#include "environment.h"
 
 #define RUNNABLE 1
 #define WAITING 2
@@ -193,11 +200,37 @@ static void current_state(long vers[])
     for (E_List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED) {
-            int idx = array_find(all_vars, num_vars, e->var);
+            int idx = array_scan(all_vars, num_vars, e->var);
             if (vers[idx] < e->version)
                 vers[idx] = e->version;
         }
     }
+}
+
+extern void wstate()
+{
+    long vers[num_vars];
+    current_state(vers);
+
+    int SID_LEN = fs_sid_len;
+    char sid[SID_LEN];
+    char *buf = mem_alloc(num_vars * (MAX_NAME + SID_LEN));
+
+    sys_move(fs_state_bak, fs_state);
+
+    int off = 0;
+    for (int i = 0; i < num_vars; ++i) {
+        fs_sid_to_str(sid, vers[i]);
+        off += str_print(buf + off, "%s,%s\n", all_vars[i], sid);
+    }
+
+    IO *io = sys_open(fs_state, CREATE | WRITE);
+    sys_write(io, buf, off);
+    sys_close(io);
+
+    mem_free(buf);
+
+    sys_remove(fs_state_bak);
 }
 
 /* removes entries from gents which are
@@ -230,9 +263,6 @@ static void clean_up()
 
         if (rm) {
             *prev = it->next;
-
-            if (e->a_type == WRITE && e->state == COMMITTED)
-                vol_remove(e->var, e->sid);
 
             mem_free(it->elem);
             mem_free(it);
@@ -283,10 +313,7 @@ static void finish(int sid, int final_state)
         mon_free(e->mon);
     }
 
-    long vers[num_vars];
-    current_state(vers);
-    vol_wstate(all_vars, vers, num_vars);
-
+    wstate();
     clean_up();
 
     for (; sig != NULL; sig = next(sig)) {
@@ -314,22 +341,107 @@ extern void tx_free()
     mon_free(gmon);
 }
 
-extern void tx_init(char *vars[], int len)
+extern void tx_init()
 {
     gmon = mon_new();
-    last_sid = 1;
     gents = NULL;
-    num_vars = len;
+    last_sid = 1;
+    num_vars = 0;
+
+    if (sys_exists(fs_state_bak))
+        sys_move(fs_state, fs_state_bak);
+
+    long vers[MAX_VARS];
+    char *vars[MAX_VARS];
+    int len;
+
+    char *buf = sys_load(fs_state);
+    char **lines = str_split(buf, '\n', &len);
+    if (str_len(lines[len - 1]) == 0)
+        --len;
+
+    for (int i = 0; i < len; ++i) {
+        int cnt;
+        char **name_sid = str_split(lines[i], ',', &cnt);
+        if (cnt != 2)
+            sys_die("bad line %s:%d\n", fs_state, i + 1);
+
+        vars[i] = str_dup(name_sid[0]);
+        vers[i] = fs_str_to_sid(name_sid[1]);
+
+        mem_free(name_sid);
+    }
+
+    mem_free(lines);
+    mem_free(buf);
 
     mon_lock(gmon);
-    for (int i = 0; i < num_vars; ++i) {
-        all_vars[i] = str_dup(vars[i]);
+    num_vars = len;
 
-        Entry *e = add_entry(1, all_vars[i], WRITE, 1, COMMITTED);
+    for (int i = 0; i < num_vars; ++i) {
+        all_vars[i] = vars[i];
+        long sid = vers[i];
+
+        if (sid > last_sid)
+            last_sid = sid;
+
+        Entry *e = add_entry(sid, all_vars[i], WRITE, sid, COMMITTED);
         mon_free(e->mon);
     }
-    array_sort(all_vars, num_vars, 0);
     mon_unlock(gmon);
+}
+
+extern void tx_deploy(const char *new_src)
+{
+    char *old_src = fs_source;
+    if (sys_empty(fs_path)) {
+        IO *io = sys_open(old_src, CREATE | WRITE);
+        sys_close(io);
+
+        io = sys_open(fs_state, CREATE | WRITE);
+        sys_close(io);
+    } else
+        tx_init();
+
+    Env *new_env = env_new(new_src);
+    Env *old_env = env_new(old_src);
+
+    if (!env_compat(old_env, new_env))
+        sys_die("cannot deploy incompatible source file '%s'\n", new_src);
+
+    int new_len = new_env->vars.len;
+    char **new_vars = new_env->vars.names;
+
+    /* create new variables  */
+    for (int i = 0; i < new_len; ++i) {
+        char *var = str_dup(new_vars[i]);
+        int idx = array_scan(all_vars, num_vars, new_vars[i]);
+        if (idx < 0) {
+            all_vars[num_vars++] = var;
+            Entry *e = add_entry(1, var, WRITE, 1, COMMITTED);
+            mon_free(e->mon);
+        }
+    }
+
+    wstate();
+    sys_cpy(old_src, new_src);
+
+    env_free(new_env);
+    env_free(old_env);
+}
+
+extern void tx_volume_sync(State *in, State *out)
+{
+    /* FIXME: to be implemeted a merge with *in variable */
+
+    for (E_List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
+        if (e->a_type == WRITE && e->state == COMMITTED) {
+            str_cpy(out->vars[out->len], e->var);
+            out->vers[out->len] = e->version;
+            out->len++;
+        }
+    }
 }
 
 static long wait(Entry *e)
