@@ -27,8 +27,8 @@ limitations under the License.
 #include "tuple.h"
 #include "expression.h"
 #include "summary.h"
-#include "transaction.h"
 #include "relation.h"
+#include "transaction.h"
 #include "environment.h"
 #include "pack.h"
 
@@ -40,12 +40,55 @@ extern const char *VERSION;
 
 typedef struct {
     char func[MAX_NAME];
-    struct {
-        char vars[MAX_VARS][MAX_NAME];
-        long vers[MAX_VARS];
-        int len;
-    } r, w;
+    Vars *r;
+    Vars *w;
 } Call;
+
+static void call_free(Call *c)
+{
+    if (c->r != NULL)
+        mem_free(c->r);
+    if (c->w != NULL)
+        mem_free(c->w);
+    mem_free(c);
+}
+
+static int call_write(Call *c, IO *io)
+{
+    if (sys_write(io, c->func, sizeof(c->func)) < 0)
+        return -1;
+
+    if (vars_write(c->r, io) < 0)
+        return -1;
+
+    if (vars_write(c->w, io) < 0)
+        return -1;
+
+    return 1;
+}
+
+static Call *call_read(IO *io)
+{
+    Call *res = NULL, *c = mem_alloc(sizeof(Call));
+    c->r = NULL;
+    c->w = NULL;
+
+    if (sys_readn(io, c->func, sizeof(c->func)) != sizeof(c->func))
+       goto failure;
+    else if ((c->r = vars_read(io)) == NULL)
+       goto failure;
+    else if ((c->w = vars_read(io)) == NULL)
+       goto failure;
+
+    res = c;
+    c = NULL;
+
+failure:
+    if (c != NULL)
+        call_free(c);
+
+    return res;
+}
 
 typedef struct {
     Env *env;
@@ -110,6 +153,7 @@ static void *exec_thread(void *arg)
         IO *pio = NULL;
         long sid = 0, time = sys_millis();
         TBuf *param = NULL, *ret = NULL;
+        Call *call = NULL;
 
         Http_Req *req = http_parse(cio);
         if (req == NULL) {
@@ -151,12 +195,14 @@ static void *exec_thread(void *arg)
             }
         }
 
-        Call call = {.r.len = fn->r.len, .w.len = fn->w.len};
-        str_cpy(call.func, req->path + 1);
-        for (int i = 0; i < call.r.len; ++i)
-            str_cpy(call.r.vars[i], fn->r.vars[i]);
-        for (int i = 0; i < call.w.len; ++i)
-            str_cpy(call.w.vars[i], fn->w.vars[i]);
+        call = mem_alloc(sizeof(Call));
+        str_cpy(call->func, req->path + 1);
+        call->r = vars_new(fn->r.len);
+        call->w = vars_new(fn->w.len);
+        for (int i = 0; i < fn->r.len; ++i)
+            vars_put(call->r, fn->r.vars[i], 0L);
+        for (int i = 0; i < fn->w.len; ++i)
+            vars_put(call->w, fn->w.vars[i], 0L);
 
         pid = sys_exec(argv);
         if (!sys_iready(sio, PROC_WAIT_SEC)) {
@@ -166,10 +212,9 @@ static void *exec_thread(void *arg)
 
         /* FIXME: sys_accept might fail (and cause sys_die). */
         pio = sys_accept(sio);
-        sid = tx_enter(fn->r.vars, call.r.vers, call.r.len,
-                       fn->w.vars, call.w.vers, call.w.len);
+        sid = tx_enter(call->r, call->w);
 
-        if (sys_write(pio, &call, sizeof(Call)) < 0) {
+        if (call_write(call, pio) < 0) {
             status = http_500(cio);
             goto exit;
         }
@@ -235,6 +280,9 @@ exit:
 
         if (pio != NULL)
             sys_close(pio);
+
+        if (call != NULL)
+            call_free(call);
 
         sys_close(cio);
     }
@@ -320,50 +368,41 @@ int main(int argc, char *argv[])
 
         IO *io = sys_connect(p);
 
-        Call call;
-        if (sys_readn(io, &call, sizeof(Call)) != sizeof(Call))
+        Call *call = call_read(io);
+        if (call == NULL)
             sys_die("executor: failed to retrieve function details\n");
 
-        int idx = 0;
-        Func *fn = env_func(env, call.func);
-        Args args = {.len = fn->r.len + fn->p.len};
+        Func *fn = env_func(env, call->func);
+        TBuf *arg;
 
         if (fn->p.len == 1) {
-            args.names[0] = fn->p.names[0];
-            args.tbufs[0] = tbuf_read(io);
-            if (args.tbufs[0] == NULL)
-                sys_die("%s: failed to retrieve the parameter\n", call.func);
-
-            idx++;
-        }
-
-        for (int i = 0; i < call.r.len; ++i, ++idx) {
-            args.names[idx] = call.r.vars[i];
-            args.vers[idx] = call.r.vers[i];
+            arg = tbuf_read(io);
+            if (arg == NULL)
+                sys_die("%s: failed to retrieve the parameter\n", call->func);
         }
 
         for (int i = 0; i < fn->p.len; ++i)
-            rel_init(fn->p.rels[i], &args);
+            rel_init(fn->p.rels[i], call->r, arg);
 
         for (int i = 0; i < fn->t.len; ++i)
-            rel_init(fn->t.rels[i], &args);
+            rel_init(fn->t.rels[i], call->r, arg);
 
         for (int i = 0; i < fn->w.len; ++i) {
-            rel_init(fn->w.rels[i], &args);
-            /* FIXME: potential mismatch in call/fn vars/rels */
-            rel_store(call.w.vars[i], call.w.vers[i], fn->w.rels[i]);
+            rel_init(fn->w.rels[i], call->r, arg);
+            rel_store(call->w->vars[i], call->w->vers[i], fn->w.rels[i]);
         }
 
         if (fn->ret != NULL) {
-            rel_init(fn->ret, &args);
+            rel_init(fn->ret, call->r, arg);
             if (tbuf_write(fn->ret->body, io) < 0)
-                sys_die("%s: failed to transmit the result\n", call.func);
+                sys_die("%s: failed to transmit the result\n", call->func);
         }
 
         int failed = 0;
         if (sys_write(io, &failed, sizeof(int)) < 0)
-            sys_die("%s: failed to transmit the result flag\n", call.func);
+            sys_die("%s: failed to transmit the result flag\n", call->func);
 
+        call_free(call);
         sys_close(io);
         env_free(env);
     } else

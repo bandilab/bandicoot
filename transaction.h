@@ -15,17 +15,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-typedef struct {
-    char vars[MAX_VARS][MAX_NAME];
-    long vers[MAX_VARS];
-    int len;
-} State;
-
 extern void tx_init();
 extern void tx_deploy(const char *new_src);
-extern void tx_volume_sync(State *in, State *out);
-extern long tx_enter(char *rnames[], long rvers[], int rlen,
-                     char *wnames[], long wvers[], int wlen);
+extern Vars *tx_volume_sync(long long vol_id, Vars *in);
+extern long tx_enter(Vars *rvars, Vars *wvars);
 extern void tx_commit(long sid);
 extern void tx_revert(long sid);
 extern void tx_state();

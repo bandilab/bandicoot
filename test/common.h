@@ -28,8 +28,8 @@ limitations under the License.
 #include "../expression.h"
 #include "../summary.h"
 #include "../volume.h"
-#include "../transaction.h"
 #include "../relation.h"
+#include "../transaction.h"
 #include "../pack.h"
 #include "../environment.h"
 #include "../http.h"
@@ -48,9 +48,7 @@ extern Tuple *tuple_dec(void *mem, int *len);
 extern int tuple_enc(Tuple *t, void *buf);
 
 /* from transaction.c */
-extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
-                          char *wnames[], long wvers[], int wlen,
-                          Mon *m);
+extern long tx_enter_full(Vars *rvars, Vars *wvars, Mon *m);
 
 static Expr *expr_true()
 {

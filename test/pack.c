@@ -20,14 +20,14 @@ limitations under the License.
 static Rel *pack_init(char *str)
 {
     Head *h;
-    TBuf *buf = rel_pack_sep(str, &h);
+    TBuf *arg = rel_pack_sep(str, &h);
     Rel *res = NULL;
 
-    if (buf != NULL) {
-        Args args = { .len = 1, .names[0] = "input", .tbufs[0] = buf };
-        res = rel_param(h, "input");
+    if (arg != NULL) {
+        Vars rvars = { .len = 0 };
+        res = rel_param(h);
 
-        rel_init(res, &args);
+        rel_init(res, &rvars, arg);
         mem_free(h);
     }
 

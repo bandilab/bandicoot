@@ -15,29 +15,35 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-struct Args {
+typedef struct {
+    int size;
     int len;
-    long vers[MAX_ARGS];
-    char *names[MAX_ARGS];
-    TBuf *tbufs[MAX_ARGS];
-};
+    char **vars;
+    long *vers;
+    long long **vols;
+} Vars;
+
+extern Vars *vars_new(int len);
+extern int vars_write(Vars *v, IO *io);
+extern Vars *vars_read(IO *io);
+extern Vars *vars_put(Vars *v, const char *var, long ver);
+extern int vars_scan(Vars *v, const char *var, long ver);
 
 struct Rel {
     Head *head;
     TBuf *body;
     void *ctxt;
 
-    void (*init)(struct Rel *self, struct Args *args);
+    void (*init)(struct Rel *self, Vars *rvars, TBuf *arg);
     void (*free)(struct Rel *self);
 };
 
 typedef struct Rel Rel;
-typedef struct Args Args;
 
-static void rel_init(Rel *r, Args *args)
+static void rel_init(Rel *r, Vars *rvars, TBuf *arg)
 {
     if (r->init != NULL)
-        r->init(r, args);
+        r->init(r, rvars, arg);
     if (r->body != NULL)
         tbuf_reset(r->body);
 }
@@ -59,7 +65,7 @@ static Tuple *rel_next(Rel *r)
 
 extern Rel *rel_empty();
 
-extern Rel *rel_param(Head *head, const char *name);
+extern Rel *rel_param(Head *head);
 extern Rel *rel_tmp(Rel *r, Rel *clones[], int cnt);
 extern Rel *rel_load(Head *head, const char *name);
 

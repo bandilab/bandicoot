@@ -15,6 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/* FIXME: temporary until we implement VOLUME process with proper id */
+#define VOLUME_ID 1L
+
 #define MAX_FILE_PATH 256
 
 /* maximum number of named relational type declarations */
@@ -30,9 +33,6 @@ limitations under the License.
    variables */
 #define MAX_VARS 128
 
-/* MAX_VARS + number of input parameters to a function */
-#define MAX_ARGS MAX_VARS + 1
-
 /* maximum number of statements per function */
 #define MAX_STMTS 128
 
@@ -41,6 +41,9 @@ limitations under the License.
 
 /* size of block for IO operations */
 #define MAX_BLOCK 65536
+
+/* maximum number of volume nodes in a cluster per variable */
+#define MAX_VOLUMES 8
 
 #ifndef NULL
 #define NULL ((void*) 0)

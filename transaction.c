@@ -22,7 +22,6 @@ limitations under the License.
 #include "system.h"
 #include "fs.h"
 #include "head.h"
-#include "transaction.h"
 #include "volume.h"
 #include "value.h"
 #include "tuple.h"
@@ -30,27 +29,79 @@ limitations under the License.
 #include "summary.h"
 #include "relation.h"
 #include "environment.h"
+#include "transaction.h"
 
 #define RUNNABLE 1
 #define WAITING 2
 #define COMMITTED 3
 #define REVERTED 4
 
+/* Vol keeps information about the content of a volume */
 typedef struct {
-    long sid;
-    char var[MAX_NAME];
-    int a_type;
-    long version;
-    int state;
-    Mon *mon;
+    long long id;
+    Vars *v;
+} Vol;
+
+typedef struct {
+    long sid; /* transaction identifier */
+    char var[MAX_NAME]; /* variable name */
+    int a_type; /* READ or WRITE actions */
+    long version; /* either an SID to read or an SID to create/write */
+    int state; /* identifies the current entry state, see defines above */
+    long long wvol_id; /* volume for write action */
+    Mon *mon; /* monitor on which the caller/transaction is blocked if needed */
 } Entry;
 
-struct E_List {
-    Entry *elem;
-    struct E_List *next;
+/* generic List structure */
+struct List {
+    void *elem;
+    struct List *next;
 };
 
-typedef struct E_List E_List;
+typedef struct List List;
+
+static List *next(List *e)
+{
+    List *res = e->next;
+    mem_free(e);
+    return res;
+}
+
+static List *add(List *dest, void *elem)
+{
+    List *new = mem_alloc(sizeof(List));
+    new->elem = elem;
+    new->next = dest;
+
+    return new;
+}
+
+/* rm_elem method is used to:
+   - identify elems to be removed
+   - must mem_free the whole elem
+
+   elem is current elem from the list to be removed
+   cmp which can be used to compare the elem to */
+static void rm(List **list,
+               void *cmp,
+               int (*rm_elem)(void *elem, void *cmp))
+{
+    List *it = *list, **prev = list;
+    while (it) {
+        int rm = rm_elem(it->elem, cmp);
+        if (rm) {
+            *prev = it->next;
+
+            mem_free(it);
+
+            it = *list;
+            prev = list;
+        } else {
+            prev = &it->next;
+            it = it->next;
+        }
+    }
+}
 
 #ifdef LP64
 static const long MAX_LONG = 0x7FFFFFFFFFFFFFFF;
@@ -61,24 +112,69 @@ static const long MAX_LONG = 0x7FFFFFFF;
 static char *all_vars[MAX_VARS];
 static int num_vars;
 
-static E_List *gents;
+static List *gents;
+static List *gvols;
 static Mon *gmon;
 static long last_sid;
 
-static E_List *next(E_List *e)
+/* determines a version to read */
+static long get_rsid(long sid, const char var[])
 {
-    E_List *res = e->next;
-    mem_free(e);
+    long res = -1;
+
+    for (List *it = gents; it != NULL; it = it->next) {
+        Entry *e = it->elem;
+        if (e->a_type == WRITE && e->state == COMMITTED
+                && e->sid < sid && e->sid > res && str_cmp(e->var, var) == 0)
+            res = e->sid;
+    }
+
     return res;
 }
 
-static E_List *add(E_List *dest, Entry *e)
+/* returns true if a given sid of a variable is active (being read) */
+static int is_active(const char var[], long sid)
 {
-    E_List *new = mem_alloc(sizeof(E_List));
-    new->elem = e;
-    new->next = dest;
+    int res = 0;
 
-    return new;
+    for (List *it = gents; !res && it != NULL; it = it->next) {
+        Entry *e = it->elem;
+        res = (e->state == RUNNABLE && e->a_type == READ
+                && e->version == sid && str_cmp(e->var, var) == 0);
+    }
+
+    return res;
+}
+
+/* returns true if the entry is
+    * non-active, non-latest committed write
+    * committed read
+    * reverted read or write
+*/
+static int rm_entry(void *elem, void *cmp)
+{
+    Entry *e = elem;
+    int rm = 0;
+    if (e->a_type == WRITE && e->state == COMMITTED) {
+        long sid = e->sid;
+        char *var = e->var;
+
+        long rsid = get_rsid(MAX_LONG, var);
+
+        int act = is_active(var, sid);
+
+        if (sid < rsid && !act)
+            rm = 1;
+    } else if ((e->a_type == READ && e->state == COMMITTED)
+                    || e->state == REVERTED)
+    {
+        rm = 1;
+    }
+
+    if (rm)
+        mem_free(e);
+
+    return rm;
 }
 
 static Entry *add_entry(long sid,
@@ -94,6 +190,7 @@ static Entry *add_entry(long sid,
     e->a_type = a_type;
     e->version = version;
     e->state = state;
+    e->wvol_id = 0L;
     e->mon = mon_new();
 
     gents = add(gents, e);
@@ -101,11 +198,11 @@ static Entry *add_entry(long sid,
     return e;
 }
 
-static E_List *list_entries(long sid)
+static List *list_entries(long sid)
 {
-    E_List *dest = NULL;
+    List *dest = NULL;
 
-    for (E_List *it = gents; it != NULL; it = it->next) {
+    for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->sid == sid)
             dest = add(dest, e);
@@ -119,7 +216,7 @@ static Entry *get_min_waiting(const char var[], int a_type)
     long min_sid = MAX_LONG;
     Entry *res = 0;
 
-    for (E_List *it = gents; it != NULL; it = it->next) {
+    for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->state == WAITING && e->sid < min_sid
                 && e->a_type == a_type && str_cmp(e->var, var) == 0)
@@ -132,25 +229,11 @@ static Entry *get_min_waiting(const char var[], int a_type)
     return res;
 }
 
-/* finds if the given version (sid) of a variable is active (being read) */
-static int is_active(const char var[], long sid)
+static List *list_waiting(long sid, const char var[], int a_type)
 {
-    int res = 0;
+    List *dest = NULL;
 
-    for (E_List *it = gents; !res && it != NULL; it = it->next) {
-        Entry *e = it->elem;
-        res = (e->state == RUNNABLE && e->a_type == READ
-                && e->version == sid && str_cmp(e->var, var) == 0);
-    }
-
-    return res;
-}
-
-static E_List *list_waiting(long sid, const char var[], int a_type)
-{
-    E_List *dest = NULL;
-
-    for (E_List *it = gents; it != NULL; it = it->next) {
+    for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->state == WAITING && e->sid <= sid
                 && e->a_type == a_type && str_cmp(e->var, var) == 0)
@@ -164,7 +247,7 @@ static long get_wsid(const char var[])
 {
     long res = -1;
 
-    for (E_List *it = gents; it != NULL; it = it->next) {
+    for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == RUNNABLE
                 && str_cmp(e->var, var) == 0)
@@ -177,19 +260,69 @@ static long get_wsid(const char var[])
     return res;
 }
 
-/* determines a version to read */
-static long get_rsid(long sid, const char var[])
+static int rm_volume(void *elem, void *cmp)
 {
-    long res = -1;
+    Vol *e = elem, *c = cmp;
+    if (e->id == c->id) {
+        mem_free(e->v);
+        mem_free(e);
 
-    for (E_List *it = gents; it != NULL; it = it->next) {
-        Entry *e = it->elem;
-        if (e->a_type == WRITE && e->state == COMMITTED
-                && e->sid < sid && e->sid > res && str_cmp(e->var, var) == 0)
-            res = e->sid;
+        return 1;
     }
 
-    return res;
+    return 0;
+}
+
+static Vol *replace_volume(long long vol_id, Vars *v)
+{
+    Vol *vol = (Vol*) mem_alloc(sizeof(Vol));
+    vol->id = vol_id;
+    vol->v = v;
+
+    /* FIXME: we can possibly overwrite variables written via tx_commit 
+       an obsolete tx_volume_sync message from a volume can arrive after a
+       commit due to some network delays. It would not have the latest
+       commited variables in it.
+     */
+    rm(&gvols, vol, rm_volume);
+    gvols = add(gvols, vol);
+
+    return vol;
+}
+
+/* populate volume ids for given variables */
+static void set_vols(Vars *v)
+{
+    for (int i = 0; i < v->len; ++i) {
+        char *var = v->vars[i];
+        long ver = v->vers[i];
+        for (List *vit = gvols; vit != NULL; vit = vit->next) {
+            Vol *vol = vit->elem;
+            if (vars_scan(vol->v, var, ver) > -1) {
+                int j;
+                for (j = 0; j < MAX_VOLUMES; ++j)
+                    if (v->vols[i][j] == 0L) {
+                        v->vols[i][j] = vol->id;
+                        break;
+                    }
+
+                if (j == MAX_VOLUMES)   /* replace first volume id */
+                    v->vols[i][0] = vol->id;
+            }
+        }
+    }
+}
+
+static Vol *get_volume(long long vol_id)
+{
+    Vol *vol = NULL;
+    for (List *it = gvols; it != NULL && vol == NULL; it = it->next) {
+        Vol *v = it->elem;
+        if (v->id == vol_id)
+            vol = v;
+    }
+
+    return vol;
 }
 
 static void current_state(long vers[])
@@ -197,7 +330,7 @@ static void current_state(long vers[])
     for (int i = 0; i < num_vars; ++i)
         vers[i] = 0;
 
-    for (E_List *it = gents; it != NULL; it = it->next) {
+    for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED) {
             int idx = array_scan(all_vars, num_vars, e->var);
@@ -233,66 +366,28 @@ extern void wstate()
     sys_remove(fs_state_bak);
 }
 
-/* removes entries from gents which are
-    * non-active, non-latest committed writes
-    * committed reads
-    * reverted reads and writes
-*/
-static void clean_up()
-{
-    E_List *it = gents, **prev = &gents;
-    int rm = 0;
-
-    while (it) {
-        Entry *e = it->elem;
-        if (e->a_type == WRITE && e->state == COMMITTED) {
-            long sid = e->sid;
-            char *var = e->var;
-
-            long rsid = get_rsid(MAX_LONG, var);
-
-            int act = is_active(var, sid);
-
-            if (sid < rsid && !act)
-                rm = 1;
-        } else if ((e->a_type == READ && e->state == COMMITTED)
-                        || e->state == REVERTED)
-        {
-            rm = 1;
-        }
-
-        if (rm) {
-            *prev = it->next;
-
-            mem_free(it->elem);
-            mem_free(it);
-
-            rm = 0;
-            it = gents;
-            prev = &gents;
-        } else {
-            prev = &it->next;
-            it = it->next;
-        }
-    }
-}
-
 static void finish(int sid, int final_state)
 {
     mon_lock(gmon);
 
-    E_List *sig = NULL; /* entries to signal (unlock) */
-    E_List *it = list_entries(sid);
-
+    List *sig = NULL; /* entries to signal (unlock) */
+    List *it = list_entries(sid);
     for (; it != NULL; it = next(it)) {
         Entry *e = it->elem;
         int prev_state = e->state;
         e->state = final_state;
 
         if (e->a_type == WRITE && prev_state == RUNNABLE) {
+
             long rsid = e->version;
             if (final_state == REVERTED)
                 rsid = get_rsid(e->sid, e->var);
+            else {
+                long long vol_id = e->wvol_id;
+                Vol *vol = get_volume(vol_id);
+                if (vol != NULL)
+                    vol->v = vars_put(vol->v, e->var, e->version);
+            }
 
             Entry *we = get_min_waiting(e->var, WRITE);
 
@@ -302,7 +397,7 @@ static void finish(int sid, int final_state)
                 sig = add(sig, we);
             }
 
-            E_List *rents = list_waiting(wsid, e->var, READ);
+            List *rents = list_waiting(wsid, e->var, READ);
             for (; rents != NULL; rents = next(rents)) {
                 Entry *re = rents->elem;
                 re->version = rsid;
@@ -314,7 +409,7 @@ static void finish(int sid, int final_state)
     }
 
     wstate();
-    clean_up();
+    rm(&gents, NULL, rm_entry);
 
     for (; sig != NULL; sig = next(sig)) {
         Entry *e = sig->elem;
@@ -334,6 +429,12 @@ extern void tx_free()
     for (; gents != NULL; gents = next(gents))
         mem_free(gents->elem);
 
+    for (; gvols != NULL; gvols = next(gvols)) {
+        Vol *vol = gvols->elem;
+        mem_free(vol->v);
+        mem_free(gvols->elem);
+    }
+
     for (int i = 0; i < num_vars; ++i)
         mem_free(all_vars[i]);
 
@@ -345,6 +446,8 @@ extern void tx_init()
 {
     gmon = mon_new();
     gents = NULL;
+    gvols = NULL;
+
     last_sid = 1;
     num_vars = 0;
 
@@ -430,57 +533,69 @@ extern void tx_deploy(const char *new_src)
     env_free(old_env);
 }
 
-extern void tx_volume_sync(State *in, State *out)
+extern Vars *tx_volume_sync(long long vol_id, Vars *in)
 {
-    /* FIXME: to be implemeted a merge with *in variable */
+    mon_lock(gmon);
 
-    for (E_List *it = gents; it != NULL; it = it->next) {
+    if (in != NULL)
+        replace_volume(vol_id, in);
+
+    /* populate out variable with the (WRITE/COMMITED) variables */
+    Vars *out = vars_new(0);
+    for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
-        if (e->a_type == WRITE && e->state == COMMITTED) {
-            str_cpy(out->vars[out->len], e->var);
-            out->vers[out->len] = e->version;
-            out->len++;
-        }
+        if (e->a_type == WRITE && e->state == COMMITTED)
+            out = vars_put(out, e->var, e->version);
+    }
+    set_vols(out);
+
+    mon_unlock(gmon);
+
+    return out;
+}
+
+static void wait(Vars *s, Entry *entries[])
+{
+    for (int i = 0; i < s->len; ++i) {
+        Entry *e = entries[i];
+        mon_lock(e->mon);
+        while (e->state == WAITING)
+            mon_wait(e->mon);
+
+        s->vers[i] = e->version;
+        mon_unlock(e->mon);
     }
 }
 
-static long wait(Entry *e)
-{
-    mon_lock(e->mon);
-    while (e->state == WAITING)
-        mon_wait(e->mon);
-
-    long version = e->version;
-    mon_unlock(e->mon);
-
-    return version;
-}
-
 /* the m input parameter is for testing purposes (test/transaction.c) */
-extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
-                          char *wnames[], long wvers[], int wlen,
-                          Mon *m)
+extern long tx_enter_full(Vars *rvars, Vars *wvars, Mon *m)
 {
     long sid;
     int i, state, rw = 0;
     const char *var;
-    Entry *re[rlen], *we[wlen];
+    Entry *re[rvars->len], *we[wvars->len];
 
     mon_lock(gmon);
 
     sid = ++last_sid;
-    for (i = 0; i < wlen; ++i) {
-        var = wnames[i];
+    for (i = 0; i < wvars->len; ++i) {
+        var = wvars->vars[i];
         state = WAITING;
         if (get_wsid(var) == -1)
             state = RUNNABLE;
 
         we[i] = add_entry(sid, var, WRITE, sid, state);
+
+        /* FIXME: populate wvol_id based on an algorithm
+           executor id is probably required as well for the calculation */
+        we[i]->wvol_id = VOLUME_ID;
+
         rw = 1;
     }
-    for (i = 0; i < rlen; ++i) {
-        var = rnames[i];
+    for (i = 0; i < rvars->len; ++i) {
+        var = rvars->vars[i];
         long rsid = get_rsid(sid, var);
+
         state = RUNNABLE;
 
         if (rw) {
@@ -503,21 +618,21 @@ extern long tx_enter_full(char *rnames[], long rvers[], int rlen,
         mon_unlock(m);
     }
 
-    for (i = 0; i < rlen; ++i)
-        rvers[i] = wait(re[i]);
+    wait(rvars, re);
+    wait(wvars, we);
 
-    for (i = 0; i < wlen; ++i)
-        wvers[i] = wait(we[i]);
+    set_vols(rvars);
+
+    /* FIXME: populate wvols based on previous result */
+    for (int i = 0; i < wvars->len; ++i)
+        wvars->vols[i][0] = VOLUME_ID;
 
     return sid;
 }
 
-extern long tx_enter(char *rnames[], long rvers[], int rlen,
-                     char *wnames[], long wvers[], int wlen)
+extern long tx_enter(Vars *rvars, Vars *wvars)
 {
-    return tx_enter_full(rnames, rvers, rlen,
-                         wnames, wvers, wlen,
-                         NULL);
+    return tx_enter_full(rvars, wvars, NULL);
 }
 
 extern void tx_commit(long sid)
@@ -536,7 +651,7 @@ extern void tx_state()
 
     sys_print("%-8s %-32s %-5s %-8s %-9s\n",
               "SID", "VARIABLE", "ATYPE", "ASID", "STATE");
-    for (E_List *it = gents; it != NULL; it = it->next) {
+    for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         char *a_type = "READ";
         if (e->a_type == WRITE)
@@ -555,6 +670,15 @@ extern void tx_state()
         sys_print("%-8d %-32s %-5s %-8d %-9s\n",
                   e->sid, e->var, a_type, e->version, state);
 
+    }
+
+    sys_print("%-8s %-32s %-8s\n",
+              "VOLUME", "VARIABLE", "SID");
+    for (List *it = gvols; it != NULL; it = it->next) {
+        Vol *vol = it->elem;
+        for (int i = 0; i < vol->v->len; ++i)
+            sys_print("%-8d %-32s %-8d\n",
+                      vol->id, vol->v->vars[i], vol->v->vers[i]);
     }
 
     mon_unlock(gmon);

@@ -17,5 +17,3 @@ limitations under the License.
 
 extern void vol_init();
 extern IO *vol_open(const char *name, long version, int mode);
-extern void vol_remove(const char *name, long version);
-extern void vol_wstate(char *names[], long sids[], int len);

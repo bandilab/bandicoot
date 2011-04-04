@@ -912,7 +912,7 @@ static void add_func(const char *name,
         char *wvar = stmts.names[i];
 
         if (stmts.types[i] == PARAM) {
-            body = rel_param(stmts.heads[i], wvar);
+            body = rel_param(stmts.heads[i]);
             fn->p.names[fn->p.len] = str_dup(wvar);
             fn->p.rels[fn->p.len++] = rel_tmp(body, t_clones[i], t_cnts[i]);
         } else {

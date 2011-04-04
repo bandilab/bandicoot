@@ -96,17 +96,13 @@ static int count(Rel *r)
 static void *exec_thread(void *arg)
 {
     Proc *p = arg;
-    Args r = { .len = 0 };
-    if (str_len(p->rname) > 0) {
-        r.len = 1;
-        r.names[0] = p->rname;
-    }
+    Vars *rvars = vars_new(1);
+    if (str_len(p->rname) > 0)
+        vars_put(rvars, p->rname, 0L);
 
-    Args w = { .len = 0 };
-    if (str_len(p->wname) > 0) {
-        w.len = 1;
-        w.names[0] = p->wname;
-    }
+    Vars *wvars = vars_new(1);
+    if (str_len(p->wname) > 0)
+        vars_put(wvars, p->wname, 0L);
 
     Rel *rel = NULL;
     long sid = 0L;
@@ -124,14 +120,14 @@ static void *exec_thread(void *arg)
             tx_revert(sid);
         else if (action == TX_READ) {
             rel = rel_load(env_head(env, p->rname), p->rname);
-            rel_init(rel, &r);
+            rel_init(rel, rvars, NULL);
         } else if (action == TX_CHECK) {
             int cnt = count(rel);
             if (cnt != value) {
                 sys_print("%s: sid=%d, version=%d, expected=%d, got=%d\n",
                           current_test,
                           sid,
-                          r.vers[0],
+                          rvars->vers[0],
                           value,
                           cnt);
                 tx_state();
@@ -139,7 +135,7 @@ static void *exec_thread(void *arg)
             }
             rel_free(rel);
         } else if (action == TX_WRITE) {
-            rel_store(w.names[0], w.vers[0], rel);
+            rel_store(wvars->vars[0], wvars->vers[0], rel);
             rel_free(rel);
         }
 
@@ -154,11 +150,12 @@ static void *exec_thread(void *arg)
 
             sem_wait(gmon, value);
 
-            sid = tx_enter_full(r.names, r.vers, r.len,
-                                w.names, w.vers, w.len,
-                                gmon);
+            sid = tx_enter_full(rvars, wvars, gmon);
         }
     }
+
+    mem_free(rvars);
+    mem_free(wvars);
 
     return NULL;
 }
@@ -195,22 +192,63 @@ static void test(char *name, int cnt)
 
 static void test_basics()
 {
-    Args r = { .len = 1 };
-    r.names[0] = str_dup("tx_empty");
+    /* test read */
+    Vars *w = vars_new(0), *r = vars_new(1);
+    vars_put(r, "tx_empty", 0L);
 
-    Args w = { .len = 0 };
+    long sid = tx_enter(r, w);
+    long ver = r->vers[0];
 
-    long sid = tx_enter(r.names, r.vers, r.len,
-                        w.names, w.vers, w.len);
-    Rel *rel = rel_load(env_head(env, r.names[0]), r.names[0]);
-    rel_init(rel, &r);
+    for (int i = 0; i < MAX_VOLUMES; ++i)
+        if ((r->vols[0][i] != 0) && (r->vols[0][i] != VOLUME_ID))
+            fail();
+
+    Rel *rel = rel_load(env_head(env, r->vars[0]), r->vars[0]);
+
+    rel_init(rel, r, NULL);
     if (count(rel) != 0)
         fail();
 
     rel_free(rel);
     tx_commit(sid);
 
-    mem_free(r.names[0]);
+    mem_free(r);
+    mem_free(w);
+
+    /* test write and revert */
+    r = vars_new(0);
+    w = vars_new(1);
+    vars_put(w, "tx_empty", 0L);
+
+    sid = tx_enter(r, w);
+
+    for (int i = 0; i < MAX_VOLUMES; ++i)
+        if ((w->vols[0][i] != 0) && (w->vols[0][i] != VOLUME_ID))
+            fail();
+
+    tx_revert(sid);
+
+    mem_free(r);
+    mem_free(w);
+
+    /* test read and revert */
+    r = vars_new(1);
+    w = vars_new(0);
+    vars_put(r, "tx_empty", 0L);
+
+    sid = tx_enter(r, w);
+
+    if (ver != r->vers[0])
+        fail();
+
+    tx_revert(sid);
+
+    mem_free(r);
+    mem_free(w);
+}
+
+static void test_basics_write()
+{
 }
 
 static void test_reset()

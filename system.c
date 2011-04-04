@@ -94,11 +94,17 @@ static IO *_sys_open(const char *path, int mode, int binary)
 
 extern int sys_read(IO *io, void *buf, int size)
 {
+    if (size == 0)
+        return 0;
+
     return io->read(io, buf, size);
 }
 
 extern int sys_readn(IO *io, void *buf, int size)
 {
+    if (size == 0)
+        return 0;
+
     int r, idx = 0;
     do {
         r = io->read(io, buf + idx, size - idx);
@@ -110,6 +116,9 @@ extern int sys_readn(IO *io, void *buf, int size)
 
 extern int sys_write(IO *io, const void *buf, int size)
 {
+    if (size == 0)
+        return 0;
+
     return io->write(io, buf, size);
 }
 

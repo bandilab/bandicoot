@@ -24,18 +24,18 @@ limitations under the License.
 #include "fs.h"
 #include "head.h"
 #include "volume.h"
-#include "transaction.h"
 #include "value.h"
 #include "tuple.h"
 #include "expression.h"
 #include "summary.h"
 #include "relation.h"
+#include "transaction.h"
 
-static void create_empty(State *s)
+static void create_empty(Vars *v)
 {
-    for (int i = 0; i < s->len; ++i) {
-        char *var = s->vars[i];
-        long ver = s->vers[i];
+    for (int i = 0; i < v->len; ++i) {
+        char *var = v->vars[i];
+        long ver = v->vers[i];
 
         if (ver == 1) {
             sys_close(vol_open(var, ver, CREATE | WRITE));
@@ -46,14 +46,11 @@ static void create_empty(State *s)
     }
 }
 
-static int look_up(char const var[MAX_NAME], long ver, State *s)
+static void vol_remove(const char *name, long version)
 {
-    int idx = -1;
-    for (int i = 0; i < s->len && idx < 0; ++i)
-        if (str_cmp(var, s->vars[i]) == 0 && ver == s->vers[i])
-            idx = i;
-
-    return idx;
+    char file[MAX_FILE_PATH];
+    fs_fpath(file, name, version);
+    sys_remove(file);
 }
 
 extern long parse(const char *file, char *rel)
@@ -73,11 +70,14 @@ extern long parse(const char *file, char *rel)
     return sid;
 }
 
-extern void vol_init()
+static void sync_tx(long long id)
 {
-    State disk = {.len = 0}, tx = {.len = 0};
+    Vars *tx = NULL, *disk = NULL;
 
-    tx_volume_sync(&disk, &tx);
+    tx = tx_volume_sync(id, disk);
+    disk = vars_new(tx->len);
+
+    create_empty(tx);
 
     /* init the disk state variable + clean up old files */
     int num_files;
@@ -86,17 +86,27 @@ extern void vol_init()
         char var[MAX_NAME] = "";
         long ver = parse(files[i], var);
         if (ver > 0) {
-            if (look_up(var, ver, &tx) < 0)
+            if (vars_scan(tx, var, ver) < 0)
                 vol_remove(var, ver);
             else {
-                disk.vers[disk.len] = ver;
-                str_cpy(disk.vars[disk.len++], var);
+                disk->vers[disk->len] = ver;
+                str_cpy(disk->vars[disk->len++], var);
             }
         }
     }
     mem_free(files);
 
-    create_empty(&tx);
+    Vars *tx2 = tx_volume_sync(id, disk);
+
+    mem_free(tx);
+    mem_free(tx2);
+}
+
+extern void vol_init()
+{
+    long long id = VOLUME_ID;
+
+    sync_tx(id);
 }
 
 extern IO *vol_open(const char *name, long version, int mode)
@@ -105,11 +115,4 @@ extern IO *vol_open(const char *name, long version, int mode)
     fs_fpath(file, name, version);
 
     return sys_open(file, mode);
-}
-
-extern void vol_remove(const char *name, long version)
-{
-    char file[MAX_FILE_PATH];
-    fs_fpath(file, name, version);
-    sys_remove(file);
 }

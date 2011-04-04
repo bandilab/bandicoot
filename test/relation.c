@@ -17,7 +17,8 @@ limitations under the License.
 
 #include "common.h"
 
-static Args args;
+static Vars *rvars;
+static TBuf *arg;
 static Env *env = NULL;
 
 static Rel *pack(char *str)
@@ -27,11 +28,8 @@ static Rel *pack(char *str)
     Rel *res = NULL;
 
     if (buf != NULL) {
-        /* rel_init (init_param) will pick up tbuf[0] (it should be
-           fine to reuse the global variable name for parameter as
-           they are in a different namespace) */
-        args.tbufs[0] = buf;
-        res = rel_param(h, args.names[0]);
+        arg = buf;
+        res = rel_param(h);
         mem_free(h);
     }
 
@@ -47,11 +45,12 @@ static Rel *load(const char *name)
 static int equal(Rel *left, const char *name)
 {
     Rel *right = load(name);
+    Vars *wvars = vars_new(0);
 
-    long sid = tx_enter(args.names, args.vers, args.len, NULL, NULL, 0);
+    long sid = tx_enter(rvars, wvars);
 
-    rel_init(left, &args);
-    rel_init(right, &args);
+    rel_init(left, rvars, arg);
+    rel_init(right, rvars, arg);
 
     int res = rel_eq(left, right);
 
@@ -60,14 +59,19 @@ static int equal(Rel *left, const char *name)
 
     tx_commit(sid);
 
+    mem_free(wvars);
+
     return res;
 }
 
 static int count(const char *name)
 {
     Rel *r = load(name);
-    long sid = tx_enter(args.names, args.vers, args.len, NULL, NULL, 0);
-    rel_init(r, &args);
+    Vars *wvars = vars_new(0);
+
+    long sid = tx_enter(rvars, wvars);
+
+    rel_init(r, rvars, arg);
 
     Tuple *t;
     int i;
@@ -77,6 +81,7 @@ static int count(const char *name)
     rel_free(r);
     tx_commit(sid);
 
+    mem_free(wvars);
     return i;
 }
 
@@ -134,16 +139,17 @@ static void test_store()
 {
     Rel *r = load("one_r1");
 
-    char *wnames[] = {"one_r1_cpy"};
-    long wvers[1];
+    Vars *wvars = vars_new(1);
+    vars_put(wvars, "one_r1_cpy", 0L);
 
-    long sid = tx_enter(args.names, args.vers, args.len, wnames, wvers, 1);
-    rel_init(r, &args);
+    long sid = tx_enter(rvars, wvars);
+    rel_init(r, rvars, arg);
 
-    rel_store("one_r1_cpy", wvers[0], r);
+    rel_store("one_r1_cpy", wvars->vers[0], r);
     rel_free(r);
     tx_commit(sid);
 
+    mem_free(wvars);
     if (!equal(load("one_r1"), "one_r1_cpy"))
         fail();
 }
@@ -373,9 +379,12 @@ int main()
     vol_init();
     env = env_new(fs_source);
 
-    char **files = sys_list("test/data", &args.len);
-    for (int i = 0; i < args.len; ++i)
-        args.names[i] = files[i];
+    int len = 0;
+    char **files = sys_list("test/data", &len);
+
+    rvars = vars_new(len);
+    for (int i = 0; i < len; ++i)
+        vars_put(rvars, files[i], 0L);
 
     test_load();
     test_param();
@@ -394,6 +403,7 @@ int main()
     tx_free();
     env_free(env);
     mem_free(files);
+    mem_free(rvars);
 
     return 0;
 }

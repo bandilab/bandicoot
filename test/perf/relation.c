@@ -19,18 +19,17 @@ limitations under the License.
 
 static void perf_load_store(Env *env, int count)
 {
-    Args args = {.len = 1, .names[0] = "perf_rel"};
-
-    char *names[] = { "perf_rel" };
-    long vers[1];
+    Vars *wvars = vars_new(1), *rvars = vars_new(1);
+    vars_put(rvars, "perf_rel", 0L);
+    vars_put(wvars, "perf_rel", 0L);
 
     Rel *r = gen_rel(0, count);
 
-    long sid = tx_enter(NULL, NULL, 0, names, vers, 1);
-    rel_init(r, NULL);
+    long sid = tx_enter(rvars, wvars);
+    rel_init(r, NULL, NULL);
 
     long time = sys_millis();
-    rel_store("perf_rel", vers[0], r);
+    rel_store("perf_rel", wvars->vers[0], r);
     sys_print("%8s %d tuples in %dms\n", "write", count, sys_millis() - time);
 
     rel_free(r);
@@ -38,10 +37,10 @@ static void perf_load_store(Env *env, int count)
 
     Head *h = env_head(env, "perf_rel");
     r = rel_load(h, "perf_rel");
-    sid = tx_enter(args.names, args.vers, args.len, NULL, NULL, 0);
+    sid = tx_enter(rvars, wvars);
 
     time = sys_millis();
-    rel_init(r, &args);
+    rel_init(r, rvars, NULL);
     int i = 0;
     Tuple *t;
     while ((t = rel_next(r)) != NULL) {
@@ -52,6 +51,9 @@ static void perf_load_store(Env *env, int count)
 
     rel_free(r);
     tx_commit(sid);
+
+    mem_free(wvars);
+    mem_free(rvars);
 }
 
 static void perf_join(int count)
@@ -59,7 +61,7 @@ static void perf_join(int count)
     Rel *join = rel_join(gen_rel(0, count), gen_rel(-count / 2, count / 2));
 
     long time = sys_millis();
-    rel_init(join, NULL);
+    rel_init(join, NULL, NULL);
 
     Tuple *t;
     int res = 0;
@@ -86,7 +88,7 @@ static void perf_project(int count)
     Rel *rel = rel_project(gen_rel(0, count), names, 1);
 
     long time = sys_millis();
-    rel_init(rel, NULL);
+    rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
     while ((t = rel_next(rel)) != 0) {
@@ -120,7 +122,7 @@ static void perf_select(int count)
     rel = rel_select(rel, e);
 
     long time = sys_millis();
-    rel_init(rel, NULL);
+    rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
     while ((t = rel_next(rel)) != 0) {
@@ -143,7 +145,7 @@ static void perf_diff(int count)
                         gen_rel(-count / 2, count / 2));
 
     long time = sys_millis();
-    rel_init(rel, NULL);
+    rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
     while ((t = rel_next(rel)) != 0) {
@@ -167,7 +169,7 @@ static void perf_union(int count)
                          gen_rel(-count / 2, count));
 
     long time = sys_millis();
-    rel_init(rel, NULL);
+    rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
     while ((t = rel_next(rel)) != 0) {
@@ -203,7 +205,7 @@ static void perf_extend(int count)
     rel = rel_extend(rel, names, e, 2);
 
     long time = sys_millis();
-    rel_init(rel, NULL);
+    rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
     while ((t = rel_next(rel)) != 0) {
@@ -236,7 +238,7 @@ static void perf_sum(int count)
     rel = rel_sum(rel, gen_rel(0, count), names, types, sums, 3);
 
     long time = sys_millis();
-    rel_init(rel, NULL);
+    rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
     while ((t = rel_next(rel)) != 0) {
@@ -258,8 +260,8 @@ static void perf_eq(int count)
     Rel *l = gen_rel(0, count);
     Rel *r = gen_rel(0, count);
 
-    rel_init(l, NULL);
-    rel_init(r, NULL);
+    rel_init(l, NULL, NULL);
+    rel_init(r, NULL, NULL);
 
     long time = sys_millis();
 
