@@ -29,96 +29,111 @@ limitations under the License.
 #include "relation.h"
 #include "index.h"
 
-static int vars_ptr_sz(int len) {
-    return sizeof(Vars) + len * (sizeof(char*) + sizeof(long long *));
+static void *vars_p(Vars *v)
+{
+    return ((void*) v->vars) + v->size * sizeof(void*);
 }
-static int vars_data_sz(int len) {
-    return len * (MAX_NAME * sizeof(char) +
-           sizeof(long) +
-           MAX_VOLUMES * sizeof(long long));
+
+static void *vols_p(Vars *v)
+{
+    return ((void*) v->vols) + v->size * sizeof(void*);
+}
+
+static void vars_init(Vars *v)
+{
+    for (int i = 0; i < v->size; ++i) {
+        v->vars[i] = vars_p(v) + i * MAX_NAME;
+        v->vols[i] = vols_p(v) + i * MAX_VOLS * sizeof(long long);
+        v->vers[i] = 0L;
+        for (int j = 0; j < MAX_NAME; ++j)
+            v->vars[i][j] = '\0';
+        for (int j = 0; j < MAX_VOLS; ++j)
+            v->vols[i][j] = 0L;
+    }
 }
 
 extern Vars *vars_new(int len)
 {
-    void *buf = mem_alloc(vars_ptr_sz(len) + vars_data_sz(len));
-    Vars *res = buf;
+    Vars *res = mem_alloc(sizeof(Vars));
     res->size = len;
     res->len = 0;
-    res->vars = buf + sizeof(Vars);
-    res->vols = buf + sizeof(Vars) + len * sizeof(char*);
+    res->vars = mem_alloc(len * (sizeof(void*) + MAX_NAME));
+    res->vers = mem_alloc(len * sizeof(long));
+    res->vols = mem_alloc(len * (sizeof(void*) + MAX_VOLS * sizeof(long long)));
 
-    buf += vars_ptr_sz(len);
-    for (int i = 0; i < len; ++i)
-        res->vars[i] = buf + (i * MAX_NAME * sizeof(char));
-
-    buf += len * MAX_NAME * sizeof(char);
-    res->vers = buf;
-
-    buf += len * sizeof(long);
-    for (int i = 0; i < len; ++i)
-        res->vols[i] = buf + (i * MAX_VOLUMES * sizeof(long long));
+    vars_init(res);
 
     return res;
 }
 
-extern int vars_write(Vars *v, IO *io)
+extern void vars_free(Vars *v)
 {
-    if (sys_write(io, &v->len, sizeof(v->len)) < 0)
-        return -1;
-
-    void *buf = v;
-    if (sys_write(io, buf + vars_ptr_sz(v->len), vars_data_sz(v->len)) < 0)
-        return -1;
-
-    return 1;
+    mem_free(v->vars);
+    mem_free(v->vers);
+    mem_free(v->vols);
+    mem_free(v);
 }
 
 extern Vars *vars_read(IO *io)
 {
-    Vars *res = NULL;
+    Vars *v = NULL;
 
     int len;
     if (sys_readn(io, &len, sizeof(len)) != sizeof(len))
        goto failure;
 
-    res = vars_new(len);
-    res->len = len;
+    v = vars_new(len);
+    v->len = len;
+    int size = len * MAX_NAME;
+    if (sys_readn(io, vars_p(v), size) != size)
+        goto failure;
 
-    void *buf = res;
-    int sz = vars_data_sz(len);
-    if (sys_read(io, buf + vars_ptr_sz(len), sz) != sz)
-       goto failure;
+    size = len * sizeof(long);
+    if (sys_readn(io, v->vers, size) != size)
+        goto failure;
 
-    return res;
+    size = len * MAX_VOLS * sizeof(long long);
+    if (sys_readn(io, vols_p(v), size) != size)
+        goto failure;
+
+    return v;
+
 failure:
-    if (res != NULL)
-        mem_free(res);
+    if (v != NULL)
+        vars_free(v);
+
     return NULL;
 }
 
-extern Vars *vars_put(Vars *v, const char *var, long ver)
+extern int vars_write(Vars *v, IO *io)
 {
-    Vars *res = v;
+    if (sys_write(io, &v->len, sizeof(v->len)) < 0 ||
+        sys_write(io, vars_p(v), v->len * MAX_NAME) < 0 ||
+        sys_write(io, v->vers, v->len * sizeof(long)) < 0 ||
+        sys_write(io, vols_p(v), v->len * MAX_VOLS * sizeof(long long)) < 0)
+        return -1;
 
-    if (v->len == v->size) { /* copy the data, mem_cpy cannot be used */
-        res = vars_new(v->size + MAX_VARS);
-        for (int i = 0; i < v->len; ++i) {
-            str_cpy(res->vars[i], v->vars[i]);
-            res->vers[i] = v->vers[i];
-            for (int j = 0; j < MAX_VOLUMES; ++j)
-                res->vols[i][j] = v->vols[i][j];
-        }
-        res->len = v->len;
-        mem_free(v);
+    return sizeof(v->len) +
+        v->len * (MAX_NAME + sizeof(long) + MAX_VOLS * sizeof(long long));
+}
+
+extern void vars_put(Vars *v, const char *var, long ver)
+{
+    if (v->len == v->size) {
+        v->size += MAX_VARS;
+        v->vars = mem_realloc(v->vars, v->size * (sizeof(void*) + MAX_NAME));
+        v->vers = mem_realloc(v->vers, v->size * sizeof(long));
+        v->vols = mem_realloc(v->vols,
+                v->size * (sizeof(void*) + MAX_VOLS * sizeof(long long)));
+
+        vars_init(v);
     }
 
-    str_cpy(res->vars[res->len], var);
-    res->vers[res->len] = ver;
-    for (int i = 0; i < MAX_VOLUMES; ++i)
-        res->vols[res->len][i] = 0L;
-    res->len++;
-
-    return res;
+    str_cpy(v->vars[v->len], var);
+    v->vers[v->len] = ver;
+    for (int i = 0; i < MAX_VOLS; ++i)
+        v->vols[v->len][i] = 0L;
+    v->len++;
 }
 
 extern int vars_scan(Vars *v, char const *var, long ver)
@@ -234,7 +249,6 @@ extern Rel *rel_empty()
 
 static void init_param(Rel *r, Vars *rvars, TBuf *arg)
 {
-    Ctxt *c = r->ctxt;
     r->body = arg;
 }
 
@@ -242,8 +256,6 @@ extern Rel *rel_param(Head *head)
 {
     Rel *res = alloc(init_param);
     res->head = head_cpy(head);
-
-    Ctxt *c = res->ctxt;
 
     return rel_project(res, head->names, head->len);
 }

@@ -59,7 +59,7 @@ static int equal(Rel *left, const char *name)
 
     tx_commit(sid);
 
-    mem_free(wvars);
+    vars_free(wvars);
 
     return res;
 }
@@ -81,7 +81,7 @@ static int count(const char *name)
     rel_free(r);
     tx_commit(sid);
 
-    mem_free(wvars);
+    vars_free(wvars);
     return i;
 }
 
@@ -149,7 +149,7 @@ static void test_store()
     rel_free(r);
     tx_commit(sid);
 
-    mem_free(wvars);
+    vars_free(wvars);
     if (!equal(load("one_r1"), "one_r1_cpy"))
         fail();
 }
@@ -372,6 +372,56 @@ static void test_compound()
         fail();
 }
 
+static void check_vars(Vars *v)
+{
+    vars_put(v, "a1", 1);
+    vars_put(v, "a2", 2);
+    vars_put(v, "a3", 3);
+
+    if (str_cmp(v->vars[0], "a1") != 0 || v->vers[0] != 1)
+        fail();
+    if (str_cmp(v->vars[1], "a2") != 0 || v->vers[1] != 2)
+        fail();
+    if (str_cmp(v->vars[2], "a3") != 0 || v->vers[2] != 3)
+        fail();
+
+    const char *file = "bin/relation_vars_test";
+    IO *io = sys_open(file, CREATE | WRITE);
+    if (vars_write(v, io) < 0)
+        fail();
+    sys_close(io);
+
+    io = sys_open(file, READ);
+    Vars *out = vars_read(io);
+    if (out == NULL)
+        fail();
+
+    if (str_cmp(out->vars[0], "a1") != 0 || out->vers[0] != 1)
+        fail();
+    if (str_cmp(out->vars[1], "a2") != 0 || out->vers[1] != 2)
+        fail();
+    if (str_cmp(out->vars[2], "a3") != 0 || out->vers[2] != 3)
+        fail();
+
+    vars_free(out);
+    sys_close(io);
+}
+
+static void test_vars()
+{
+    Vars *v1 = vars_new(0);
+    Vars *v2 = vars_new(3);
+    Vars *v3 = vars_new(7);
+
+    check_vars(v1);
+    check_vars(v2);
+    check_vars(v3);
+
+    vars_free(v1);
+    vars_free(v2);
+    vars_free(v3);
+}
+
 int main()
 {
     fs_init("bin/volume");
@@ -399,11 +449,12 @@ int main()
     test_summary();
     test_union();
     test_compound();
+    test_vars();
 
     tx_free();
     env_free(env);
     mem_free(files);
-    mem_free(rvars);
+    vars_free(rvars);
 
     return 0;
 }

@@ -154,8 +154,8 @@ static void *exec_thread(void *arg)
         }
     }
 
-    mem_free(rvars);
-    mem_free(wvars);
+    vars_free(rvars);
+    vars_free(wvars);
 
     return NULL;
 }
@@ -199,7 +199,7 @@ static void test_basics()
     long sid = tx_enter(r, w);
     long ver = r->vers[0];
 
-    for (int i = 0; i < MAX_VOLUMES; ++i)
+    for (int i = 0; i < MAX_VOLS; ++i)
         if ((r->vols[0][i] != 0) && (r->vols[0][i] != VOLUME_ID))
             fail();
 
@@ -212,8 +212,8 @@ static void test_basics()
     rel_free(rel);
     tx_commit(sid);
 
-    mem_free(r);
-    mem_free(w);
+    vars_free(r);
+    vars_free(w);
 
     /* test write and revert */
     r = vars_new(0);
@@ -222,14 +222,14 @@ static void test_basics()
 
     sid = tx_enter(r, w);
 
-    for (int i = 0; i < MAX_VOLUMES; ++i)
+    for (int i = 0; i < MAX_VOLS; ++i)
         if ((w->vols[0][i] != 0) && (w->vols[0][i] != VOLUME_ID))
             fail();
 
     tx_revert(sid);
 
-    mem_free(r);
-    mem_free(w);
+    vars_free(r);
+    vars_free(w);
 
     /* test read and revert */
     r = vars_new(1);
@@ -243,12 +243,8 @@ static void test_basics()
 
     tx_revert(sid);
 
-    mem_free(r);
-    mem_free(w);
-}
-
-static void test_basics_write()
-{
+    vars_free(r);
+    vars_free(w);
 }
 
 static void test_reset()

@@ -43,7 +43,7 @@ limitations under the License.
 #define MAX_BLOCK 65536
 
 /* maximum number of volume nodes in a cluster per variable */
-#define MAX_VOLUMES 8
+#define MAX_VOLS 8
 
 #ifndef NULL
 #define NULL ((void*) 0)

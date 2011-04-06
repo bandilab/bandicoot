@@ -264,7 +264,7 @@ static int rm_volume(void *elem, void *cmp)
 {
     Vol *e = elem, *c = cmp;
     if (e->id == c->id) {
-        mem_free(e->v);
+        vars_free(e->v);
         mem_free(e);
 
         return 1;
@@ -300,13 +300,13 @@ static void set_vols(Vars *v)
             Vol *vol = vit->elem;
             if (vars_scan(vol->v, var, ver) > -1) {
                 int j;
-                for (j = 0; j < MAX_VOLUMES; ++j)
+                for (j = 0; j < MAX_VOLS; ++j)
                     if (v->vols[i][j] == 0L) {
                         v->vols[i][j] = vol->id;
                         break;
                     }
 
-                if (j == MAX_VOLUMES)   /* replace first volume id */
+                if (j == MAX_VOLS)   /* replace first volume id */
                     v->vols[i][0] = vol->id;
             }
         }
@@ -386,7 +386,7 @@ static void finish(int sid, int final_state)
                 long long vol_id = e->wvol_id;
                 Vol *vol = get_volume(vol_id);
                 if (vol != NULL)
-                    vol->v = vars_put(vol->v, e->var, e->version);
+                    vars_put(vol->v, e->var, e->version);
             }
 
             Entry *we = get_min_waiting(e->var, WRITE);
@@ -431,7 +431,7 @@ extern void tx_free()
 
     for (; gvols != NULL; gvols = next(gvols)) {
         Vol *vol = gvols->elem;
-        mem_free(vol->v);
+        vars_free(vol->v);
         mem_free(gvols->elem);
     }
 
@@ -545,7 +545,7 @@ extern Vars *tx_volume_sync(long long vol_id, Vars *in)
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED)
-            out = vars_put(out, e->var, e->version);
+            vars_put(out, e->var, e->version);
     }
     set_vols(out);
 

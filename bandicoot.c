@@ -47,9 +47,9 @@ typedef struct {
 static void call_free(Call *c)
 {
     if (c->r != NULL)
-        mem_free(c->r);
+        vars_free(c->r);
     if (c->w != NULL)
-        mem_free(c->w);
+        vars_free(c->w);
     mem_free(c);
 }
 

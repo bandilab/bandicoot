@@ -98,8 +98,8 @@ static void sync_tx(long long id)
 
     Vars *tx2 = tx_volume_sync(id, disk);
 
-    mem_free(tx);
-    mem_free(tx2);
+    vars_free(tx);
+    vars_free(tx2);
 }
 
 extern void vol_init()

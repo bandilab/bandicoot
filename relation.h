@@ -24,10 +24,11 @@ typedef struct {
 } Vars;
 
 extern Vars *vars_new(int len);
-extern int vars_write(Vars *v, IO *io);
 extern Vars *vars_read(IO *io);
-extern Vars *vars_put(Vars *v, const char *var, long ver);
+extern int vars_write(Vars *v, IO *io);
 extern int vars_scan(Vars *v, const char *var, long ver);
+extern void vars_put(Vars *v, const char *var, long ver);
+extern void vars_free(Vars *v);
 
 struct Rel {
     Head *head;
