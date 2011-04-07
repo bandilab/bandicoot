@@ -23,6 +23,5 @@ extern char fs_state[MAX_FILE_PATH];
 extern char fs_state_bak[MAX_FILE_PATH];
 
 extern void fs_init(const char *p);
-extern void fs_sid_to_str(char *dest, long sid);
+extern int fs_sid_to_str(char *dest, long sid);
 extern long fs_str_to_sid(char *str);
-extern void fs_fpath(char *res, const char *var, long sid);

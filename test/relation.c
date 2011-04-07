@@ -392,7 +392,7 @@ static void check_vars(Vars *v)
 
 static void test_vars()
 {
-    Vars *v[] = {vars_new(0), vars_new(3), vars_new(7)};
+    Vars *v[] = {vars_new(0), vars_new(1), vars_new(3), vars_new(7)};
 
     for (unsigned i = 0; i < sizeof(v) / sizeof(Vars*); ++i) {
         vars_put(v[i], "a1", 1);

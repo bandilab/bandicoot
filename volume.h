@@ -16,4 +16,5 @@ limitations under the License.
 */
 
 extern void vol_init();
-extern IO *vol_open(const char *name, long version, int mode);
+extern TBuf *vol_read(const char *name, long version);
+extern void vol_write(TBuf *buf, const char *name, long version);

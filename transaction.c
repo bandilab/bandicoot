@@ -22,9 +22,9 @@ limitations under the License.
 #include "system.h"
 #include "fs.h"
 #include "head.h"
-#include "volume.h"
 #include "value.h"
 #include "tuple.h"
+#include "volume.h"
 #include "expression.h"
 #include "summary.h"
 #include "relation.h"
@@ -543,8 +543,7 @@ static Vars *volume_sync(long long vol_id, Vars *in)
 {
     mon_lock(gmon);
 
-    if (in != NULL)
-        replace_volume(vol_id, in);
+    replace_volume(vol_id, in);
 
     /* populate out variable with the (WRITE/COMMITED) variables */
     Vars *out = vars_new(0);
@@ -699,11 +698,6 @@ static void *tx_thread(void *sio)
             if (in == NULL)
                 goto next;
 
-            if (in->len < 1) {
-                vars_free(in);
-                in = NULL;
-            }
-
             Vars *out = volume_sync(vid, in);
             msg = R_SYNC;
 
@@ -799,12 +793,6 @@ extern Vars *tx_volume_sync(long long vol_id, Vars *in)
         sys_write(io, &vol_id, sizeof(long long)) < 0)
         sys_die("T_SYNC failed\n");
 
-    int free_in = 0;
-    if (in == NULL) {
-        in = vars_new(0);
-        free_in = 1;
-    }
-
     Vars *out = NULL;
     if (vars_write(in, io) < 0 ||
         sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
@@ -813,9 +801,6 @@ extern Vars *tx_volume_sync(long long vol_id, Vars *in)
         sys_die("R_SYNC failed\n");
 
     sys_close(io);
-
-    if (free_in)
-        vars_free(in);
 
     return out;
 }

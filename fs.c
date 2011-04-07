@@ -30,7 +30,7 @@ static char SID_TO_STR[] = {
     '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 static char STR_TO_SID[127];
 
-extern void fs_sid_to_str(char *dest, long sid)
+extern int fs_sid_to_str(char *dest, long sid)
 {
 #ifdef LP64
     int i = 0, shift = 60;
@@ -47,6 +47,8 @@ extern void fs_sid_to_str(char *dest, long sid)
     }
 
     dest[i] = '\0';
+
+    return i;
 }
 
 extern long fs_str_to_sid(char *str)
@@ -64,15 +66,6 @@ extern long fs_str_to_sid(char *str)
     }
 
     return sid;
-}
-
-extern void fs_fpath(char *res, const char *var, long sid)
-{
-    res += str_cpy(res, fs_path);
-    res += str_cpy(res, "/");
-    res += str_cpy(res, var);
-    res += str_cpy(res, "-");
-    fs_sid_to_str(res, sid);
 }
 
 extern void fs_init(const char *p)

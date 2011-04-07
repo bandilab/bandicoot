@@ -51,6 +51,7 @@ static const char PROC_FAIL = 0x01;
 
 extern int sys_exec(char *const argv[]);
 extern char sys_wait(int pid);
+extern void sys_sleep(int secs);
 extern void sys_thread(void *(*fn)(void *arg), void *arg);
 extern void sys_exit(char status);
 extern void sys_die(const char *msg, ...);

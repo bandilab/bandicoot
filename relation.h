@@ -72,7 +72,7 @@ extern Rel *rel_tmp(Rel *r, Rel *clones[], int cnt);
 extern Rel *rel_load(Head *head, const char *name);
 
 /* relations passed to both rel_store & rel_eq must be rel_init()'ed */
-extern int rel_store(const char *name, long vers, Rel *r);
+extern void rel_store(const char *name, long vers, Rel *r);
 extern int rel_eq(Rel *l, Rel *r);
 
 extern Rel *rel_join(Rel *l, Rel *r);

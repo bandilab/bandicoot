@@ -21,9 +21,9 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 #include "head.h"
-#include "volume.h"
 #include "value.h"
 #include "tuple.h"
+#include "volume.h"
 #include "expression.h"
 #include "summary.h"
 #include "relation.h"
@@ -130,13 +130,27 @@ extern int vars_write(Vars *v, IO *io)
 extern void vars_put(Vars *v, const char *var, long ver)
 {
     if (v->len == v->size) {
+        char **vars = v->vars;
+        long *vers = v->vers;
+        long long **vols = v->vols;
+
         v->size += MAX_VARS;
-        v->vars = mem_realloc(v->vars, v->size * (sizeof(void*) + MAX_NAME));
-        v->vers = mem_realloc(v->vers, v->size * sizeof(long));
-        v->vols = mem_realloc(v->vols,
+        v->vars = mem_alloc(v->size * (sizeof(void*) + MAX_NAME));
+        v->vers = mem_alloc(v->size * sizeof(long));
+        v->vols = mem_alloc(
                 v->size * (sizeof(void*) + MAX_VOLS * sizeof(long long)));
 
         vars_init(v);
+
+        for (int i = 0; i < v->len; ++i) {
+            str_cpy(v->vars[i], vars[i]);
+            v->vers[i] = vers[i];
+            for (int j = 0; j < MAX_VOLS; ++j)
+                v->vols[i][j] = vols[i][j];
+        }
+        mem_free(vars);
+        mem_free(vers);
+        mem_free(vols);
     }
 
     str_cpy(v->vars[v->len], var);
@@ -229,12 +243,7 @@ static void init_load(Rel *r, Vars *rvars, TBuf *arg)
     Ctxt *c = r->ctxt;
 
     int pos = array_scan(rvars->vars, rvars->len, c->name);
-    IO *io = vol_open(c->name, rvars->vers[pos], READ);
-    r->body = tbuf_read(io);
-    if (r->body == NULL)
-        sys_die("rel: failed to load '%s'\n", c->name);
-
-    sys_close(io);
+    r->body = vol_read(c->name, rvars->vers[pos]);
 }
 
 extern Rel *rel_load(Head *head, const char *name)
@@ -630,15 +639,9 @@ extern Rel *rel_sum_unary(Rel *r,
     return res;
 }
 
-extern int rel_store(const char *name, long vers, Rel *r)
+extern void rel_store(const char *name, long vers, Rel *r)
 {
-    int res = 0;
-    IO *io = vol_open(name, vers, CREATE | WRITE);
-    if (tbuf_write(r->body, io) < 0)
-        sys_die("rel: failed to store '%s'\n", name);
-    sys_close(io);
-
-    return res;
+    vol_write(r->body, name, vers);
 }
 
 extern int rel_eq(Rel *l, Rel *r)

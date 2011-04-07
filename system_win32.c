@@ -111,6 +111,11 @@ extern char sys_wait(int pid)
     return result;
 }
 
+extern void sys_sleep(int secs)
+{
+    Sleep(secs * 1000);
+}
+
 extern void sys_thread(void *(*fn)(void *arg), void *arg)
 {
     DWORD id;

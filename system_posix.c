@@ -91,6 +91,11 @@ extern char sys_wait(int pid)
     return WIFEXITED(status) ? WEXITSTATUS(status) : PROC_FAIL;
 }
 
+extern void sys_sleep(int secs)
+{
+    sleep(secs);
+}
+
 extern void sys_thread(void *(*fn)(void *arg), void *arg)
 {
     pthread_t t;
