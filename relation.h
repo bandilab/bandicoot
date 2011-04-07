@@ -29,6 +29,7 @@ extern int vars_write(Vars *v, IO *io);
 extern int vars_scan(Vars *v, const char *var, long ver);
 extern void vars_put(Vars *v, const char *var, long ver);
 extern void vars_free(Vars *v);
+extern void vars_cpy(Vars *dest, Vars *src);
 
 struct Rel {
     Head *head;

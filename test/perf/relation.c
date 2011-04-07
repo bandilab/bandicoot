@@ -279,8 +279,10 @@ static void perf_eq(int count)
 
 int main()
 {
+    int tx_port = 0;
     fs_init("bin/volume");
-    tx_init();
+    tx_server(&tx_port);
+    tx_attach(tx_port);
     vol_init();
     Env *env = env_new(fs_source);
 

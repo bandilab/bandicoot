@@ -15,7 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-extern void tx_init();
+extern void tx_server(int *port);
+extern void tx_attach(int port);
 extern void tx_deploy(const char *new_src);
 extern Vars *tx_volume_sync(long long vol_id, Vars *in);
 extern long tx_enter(Vars *rvars, Vars *wvars);

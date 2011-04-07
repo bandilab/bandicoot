@@ -31,10 +31,23 @@ limitations under the License.
 #include "environment.h"
 #include "transaction.h"
 
-#define RUNNABLE 1
-#define WAITING 2
-#define COMMITTED 3
-#define REVERTED 4
+static const int RUNNABLE = 1;
+static const int WAITING = 2;
+static const int COMMITTED = 3;
+static const int REVERTED = 4;
+
+#ifdef LP64
+static const long MAX_LONG = 0x7FFFFFFFFFFFFFFF;
+#else
+static const long MAX_LONG = 0x7FFFFFFF;
+#endif
+
+static const int T_ENTER = 1;
+static const int R_ENTER = 2;
+static const int T_FINISH = 3;
+static const int R_FINISH = 4;
+static const int T_SYNC = 5;
+static const int R_SYNC = 6;
 
 /* Vol keeps information about the content of a volume */
 typedef struct {
@@ -52,13 +65,20 @@ typedef struct {
     Mon *mon; /* monitor on which the caller/transaction is blocked if needed */
 } Entry;
 
-/* generic List structure */
 struct List {
     void *elem;
     struct List *next;
 };
-
 typedef struct List List;
+
+static char *all_vars[MAX_VARS];
+static int num_vars;
+static int tx_port;
+
+static List *gents;
+static List *gvols;
+static Mon *gmon;
+static long last_sid;
 
 static List *next(List *e)
 {
@@ -102,20 +122,6 @@ static void rm(List **list,
         }
     }
 }
-
-#ifdef LP64
-static const long MAX_LONG = 0x7FFFFFFFFFFFFFFF;
-#else
-static const long MAX_LONG = 0x7FFFFFFF;
-#endif
-
-static char *all_vars[MAX_VARS];
-static int num_vars;
-
-static List *gents;
-static List *gvols;
-static Mon *gmon;
-static long last_sid;
 
 /* determines a version to read */
 static long get_rsid(long sid, const char var[])
@@ -442,7 +448,7 @@ extern void tx_free()
     mon_free(gmon);
 }
 
-extern void tx_init()
+static void tx_init()
 {
     gmon = mon_new();
     gents = NULL;
@@ -533,7 +539,7 @@ extern void tx_deploy(const char *new_src)
     env_free(old_env);
 }
 
-extern Vars *tx_volume_sync(long long vol_id, Vars *in)
+static Vars *volume_sync(long long vol_id, Vars *in)
 {
     mon_lock(gmon);
 
@@ -630,19 +636,188 @@ extern long tx_enter_full(Vars *rvars, Vars *wvars, Mon *m)
     return sid;
 }
 
+extern void tx_attach(int port)
+{
+    tx_port = port;
+}
+
+static void *tx_thread(void *sio)
+{
+    for (;;) {
+        IO *cio = sys_accept(sio);
+
+        int msg = 0;
+        if (sys_readn(cio, &msg, sizeof(int)) != sizeof(int))
+            goto next;
+
+        if (msg == T_ENTER) {
+            Vars *rvars = vars_read(cio);
+            if (rvars == NULL)
+                goto next;
+
+            Vars *wvars = vars_read(cio);
+            if (wvars == NULL) {
+                vars_free(rvars);
+                goto next;
+            }
+
+            long sid = tx_enter_full(rvars, wvars, NULL);
+
+            msg = R_ENTER;
+            if (sys_write(cio, &msg, sizeof(int)) < 0 ||
+                sys_write(cio, &sid, sizeof(long)) < 0 ||
+                vars_write(rvars, cio) < 0 ||
+                vars_write(wvars, cio) < 0)
+            {
+                tx_revert(sid);
+                goto next;
+            }
+
+            vars_free(rvars);
+            vars_free(wvars);
+        } else if (msg == T_FINISH) {
+            int final_state = 0;
+            long sid = 0;
+            if (sys_readn(cio, &sid, sizeof(long)) != sizeof(long) ||
+                sys_readn(cio, &final_state, sizeof(int)) != sizeof(int) ||
+                (final_state != COMMITTED && final_state != REVERTED))
+                goto next;
+
+            /* TODO: what if sid does not exist? */
+            finish(sid, final_state);
+
+            msg = R_FINISH;
+            if (sys_write(cio, &msg, sizeof(int)) < 0 ||
+                sys_write(cio, &final_state, sizeof(int)) < 0)
+                goto next;
+        } else if (msg == T_SYNC) {
+            long long vid;
+            if (sys_readn(cio, &vid, sizeof(long long)) != sizeof(long long))
+                goto next;
+
+            Vars *in = vars_read(cio);
+            if (in == NULL)
+                goto next;
+
+            if (in->len < 1) {
+                vars_free(in);
+                in = NULL;
+            }
+
+            Vars *out = volume_sync(vid, in);
+            msg = R_SYNC;
+
+            /* we can ignore io errors while responding to volume sync */
+            sys_write(cio, &msg, sizeof(int));
+            vars_write(out, cio);
+
+            vars_free(out);
+        }
+
+next:
+
+        sys_close(cio);
+    }
+
+    return NULL;
+}
+
+extern void tx_server(int *port)
+{
+    tx_init();
+
+    IO *sio = sys_socket(port);
+    sys_thread(tx_thread, sio);
+}
+
 extern long tx_enter(Vars *rvars, Vars *wvars)
 {
-    return tx_enter_full(rvars, wvars, NULL);
+    IO *io = sys_connect(tx_port);
+
+    int msg = T_ENTER;
+    if (sys_write(io, &msg, sizeof(int)) < 0 ||
+        vars_write(rvars, io) < 0 ||
+        vars_write(wvars, io) < 0)
+        sys_die("T_ENTER failed\n");
+
+    long sid = 0;
+    Vars *r = NULL, *w = NULL;
+    if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
+        msg != R_ENTER ||
+        sys_readn(io, &sid, sizeof(long)) != sizeof(long) ||
+        (r = vars_read(io)) == NULL ||
+        (w = vars_read(io)) == NULL)
+        sys_die("R_ENTER failed\n");
+
+    vars_cpy(rvars, r);
+    vars_cpy(wvars, w);
+
+    vars_free(r);
+    vars_free(w);
+    sys_close(io);
+
+    return sid;
+}
+
+static void net_finish(long sid, int final_state)
+{
+    IO *io = sys_connect(tx_port);
+
+    int msg = T_FINISH;
+    if (sys_write(io, &msg, sizeof(int)) < 0 ||
+        sys_write(io, &sid, sizeof(long)) < 0 ||
+        sys_write(io, &final_state, sizeof(int)) < 0)
+        sys_die("T_FINISH %s failed\n",
+                final_state == COMMITTED ? "commit" : "revert");
+
+    if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
+        msg != R_FINISH ||
+        sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
+        msg != final_state)
+        sys_die("R_FINISH %s failed\n",
+                final_state == COMMITTED ? "commit" : "revert");
+
+    sys_close(io);
 }
 
 extern void tx_commit(long sid)
 {
-    finish(sid, COMMITTED);
+    net_finish(sid, COMMITTED);
 }
 
 extern void tx_revert(long sid)
 {
-    finish(sid, REVERTED);
+    net_finish(sid, REVERTED);
+}
+
+extern Vars *tx_volume_sync(long long vol_id, Vars *in)
+{
+    IO *io = sys_connect(tx_port);
+
+    int msg = T_SYNC;
+    if (sys_write(io, &msg, sizeof(int)) < 0 ||
+        sys_write(io, &vol_id, sizeof(long long)) < 0)
+        sys_die("T_SYNC failed\n");
+
+    int free_in = 0;
+    if (in == NULL) {
+        in = vars_new(0);
+        free_in = 1;
+    }
+
+    Vars *out = NULL;
+    if (vars_write(in, io) < 0 ||
+        sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
+        msg != R_SYNC ||
+        (out = vars_read(io)) == NULL)
+        sys_die("R_SYNC failed\n");
+
+    sys_close(io);
+
+    if (free_in)
+        vars_free(in);
+
+    return out;
 }
 
 extern void tx_state()
@@ -657,15 +832,17 @@ extern void tx_state()
         if (e->a_type == WRITE)
             a_type = "WRITE";
 
-        char *state = 0;
-        switch (e->state) {
-            case COMMITTED: state = "COMMITTED"; break;
-            case REVERTED: state = "REVERTED"; break;
-            case RUNNABLE: state = "RUNNABLE"; break;
-            case WAITING: state = "WAITING"; break;
-            default:
-                sys_die("tx: unknown state %d\n", e->state);
-        }
+        char *state = NULL;
+        if (e->state == COMMITTED)
+            state = "COMMITTED";
+        else if (e->state == REVERTED)
+            state = "REVERTED";
+        else if (e->state == RUNNABLE)
+            state = "RUNNABLE";
+        else if (e->state == WAITING)
+            state = "WAITING";
+        else
+            sys_die("tx: unknown state %d\n", e->state);
 
         sys_print("%-8d %-32s %-5s %-8d %-9s\n",
                   e->sid, e->var, a_type, e->version, state);

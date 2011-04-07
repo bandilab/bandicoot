@@ -374,9 +374,8 @@ static void test_compound()
 
 static void check_vars(Vars *v)
 {
-    vars_put(v, "a1", 1);
-    vars_put(v, "a2", 2);
-    vars_put(v, "a3", 3);
+    if (v == NULL || v->len != 3)
+        fail();
 
     if (str_cmp(v->vars[0], "a1") != 0 || v->vers[0] != 1)
         fail();
@@ -385,48 +384,59 @@ static void check_vars(Vars *v)
     if (str_cmp(v->vars[2], "a3") != 0 || v->vers[2] != 3)
         fail();
 
-    const char *file = "bin/relation_vars_test";
-    IO *io = sys_open(file, CREATE | WRITE);
-    if (vars_write(v, io) < 0)
-        fail();
-    sys_close(io);
-
-    io = sys_open(file, READ);
-    Vars *out = vars_read(io);
-    if (out == NULL)
-        fail();
-
-    if (str_cmp(out->vars[0], "a1") != 0 || out->vers[0] != 1)
-        fail();
-    if (str_cmp(out->vars[1], "a2") != 0 || out->vers[1] != 2)
-        fail();
-    if (str_cmp(out->vars[2], "a3") != 0 || out->vers[2] != 3)
-        fail();
-
-    vars_free(out);
-    sys_close(io);
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < MAX_VOLS; ++j)
+            if (v->vols[i][j] != i * j + 3)
+                fail();
 }
 
 static void test_vars()
 {
-    Vars *v1 = vars_new(0);
-    Vars *v2 = vars_new(3);
-    Vars *v3 = vars_new(7);
+    Vars *v[] = {vars_new(0), vars_new(3), vars_new(7)};
 
-    check_vars(v1);
-    check_vars(v2);
-    check_vars(v3);
+    for (unsigned i = 0; i < sizeof(v) / sizeof(Vars*); ++i) {
+        vars_put(v[i], "a1", 1);
+        vars_put(v[i], "a2", 2);
+        vars_put(v[i], "a3", 3);
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < MAX_VOLS; ++k)
+                v[i]->vols[j][k] = j * k + 3;
 
-    vars_free(v1);
-    vars_free(v2);
-    vars_free(v3);
+        check_vars(v[i]);
+
+        Vars *c = vars_new(0);
+        vars_cpy(c, v[i]);
+        check_vars(c);
+
+        const char *file = "bin/relation_vars_test";
+        IO *io = sys_open(file, CREATE | WRITE);
+        if (vars_write(v[i], io) < 0)
+            fail();
+        sys_close(io);
+        io = sys_open(file, READ);
+        Vars *out = vars_read(io);
+        if (out == NULL)
+            fail();
+
+        check_vars(out);
+
+        vars_free(v[i]);
+        vars_free(out);
+        vars_free(c);
+
+        sys_close(io);
+    }
 }
 
 int main()
 {
+    int tx_port = 0;
+
     fs_init("bin/volume");
-    tx_init();
+    tx_server(&tx_port);
+    tx_attach(tx_port);
     vol_init();
+
     env = env_new(fs_source);
 
     int len = 0;

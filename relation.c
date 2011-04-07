@@ -66,6 +66,16 @@ extern Vars *vars_new(int len)
     return res;
 }
 
+extern void vars_cpy(Vars *dest, Vars *src)
+{
+    dest->len = 0;
+    for (int i = 0; i < src->len; ++i) {
+        vars_put(dest, src->vars[i], src->vers[i]);
+        for (int j = 0; j < MAX_VOLS; ++j)
+            dest->vols[i][j] = src->vols[i][j];
+    }
+}
+
 extern void vars_free(Vars *v)
 {
     mem_free(v->vars);

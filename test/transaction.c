@@ -448,8 +448,11 @@ static void test_chain(Action a1)
 
 int main(void)
 {
+    int tx_port = 0;
+
     fs_init("bin/volume");
-    tx_init();
+    tx_server(&tx_port);
+    tx_attach(tx_port);
     vol_init();
     env = env_new(fs_source);
 

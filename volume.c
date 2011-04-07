@@ -73,7 +73,6 @@ extern long parse(const char *file, char *rel)
 static void sync_tx(long long id)
 {
     Vars *tx = NULL, *disk = NULL;
-
     tx = tx_volume_sync(id, disk);
     disk = vars_new(tx->len);
 
@@ -100,6 +99,7 @@ static void sync_tx(long long id)
 
     vars_free(tx);
     vars_free(tx2);
+    vars_free(disk);
 }
 
 extern void vol_init()

@@ -335,7 +335,9 @@ int main(int argc, char *argv[])
     } else if (str_cmp(argv[1], "start") == 0 &&
                s == NULL && v != NULL && p != 0)
     {
-        tx_init();
+        int tx_port = 0;
+        tx_server(&tx_port);
+        tx_attach(tx_port);
         vol_init();
         queue_init();
 
