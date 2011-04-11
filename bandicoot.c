@@ -39,61 +39,10 @@ extern const char *VERSION;
 #define PROC_WAIT_SEC 5
 
 typedef struct {
-    char func[MAX_NAME];
-    Vars *r;
-    Vars *w;
-} Call;
-
-static void call_free(Call *c)
-{
-    if (c->r != NULL)
-        vars_free(c->r);
-    if (c->w != NULL)
-        vars_free(c->w);
-    mem_free(c);
-}
-
-static int call_write(Call *c, IO *io)
-{
-    if (sys_write(io, c->func, sizeof(c->func)) < 0)
-        return -1;
-
-    if (vars_write(c->r, io) < 0)
-        return -1;
-
-    if (vars_write(c->w, io) < 0)
-        return -1;
-
-    return 1;
-}
-
-static Call *call_read(IO *io)
-{
-    Call *res = NULL, *c = mem_alloc(sizeof(Call));
-    c->r = NULL;
-    c->w = NULL;
-
-    if (sys_readn(io, c->func, sizeof(c->func)) != sizeof(c->func))
-       goto failure;
-    else if ((c->r = vars_read(io)) == NULL)
-       goto failure;
-    else if ((c->w = vars_read(io)) == NULL)
-       goto failure;
-
-    res = c;
-    c = NULL;
-
-failure:
-    if (c != NULL)
-        call_free(c);
-
-    return res;
-}
-
-typedef struct {
     Env *env;
     char exe[MAX_FILE_PATH];
     char vol[MAX_FILE_PATH];
+    char txp[16];
 } Exec;
 
 struct {
@@ -145,7 +94,8 @@ static void *exec_thread(void *arg)
     IO *sio = sys_socket(&p);
     char port[8];
     str_print(port, "%d", p);
-    char *argv[] = {x->exe, "executor", "-v", x->vol, "-p", port, NULL};
+    char *argv[] = {x->exe, "executor", "-v", x->vol,
+                    "-p", port, "-tx", x->txp, NULL};
 
     for (;;) {
         int status = -1, pid = -1;
@@ -153,7 +103,6 @@ static void *exec_thread(void *arg)
         IO *pio = NULL;
         long sid = 0, time = sys_millis();
         TBuf *param = NULL, *ret = NULL;
-        Call *call = NULL;
 
         Http_Req *req = http_parse(cio);
         if (req == NULL) {
@@ -166,7 +115,10 @@ static void *exec_thread(void *arg)
             goto exit;
         }
 
-        Func *fn = env_func(x->env, req->path + 1);
+        char func[MAX_NAME];
+        str_cpy(func, req->path + 1);
+
+        Func *fn = env_func(x->env, func);
         if (fn == NULL) {
             status = http_404(cio);
             goto exit;
@@ -177,9 +129,7 @@ static void *exec_thread(void *arg)
         {
             status = http_405(cio);
             goto exit;
-        }
-
-        if (fn->p.len == 1) {
+        } if (fn->p.len == 1) {
             Head *head = NULL;
             param = rel_pack_sep(req->body, &head);
 
@@ -195,15 +145,6 @@ static void *exec_thread(void *arg)
             }
         }
 
-        call = mem_alloc(sizeof(Call));
-        str_cpy(call->func, req->path + 1);
-        call->r = vars_new(fn->r.len);
-        call->w = vars_new(fn->w.len);
-        for (int i = 0; i < fn->r.len; ++i)
-            vars_put(call->r, fn->r.vars[i], 0L);
-        for (int i = 0; i < fn->w.len; ++i)
-            vars_put(call->w, fn->w.vars[i], 0L);
-
         pid = sys_exec(argv);
         if (!sys_iready(sio, PROC_WAIT_SEC)) {
             status = http_500(cio);
@@ -212,9 +153,8 @@ static void *exec_thread(void *arg)
 
         /* FIXME: sys_accept might fail (and cause sys_die). */
         pio = sys_accept(sio);
-        sid = tx_enter(call->r, call->w);
 
-        if (call_write(call, pio) < 0) {
+        if (sys_write(pio, func, MAX_NAME) < 0) {
             status = http_500(cio);
             goto exit;
         }
@@ -238,7 +178,6 @@ static void *exec_thread(void *arg)
 
         int failed = -1;
         if (sys_readn(pio, &failed, sizeof(int)) != sizeof(int) || failed) {
-            tx_revert(sid);
             status = http_500(cio);
             goto exit;
         }
@@ -254,10 +193,10 @@ static void *exec_thread(void *arg)
             ret = NULL;
         }
 
-        tx_commit(sid);
         status = http_chunk(cio, NULL, 0);
 
 exit:
+        /* FIXME: get the sid so that we do not print 0s */
         sys_print("[%016X] method '%c', path '%s', time %dms - %3d\n",
                   sid,
                   (req == NULL) ? '?' : req->method,
@@ -277,13 +216,8 @@ exit:
             mem_free(req);
         if (pid != -1)
             sys_wait(pid);
-
         if (pio != NULL)
             sys_close(pio);
-
-        if (call != NULL)
-            call_free(call);
-
         sys_close(cio);
     }
 
@@ -306,7 +240,7 @@ static void usage(char *p)
 
 int main(int argc, char *argv[])
 {
-    int p = 0;
+    int p = 0, tx_port = 0;
     char *v = NULL, *s = NULL;
 
     sys_init();
@@ -319,6 +253,11 @@ int main(int argc, char *argv[])
             p = str_int(argv[i + 1], &e);
             if (e || p < 1 || p > 65535)
                 sys_die("invalid port '%d'\n", p);
+        } else if (str_cmp(argv[i], "-tx") == 0) {
+            int e = -1;
+            tx_port = str_int(argv[i + 1], &e);
+            if (e || tx_port < 1 || tx_port > 65535)
+                sys_die("invalid tx port '%d'\n", tx_port);
         } else if (str_cmp(argv[i], "-v") == 0)
             v = argv[i + 1];
         else if (str_cmp(argv[i], "-s") == 0)
@@ -333,7 +272,7 @@ int main(int argc, char *argv[])
         tx_deploy(s);
         sys_print("deployed: %s -> %s\n", s, v);
     } else if (str_cmp(argv[1], "start") == 0 &&
-               s == NULL && v != NULL && p != 0)
+               s == NULL && v != NULL && p != 0 && tx_port == 0)
     {
         int tx_port = 0;
         tx_server(&tx_port);
@@ -346,6 +285,7 @@ int main(int argc, char *argv[])
             e->env = env_new(fs_source);
             str_cpy(e->vol, v);
             str_cpy(e->exe, argv[0]);
+            str_print(e->txp, "%d", tx_port);
 
             sys_thread(exec_thread, e);
         }
@@ -364,50 +304,66 @@ int main(int argc, char *argv[])
         tx_free();
         mon_free(queue.mon);
     } else if (str_cmp(argv[1], "executor") == 0 &&
-               s == NULL && v != NULL && p != 0)
+               s == NULL && v != NULL && p != 0 && tx_port != 0)
     {
         Env *env = env_new(fs_source);
-
         IO *io = sys_connect(sys_address(p));
 
-        Call *call = call_read(io);
-        if (call == NULL)
-            sys_die("executor: failed to retrieve function details\n");
+        Func *fn = NULL;
+        char func[MAX_NAME];
+        if (sys_readn(io, func, MAX_NAME) != MAX_NAME ||
+            (fn = env_func(env, func)) == NULL)
+            sys_die("executor: failed to retrieve the function name\n");
 
-        Func *fn = env_func(env, call->func);
         TBuf *arg = NULL;
+        if (fn->p.len == 1)
+            if ((arg = tbuf_read(io)) == NULL)
+                sys_die("%s: failed to retrieve the parameter\n", func);
 
-        if (fn->p.len == 1) {
-            arg = tbuf_read(io);
-            if (arg == NULL)
-                sys_die("%s: failed to retrieve the parameter\n", call->func);
-        }
+        Vars *r = vars_new(fn->r.len);
+        Vars *w = vars_new(fn->w.len);
+        for (int i = 0; i < fn->r.len; ++i)
+            vars_put(r, fn->r.vars[i], 0L);
+        for (int i = 0; i < fn->w.len; ++i)
+            vars_put(w, fn->w.vars[i], 0L);
+
+        tx_attach(tx_port);
+        long sid = tx_enter(r, w);
 
         for (int i = 0; i < fn->p.len; ++i)
-            rel_init(fn->p.rels[i], call->r, arg);
+            rel_init(fn->p.rels[i], r, arg);
 
         for (int i = 0; i < fn->t.len; ++i)
-            rel_init(fn->t.rels[i], call->r, arg);
+            rel_init(fn->t.rels[i], r, arg);
 
         for (int i = 0; i < fn->w.len; ++i) {
-            rel_init(fn->w.rels[i], call->r, arg);
-            Vars *w = call->w;
+            rel_init(fn->w.rels[i], r, arg);
             /* FIXME: is the first volume the right one (or we need to use
                       the same selection algorithm as in relation.c)? */
             rel_store(w->vols[i][0], w->vars[i], w->vers[i], fn->w.rels[i]);
         }
 
         if (fn->ret != NULL) {
-            rel_init(fn->ret, call->r, arg);
+            rel_init(fn->ret, r, arg);
             if (tbuf_write(fn->ret->body, io) < 0)
-                sys_die("%s: failed to transmit the result\n", call->func);
+                sys_die("%s: failed to transmit the result\n", func);
         }
+
+        tx_commit(sid);
 
         int failed = 0;
         if (sys_write(io, &failed, sizeof(int)) < 0)
-            sys_die("%s: failed to transmit the result flag\n", call->func);
+            sys_die("%s: failed to transmit the result flag\n", func);
 
-        call_free(call);
+        /* FIXME: confirm that the commit was successful
+        tx_commit(sid);
+        int succeeded = 1;
+        if (sys_write(io, &succeeded, sizeof(int)) < 0)
+            sys_die("%s: failed to transmit the result flag\n", func);
+        */
+
+        vars_free(r);
+        vars_free(w);
         sys_close(io);
         env_free(env);
     } else

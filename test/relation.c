@@ -419,6 +419,7 @@ int main()
 {
     int tx_port = 0;
 
+    sys_init();
     fs_init("bin/volume");
     tx_server(&tx_port);
     tx_attach(tx_port);

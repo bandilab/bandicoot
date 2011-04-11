@@ -44,7 +44,7 @@ static const long MAX_LONG = 0x7FFFFFFF;
 
 static const int T_ENTER = 1;
 static const int R_ENTER = 2;
-static const int T_FINISH = 3;
+static const int T_FINISH = 3; /* FIXME: it looks like we need only T_COMMIT */
 static const int R_FINISH = 4;
 static const int T_SYNC = 5;
 static const int R_SYNC = 6;
@@ -73,7 +73,7 @@ typedef struct List List;
 
 static char *all_vars[MAX_VARS];
 static int num_vars;
-static long long tx_address;
+static IO* gio;
 
 static List *gents;
 static List *gvols;
@@ -428,6 +428,16 @@ static void finish(int sid, int final_state)
     mon_unlock(gmon);
 }
 
+extern void commit(long sid)
+{
+    finish(sid, COMMITTED);
+}
+
+extern void revert(long sid)
+{
+    finish(sid, REVERTED);
+}
+
 extern void tx_free()
 {
     mon_lock(gmon);
@@ -573,7 +583,7 @@ static void wait(Vars *s, Entry *entries[])
 }
 
 /* the m input parameter is for testing purposes (test/transaction.c) */
-extern long tx_enter_full(Vars *rvars, Vars *wvars, Mon *m)
+extern long enter(Vars *rvars, Vars *wvars, Mon *m)
 {
     long sid;
     int i, state, rw = 0;
@@ -640,82 +650,105 @@ extern long tx_enter_full(Vars *rvars, Vars *wvars, Mon *m)
 
 extern void tx_attach(int port)
 {
-    tx_address = sys_address(port);
+    gio = sys_connect(sys_address(port));
 }
 
-static void *tx_thread(void *sio)
+static void *tx_thread(void *io)
 {
-    for (;;) {
-        IO *cio = sys_accept(sio);
+    long sid = 0;
 
+    for (;;) {
         int msg = 0;
-        if (sys_readn(cio, &msg, sizeof(int)) != sizeof(int))
-            goto next;
+        if (sys_readn(io, &msg, sizeof(int)) != sizeof(int))
+            goto exit;
 
         if (msg == T_ENTER) {
-            Vars *rvars = vars_read(cio);
-            if (rvars == NULL)
-                goto next;
+            if (sid != 0)
+                goto exit;
 
-            Vars *wvars = vars_read(cio);
+            Vars *rvars = vars_read(io);
+            if (rvars == NULL)
+                goto exit;
+
+            Vars *wvars = vars_read(io);
             if (wvars == NULL) {
                 vars_free(rvars);
-                goto next;
+                goto exit;
             }
 
-            long sid = tx_enter_full(rvars, wvars, NULL);
+            sid = enter(rvars, wvars, NULL);
 
             msg = R_ENTER;
-            if (sys_write(cio, &msg, sizeof(int)) < 0 ||
-                sys_write(cio, &sid, sizeof(long)) < 0 ||
-                vars_write(rvars, cio) < 0 ||
-                vars_write(wvars, cio) < 0)
+            if (sys_write(io, &msg, sizeof(int)) < 0 ||
+                sys_write(io, &sid, sizeof(long)) < 0 ||
+                vars_write(rvars, io) < 0 ||
+                vars_write(wvars, io) < 0)
             {
                 tx_revert(sid);
-                goto next;
+                goto exit;
             }
 
             vars_free(rvars);
             vars_free(wvars);
         } else if (msg == T_FINISH) {
             int final_state = 0;
-            long sid = 0;
-            if (sys_readn(cio, &sid, sizeof(long)) != sizeof(long) ||
-                sys_readn(cio, &final_state, sizeof(int)) != sizeof(int) ||
+            long read_sid = 0;
+            if (sys_readn(io, &read_sid, sizeof(long)) != sizeof(long) ||
+                read_sid != sid ||
+                sys_readn(io, &final_state, sizeof(int)) != sizeof(int) ||
                 (final_state != COMMITTED && final_state != REVERTED))
-                goto next;
+                goto exit;
 
             /* TODO: what if sid does not exist? */
             finish(sid, final_state);
+            sid = 0; /* at this point we cannot revert anymore */
 
+            /* FIXME: we can commit and then fail to notify the client */
             msg = R_FINISH;
-            if (sys_write(cio, &msg, sizeof(int)) < 0 ||
-                sys_write(cio, &final_state, sizeof(int)) < 0)
-                goto next;
+            if (sys_write(io, &msg, sizeof(int)) < 0 ||
+                sys_write(io, &final_state, sizeof(int)) < 0)
+                goto exit;
         } else if (msg == T_SYNC) {
-            long long vid;
-            if (sys_readn(cio, &vid, sizeof(long long)) != sizeof(long long))
-                goto next;
+            /* FIXME: if the sync fails we need to remove the volume from
+                      the list */
 
-            Vars *in = vars_read(cio);
+            long long vid;
+            if (sys_readn(io, &vid, sizeof(long long)) != sizeof(long long))
+                goto exit;
+
+            Vars *in = vars_read(io);
             if (in == NULL)
-                goto next;
+                goto exit;
 
             Vars *out = volume_sync(vid, in);
             msg = R_SYNC;
 
             /* we can ignore io errors while responding to volume sync */
-            sys_write(cio, &msg, sizeof(int));
-            vars_write(out, cio);
+            sys_write(io, &msg, sizeof(int));
+            vars_write(out, io);
 
             vars_free(out);
         }
-
-next:
-
-        sys_close(cio);
     }
 
+exit:
+    if (sid != 0) {
+        sys_print("tx thread failure, reverting sid=%016X\n", sid);
+        finish(sid, REVERTED);
+    }
+
+    sys_close(io);
+    return NULL;
+}
+
+static void *server_thread(void *sio)
+{
+    for (;;) {
+        IO *cio = sys_accept(sio);
+        sys_thread(tx_thread, cio);
+    }
+
+    sys_close(sio);
     return NULL;
 }
 
@@ -724,26 +757,24 @@ extern void tx_server(int *port)
     tx_init();
 
     IO *sio = sys_socket(port);
-    sys_thread(tx_thread, sio);
+    sys_thread(server_thread, sio);
 }
 
 extern long tx_enter(Vars *rvars, Vars *wvars)
 {
-    IO *io = sys_connect(tx_address);
-
     int msg = T_ENTER;
-    if (sys_write(io, &msg, sizeof(int)) < 0 ||
-        vars_write(rvars, io) < 0 ||
-        vars_write(wvars, io) < 0)
+    if (sys_write(gio, &msg, sizeof(int)) < 0 ||
+        vars_write(rvars, gio) < 0 ||
+        vars_write(wvars, gio) < 0)
         sys_die("T_ENTER failed\n");
 
     long sid = 0;
     Vars *r = NULL, *w = NULL;
-    if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
+    if (sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
         msg != R_ENTER ||
-        sys_readn(io, &sid, sizeof(long)) != sizeof(long) ||
-        (r = vars_read(io)) == NULL ||
-        (w = vars_read(io)) == NULL)
+        sys_readn(gio, &sid, sizeof(long)) != sizeof(long) ||
+        (r = vars_read(gio)) == NULL ||
+        (w = vars_read(gio)) == NULL)
         sys_die("R_ENTER failed\n");
 
     vars_cpy(rvars, r);
@@ -751,30 +782,27 @@ extern long tx_enter(Vars *rvars, Vars *wvars)
 
     vars_free(r);
     vars_free(w);
-    sys_close(io);
 
     return sid;
 }
 
 static void net_finish(long sid, int final_state)
 {
-    IO *io = sys_connect(tx_address);
-
     int msg = T_FINISH;
-    if (sys_write(io, &msg, sizeof(int)) < 0 ||
-        sys_write(io, &sid, sizeof(long)) < 0 ||
-        sys_write(io, &final_state, sizeof(int)) < 0)
-        sys_die("T_FINISH %s failed\n",
-                final_state == COMMITTED ? "commit" : "revert");
+    if (sys_write(gio, &msg, sizeof(int)) < 0 ||
+        sys_write(gio, &sid, sizeof(long)) < 0 ||
+        sys_write(gio, &final_state, sizeof(int)) < 0)
+        sys_die("T_FINISH %s failed, sid=%016X\n",
+                final_state == COMMITTED ? "commit" : "revert",
+                sid);
 
-    if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
+    if (sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
         msg != R_FINISH ||
-        sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
+        sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
         msg != final_state)
-        sys_die("R_FINISH %s failed\n",
-                final_state == COMMITTED ? "commit" : "revert");
-
-    sys_close(io);
+        sys_die("R_FINISH %s failed, sid=%016X\n",
+                final_state == COMMITTED ? "commit" : "revert",
+                sid);
 }
 
 extern void tx_commit(long sid)
@@ -789,21 +817,17 @@ extern void tx_revert(long sid)
 
 extern Vars *tx_volume_sync(long long vol_id, Vars *in)
 {
-    IO *io = sys_connect(tx_address);
-
     int msg = T_SYNC;
-    if (sys_write(io, &msg, sizeof(int)) < 0 ||
-        sys_write(io, &vol_id, sizeof(long long)) < 0)
+    if (sys_write(gio, &msg, sizeof(int)) < 0 ||
+        sys_write(gio, &vol_id, sizeof(long long)) < 0)
         sys_die("T_SYNC failed\n");
 
     Vars *out = NULL;
-    if (vars_write(in, io) < 0 ||
-        sys_readn(io, &msg, sizeof(int)) != sizeof(int) ||
+    if (vars_write(in, gio) < 0 ||
+        sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
         msg != R_SYNC ||
-        (out = vars_read(io)) == NULL)
+        (out = vars_read(gio)) == NULL)
         sys_die("R_SYNC failed\n");
-
-    sys_close(io);
 
     return out;
 }
@@ -821,16 +845,11 @@ extern void tx_state()
             a_type = "WRITE";
 
         char *state = NULL;
-        if (e->state == COMMITTED)
-            state = "COMMITTED";
-        else if (e->state == REVERTED)
-            state = "REVERTED";
-        else if (e->state == RUNNABLE)
-            state = "RUNNABLE";
-        else if (e->state == WAITING)
-            state = "WAITING";
-        else
-            sys_die("tx: unknown state %d\n", e->state);
+        if (e->state == COMMITTED) state = "COMMITTED";
+        else if (e->state == REVERTED) state = "REVERTED";
+        else if (e->state == RUNNABLE) state = "RUNNABLE";
+        else if (e->state == WAITING) state = "WAITING";
+        else sys_die("tx: unknown state %d\n", e->state);
 
         sys_print("%-8d %-32s %-5s %-8d %-9s\n",
                   e->sid, e->var, a_type, e->version, state);

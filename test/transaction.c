@@ -69,7 +69,7 @@ static void send_action(Proc *p, Action a, int value)
     sem_dec(p->write);
 }
 
-static void enter(Proc *p)
+static void enter_action(Proc *p)
 {
     send_action(p, TX_ENTER, seq++);
 }
@@ -116,9 +116,9 @@ static void *exec_thread(void *arg)
         value = p->value;
 
         if (action == TX_COMMIT)
-            tx_commit(sid);
+            commit(sid);
         else if (action == TX_REVERT)
-            tx_revert(sid);
+            revert(sid);
         else if (action == TX_READ) {
             rel = rel_load(env_head(env, p->rname), p->rname);
             rel_init(rel, rvars, NULL);
@@ -151,7 +151,7 @@ static void *exec_thread(void *arg)
 
             sem_wait(gmon, value);
 
-            sid = tx_enter_full(rvars, wvars, gmon);
+            sid = enter(rvars, wvars, gmon);
         }
     }
 
@@ -184,7 +184,7 @@ static void exit_thread(Proc *p)
 static void test(char *name, int cnt)
 {
     init_thread(&cp, name, "");
-    enter(&cp);
+    enter_action(&cp);
     action(&cp, TX_READ);
     check(&cp, cnt);
     action(&cp, TX_COMMIT);
@@ -265,17 +265,17 @@ static void test_reset()
     init_thread(&p2, "tx_empty", "tx_target2");
     init_thread(&p3, "tx_empty", "tx_target3");
 
-    enter(&p1);
+    enter_action(&p1);
     action(&p1, TX_READ);
     action(&p1, TX_WRITE);
     action(&p1, TX_COMMIT);
 
-    enter(&p2);
+    enter_action(&p2);
     action(&p2, TX_READ);
     action(&p2, TX_WRITE);
     action(&p2, TX_COMMIT);
 
-    enter(&p3);
+    enter_action(&p3);
     action(&p3, TX_READ);
     action(&p3, TX_WRITE);
     action(&p3, TX_COMMIT);
@@ -297,9 +297,9 @@ static void test_cleanup(Action a2)
     init_thread(&p1, "tx_target1", "");
     init_thread(&p2, "one_r1", "tx_target1");
 
-    enter(&p1);
+    enter_action(&p1);
 
-    enter(&p2);
+    enter_action(&p2);
 
     action(&p2, TX_READ);
     action(&p2, TX_WRITE);
@@ -325,8 +325,8 @@ static void test_reads()
 
     test("tx_empty", 0);
 
-    enter(&p1);
-    enter(&p2);
+    enter_action(&p1);
+    enter_action(&p2);
     action(&p1, TX_READ);
     action(&p2, TX_READ);
     check(&p1, 0);
@@ -346,8 +346,8 @@ static void test_write_read_con()
     init_thread(&p1, "one_r1", "tx_target1");
     init_thread(&p2, "tx_target1", "");
 
-    enter(&p1);
-    enter(&p2);
+    enter_action(&p1);
+    enter_action(&p2);
     action(&p1, TX_READ);
     action(&p1, TX_WRITE);
     action(&p2, TX_READ);
@@ -371,14 +371,14 @@ static void test_overwrite_seq(Action a1)
     init_thread(&p1, "one_r1", "tx_target1");
     init_thread(&p2, "one_r2", "tx_target1");
 
-    enter(&p1);
+    enter_action(&p1);
     action(&p1, TX_READ);
     action(&p1, TX_WRITE);
     action(&p1, a1);
 
     test("tx_target1", (a1 == TX_COMMIT) ? 1 : 0);
 
-    enter(&p2);
+    enter_action(&p2);
     action(&p2, TX_READ);
     action(&p2, TX_WRITE);
     action(&p2, TX_COMMIT);
@@ -400,8 +400,8 @@ static void test_overwrite_con(Action a1)
 
     int cnt = (a1 == TX_COMMIT) ? 2 : 0;
 
-    enter(&p1);
-    enter(&p2);
+    enter_action(&p1);
+    enter_action(&p2);
 
     action(&p1, TX_READ);
     action(&p1, TX_WRITE);
@@ -431,9 +431,9 @@ static void test_chain(Action a1)
 
     int cnt = (a1 == TX_COMMIT ? 1 : 0);
 
-    enter(&p1);
-    enter(&p2);
-    enter(&p3);
+    enter_action(&p1);
+    enter_action(&p2);
+    enter_action(&p3);
 
     action(&p1, TX_READ);
     action(&p1, TX_WRITE);
@@ -461,6 +461,7 @@ int main(void)
 {
     int tx_port = 0;
 
+    sys_init();
     fs_init("bin/volume");
     tx_server(&tx_port);
     tx_attach(tx_port);
