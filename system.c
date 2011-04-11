@@ -143,6 +143,22 @@ extern int sys_iready(IO *io, int sec)
     return ready == 1 && FD_ISSET(io->fd, &rfds);
 }
 
+static long long _sys_address(int port)
+{
+    char host[255];
+    if (gethostname(host, 255) < 0)
+        sys_die("sys: cannot lookup the host name\n");
+
+    struct hostent *info;
+    if ((info = gethostbyname(host)) == NULL)
+        sys_die("sys: cannot lookup the host info\n");
+
+    struct in_addr *addr = (struct in_addr*) *info->h_addr_list;
+    long long res = ((long long) addr->s_addr << 16) | htons(port);
+
+    return res;
+}
+
 extern IO *sys_socket(int *port)
 {
     int sfd = net_open();
@@ -174,17 +190,21 @@ extern IO *sys_accept(IO *sock)
     return new_io(fd, net_read, net_write, net_close);
 }
 
-extern IO *sys_connect(int port)
+extern IO *sys_connect(long long address)
 {
     int fd = net_open();
 
+    int port = address & 0xFFFF;
+    long ip = address >> 16;
+
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    addr.sin_port = port;
+    addr.sin_addr.s_addr = ip;
 
     if (connect(fd, (struct sockaddr*) &addr, sizeof(addr)) == -1)
-        sys_die("sys: cannot connect to port %d\n", port);
+        sys_die("sys: cannot connect to %s:%d\n",
+                inet_ntoa(addr.sin_addr), port);
 
     return new_io(fd, net_read, net_write, net_close);
 }

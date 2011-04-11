@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
         if (e)
             fail();
 
-        IO *io = sys_connect(p);
+        IO *io = sys_connect(sys_address(p));
         if (sys_write(io, "hello", 6) < 0)
             fail();
 

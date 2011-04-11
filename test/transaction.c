@@ -34,6 +34,7 @@ static Proc p1, p2, p3, cp;
 static char current_test[30];
 static Mon *gmon;
 static int seq;
+static long long vol_id;
 
 static void sem_inc(Mon *m)
 {
@@ -135,7 +136,7 @@ static void *exec_thread(void *arg)
             }
             rel_free(rel);
         } else if (action == TX_WRITE) {
-            rel_store(wvars->vars[0], wvars->vers[0], rel);
+            rel_store(wvars->vols[0][0], wvars->vars[0], wvars->vers[0], rel);
             rel_free(rel);
         }
 
@@ -199,9 +200,14 @@ static void test_basics()
     long sid = tx_enter(r, w);
     long ver = r->vers[0];
 
-    for (int i = 0; i < MAX_VOLS; ++i)
-        if ((r->vols[0][i] != 0) && (r->vols[0][i] != VOLUME_ID))
+    long long sum = 0L;
+    for (int i = 0; i < MAX_VOLS; ++i) {
+        if ((r->vols[0][i] != 0) && (r->vols[0][i] != vol_id))
             fail();
+        sum += r->vols[0][i];
+    }
+    if (vol_id != sum)
+        fail();
 
     Rel *rel = rel_load(env_head(env, r->vars[0]), r->vars[0]);
 
@@ -222,9 +228,14 @@ static void test_basics()
 
     sid = tx_enter(r, w);
 
-    for (int i = 0; i < MAX_VOLS; ++i)
-        if ((w->vols[0][i] != 0) && (w->vols[0][i] != VOLUME_ID))
+    sum = 0L;
+    for (int i = 0; i < MAX_VOLS; ++i) {
+        if ((w->vols[0][i] != 0) && (w->vols[0][i] != vol_id))
             fail();
+        sum += w->vols[0][i];
+    }
+    if (vol_id != sum)
+        fail();
 
     tx_revert(sid);
 
@@ -453,7 +464,7 @@ int main(void)
     fs_init("bin/volume");
     tx_server(&tx_port);
     tx_attach(tx_port);
-    vol_init();
+    vol_id = vol_init();
     env = env_new(fs_source);
 
     gmon = mon_new();

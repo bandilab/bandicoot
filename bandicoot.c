@@ -368,14 +368,14 @@ int main(int argc, char *argv[])
     {
         Env *env = env_new(fs_source);
 
-        IO *io = sys_connect(p);
+        IO *io = sys_connect(sys_address(p));
 
         Call *call = call_read(io);
         if (call == NULL)
             sys_die("executor: failed to retrieve function details\n");
 
         Func *fn = env_func(env, call->func);
-        TBuf *arg;
+        TBuf *arg = NULL;
 
         if (fn->p.len == 1) {
             arg = tbuf_read(io);
@@ -391,7 +391,10 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < fn->w.len; ++i) {
             rel_init(fn->w.rels[i], call->r, arg);
-            rel_store(call->w->vars[i], call->w->vers[i], fn->w.rels[i]);
+            Vars *w = call->w;
+            /* FIXME: is the first volume the right one (or we need to use
+                      the same selection algorithm as in relation.c)? */
+            rel_store(w->vols[i][0], w->vars[i], w->vers[i], fn->w.rels[i]);
         }
 
         if (fn->ret != NULL) {

@@ -57,9 +57,10 @@ extern void sys_exit(char status);
 extern void sys_die(const char *msg, ...);
 
 /* networking */
+extern long long sys_address(int port);
 extern IO *sys_socket(int *port);
 extern IO *sys_accept(IO *socket);
-extern IO *sys_connect(int port);
+extern IO *sys_connect(long long id);
 extern int sys_iready(IO *io, int millis);
 
 /* misc */

@@ -65,14 +65,12 @@ static Tuple *rel_next(Rel *r)
     return tbuf_next(r->body);
 }
 
-extern Rel *rel_empty();
-
 extern Rel *rel_param(Head *head);
 extern Rel *rel_tmp(Rel *r, Rel *clones[], int cnt);
 extern Rel *rel_load(Head *head, const char *name);
 
 /* relations passed to both rel_store & rel_eq must be rel_init()'ed */
-extern void rel_store(const char *name, long vers, Rel *r);
+extern void rel_store(long long vol_id, const char *name, long vers, Rel *r);
 extern int rel_eq(Rel *l, Rel *r);
 
 extern Rel *rel_join(Rel *l, Rel *r);

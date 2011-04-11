@@ -106,19 +106,6 @@ static void test_param()
 
 static void test_eq()
 {
-    Rel *left = rel_empty();
-    Rel *right = rel_empty();
-
-    int res = rel_eq(left, right);
-
-    rel_free(left);
-    rel_free(right);
-
-    if (!res)
-        fail();
-
-    if (equal(rel_empty(), "empty_r1"))
-        fail();
     if (equal(load("empty_r1"), "empty_r2"))
         fail();
     if (!equal(load("empty_r1"), "empty_r1"))
@@ -145,7 +132,7 @@ static void test_store()
     long sid = tx_enter(rvars, wvars);
     rel_init(r, rvars, arg);
 
-    rel_store("one_r1_cpy", wvars->vers[0], r);
+    rel_store(wvars->vols[0][0], "one_r1_cpy", wvars->vers[0], r);
     rel_free(r);
     tx_commit(sid);
 

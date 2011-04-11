@@ -15,9 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/* FIXME: temporary until we implement VOLUME process with proper id */
-#define VOLUME_ID 1L
-
 #define MAX_FILE_PATH 256
 
 /* maximum number of named relational type declarations */

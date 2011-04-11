@@ -20,6 +20,7 @@ limitations under the License.
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -133,6 +134,11 @@ extern int net_port(int fd)
         sys_die("sys: cannot lookup the socket details\n");
 
     return ntohs(addr.sin_port);
+}
+
+extern long long sys_address(int port)
+{
+    return _sys_address(port);
 }
 
 extern Mon *mon_new()

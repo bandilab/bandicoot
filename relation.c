@@ -243,7 +243,8 @@ static void init_load(Rel *r, Vars *rvars, TBuf *arg)
     Ctxt *c = r->ctxt;
 
     int pos = array_scan(rvars->vars, rvars->len, c->name);
-    r->body = vol_read(c->name, rvars->vers[pos]);
+    /* FIXME: we need an algorithm to pick up the right volume id */
+    r->body = vol_read(rvars->vols[pos][0], c->name, rvars->vers[pos]);
 }
 
 extern Rel *rel_load(Head *head, const char *name)
@@ -253,15 +254,6 @@ extern Rel *rel_load(Head *head, const char *name)
 
     Ctxt *c = res->ctxt;
     str_cpy(c->name, name);
-
-    return res;
-}
-
-extern Rel *rel_empty()
-{
-    Rel *res = alloc(NULL);
-    res->head = head_new(NULL, NULL, 0);
-    res->body = tbuf_new();
 
     return res;
 }
@@ -639,9 +631,9 @@ extern Rel *rel_sum_unary(Rel *r,
     return res;
 }
 
-extern void rel_store(const char *name, long vers, Rel *r)
+extern void rel_store(long long vol_id, const char *name, long vers, Rel *r)
 {
-    vol_write(r->body, name, vers);
+    vol_write(vol_id, r->body, name, vers);
 }
 
 extern int rel_eq(Rel *l, Rel *r)

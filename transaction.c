@@ -73,7 +73,7 @@ typedef struct List List;
 
 static char *all_vars[MAX_VARS];
 static int num_vars;
-static int tx_port;
+static long long tx_address;
 
 static List *gents;
 static List *gvols;
@@ -582,6 +582,10 @@ extern long tx_enter_full(Vars *rvars, Vars *wvars, Mon *m)
 
     mon_lock(gmon);
 
+    /* FIXME: populate wvol_id based on an algorithm
+       executor id is probably required as well for the calculation */
+    long long wvol_id = ((Vol*)gvols->elem)->id;
+
     sid = ++last_sid;
     for (i = 0; i < wvars->len; ++i) {
         var = wvars->vars[i];
@@ -590,10 +594,7 @@ extern long tx_enter_full(Vars *rvars, Vars *wvars, Mon *m)
             state = RUNNABLE;
 
         we[i] = add_entry(sid, var, WRITE, sid, state);
-
-        /* FIXME: populate wvol_id based on an algorithm
-           executor id is probably required as well for the calculation */
-        we[i]->wvol_id = VOLUME_ID;
+        we[i]->wvol_id = wvol_id;
 
         rw = 1;
     }
@@ -626,18 +627,20 @@ extern long tx_enter_full(Vars *rvars, Vars *wvars, Mon *m)
     wait(rvars, re);
     wait(wvars, we);
 
+    mon_lock(gmon);
     set_vols(rvars);
 
     /* FIXME: populate wvols based on previous result */
     for (int i = 0; i < wvars->len; ++i)
-        wvars->vols[i][0] = VOLUME_ID;
+        wvars->vols[i][0] = wvol_id;
+    mon_unlock(gmon);
 
     return sid;
 }
 
 extern void tx_attach(int port)
 {
-    tx_port = port;
+    tx_address = sys_address(port);
 }
 
 static void *tx_thread(void *sio)
@@ -726,7 +729,7 @@ extern void tx_server(int *port)
 
 extern long tx_enter(Vars *rvars, Vars *wvars)
 {
-    IO *io = sys_connect(tx_port);
+    IO *io = sys_connect(tx_address);
 
     int msg = T_ENTER;
     if (sys_write(io, &msg, sizeof(int)) < 0 ||
@@ -755,7 +758,7 @@ extern long tx_enter(Vars *rvars, Vars *wvars)
 
 static void net_finish(long sid, int final_state)
 {
-    IO *io = sys_connect(tx_port);
+    IO *io = sys_connect(tx_address);
 
     int msg = T_FINISH;
     if (sys_write(io, &msg, sizeof(int)) < 0 ||
@@ -786,7 +789,7 @@ extern void tx_revert(long sid)
 
 extern Vars *tx_volume_sync(long long vol_id, Vars *in)
 {
-    IO *io = sys_connect(tx_port);
+    IO *io = sys_connect(tx_address);
 
     int msg = T_SYNC;
     if (sys_write(io, &msg, sizeof(int)) < 0 ||

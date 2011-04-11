@@ -15,6 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-extern void vol_init();
-extern TBuf *vol_read(const char *name, long version);
-extern void vol_write(TBuf *buf, const char *name, long version);
+extern long long vol_init();
+extern TBuf *vol_read(long long id, const char *name, long version);
+extern void vol_write(long long id, TBuf *buf, const char *name, long version);
