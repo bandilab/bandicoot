@@ -132,7 +132,7 @@ static void test_store()
     long sid = tx_enter(rvars, wvars);
     rel_init(r, rvars, arg);
 
-    rel_store(wvars->vols[0][0], "one_r1_cpy", wvars->vers[0], r);
+    rel_store(wvars->vols[0], "one_r1_cpy", wvars->vers[0], r);
     rel_free(r);
     tx_commit(sid);
 
@@ -372,9 +372,8 @@ static void check_vars(Vars *v)
         fail();
 
     for (int i = 0; i < 3; ++i)
-        for (int j = 0; j < MAX_VOLS; ++j)
-            if (v->vols[i][j] != i * j + 3)
-                fail();
+        if (v->vols[i] != i + 3)
+            fail();
 }
 
 static void test_vars()
@@ -386,8 +385,7 @@ static void test_vars()
         vars_put(v[i], "a2", 2);
         vars_put(v[i], "a3", 3);
         for (int j = 0; j < 3; ++j)
-            for (int k = 0; k < MAX_VOLS; ++k)
-                v[i]->vols[j][k] = j * k + 3;
+            v[i]->vols[j]= j + 3;
 
         check_vars(v[i]);
 

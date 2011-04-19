@@ -338,9 +338,7 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < fn->w.len; ++i) {
             rel_init(fn->w.rels[i], r, arg);
-            /* FIXME: is the first volume the right one (or we need to use
-                      the same selection algorithm as in relation.c)? */
-            rel_store(w->vols[i][0], w->vars[i], w->vers[i], fn->w.rels[i]);
+            rel_store(w->vols[i], w->vars[i], w->vers[i], fn->w.rels[i]);
         }
 
         if (fn->ret != NULL) {

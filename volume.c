@@ -40,6 +40,7 @@ static const int R_READ = 2;
 static const int T_WRITE = 3;
 static const int R_WRITE = 4;
 
+static char name[32];
 static long long id;
 
 static void fpath(char *res, const char *var, long sid, int part)
@@ -87,35 +88,6 @@ extern long parse(const char *file, char *rel)
     return sid;
 }
 
-static Vars *sync_tx(long long id)
-{
-    Vars *disk = vars_new(0);
-
-    /* init the disk state variable */
-    int num_files;
-    char **files = sys_list(fs_path, &num_files);
-    for (int i = 0; i < num_files; ++i) {
-        char var[MAX_NAME] = "";
-        long ver = parse(files[i], var);
-        if (ver > 0)
-            vars_put(disk, var, ver);
-    }
-    mem_free(files);
-
-    Vars *tx = tx_volume_sync(id, disk);
-
-    /* remove old versions */
-    char file[MAX_FILE_PATH];
-    for (int i = 0; i < disk->len; ++i)
-        if (vars_scan(tx, disk->vars[i], disk->vers[i]) < 0) {
-            fpath(file, disk->vars[i], disk->vers[i], 0);
-            sys_remove(file);
-        }
-
-    vars_free(disk);
-    return tx;
-}
-
 static TBuf *read(const char *var, long ver)
 {
     char file[MAX_FILE_PATH];
@@ -149,6 +121,64 @@ static int read_var(IO *io, char *var, long *ver)
         return 0;
 
     return 1;
+}
+
+static void copy_file(char *var, long ver, long long vol)
+{
+    char file[MAX_FILE_PATH];
+    fpath(file, var, ver, 0);
+
+    if (ver <= 1 || vol == id || sys_exists(file))
+        return;
+
+    if (vol == 0) {
+        sys_print("volume: %s, file copy '%s-%016X' failed\n", name, var, ver);
+        return;
+    }
+
+    /* FIXME: this dies if read fails */
+    TBuf *buf = vol_read(vol, var, ver);
+    /* FIXME: this write can fail as might alread have this file
+              it can happen where the sync is behind the commit, i.e. the
+              variables passed intot the tx_volume_sync are not up to date and
+              there are newer files on the disk */
+    write(var, ver, buf);
+    tbuf_free(buf);
+
+    sys_print("volume: %s, file copy '%s-%016X' succeeded\n", name, var, ver);
+}
+
+static Vars *sync_tx(long long id)
+{
+    Vars *disk = vars_new(0);
+
+    /* init the disk state variable */
+    int num_files;
+    char **files = sys_list(fs_path, &num_files);
+    for (int i = 0; i < num_files; ++i) {
+        char var[MAX_NAME] = "";
+        long ver = parse(files[i], var);
+        if (ver > 0)
+            vars_put(disk, var, ver);
+    }
+    mem_free(files);
+
+    Vars *tx = tx_volume_sync(id, disk);
+
+    /* remove old versions */
+    char file[MAX_FILE_PATH];
+    for (int i = 0; i < disk->len; ++i)
+        if (vars_scan(tx, disk->vars[i], disk->vers[i]) < 0) {
+            fpath(file, disk->vars[i], disk->vers[i], 0);
+            sys_remove(file);
+        }
+
+    /* sync with other volumes */
+    for (int i = 0; i < tx->len; ++i)
+        copy_file(tx->vars[i], tx->vers[i], tx->vols[i]);
+
+    vars_free(disk);
+    return tx;
 }
 
 static void *exec_server(void *arg)
@@ -201,6 +231,7 @@ extern long long vol_init()
     int p = 0;
     IO *io = sys_socket(&p);
     id = sys_address(p);
+    sys_address_print(name, id);
 
     /* clean up partial files */
     int num_files;
@@ -256,7 +287,8 @@ extern TBuf *vol_read(long long id, const char *name, long version)
 
 extern void vol_write(long long id, TBuf *buf, const char *name, long version)
 {
-    char var[MAX_NAME] = "";
+    char var[MAX_NAME] = "", sid[MAX_NAME] = "";
+    fs_sid_to_str(sid, version);
     str_cpy(var, name);
 
     IO *io = sys_connect(id);
@@ -264,15 +296,15 @@ extern void vol_write(long long id, TBuf *buf, const char *name, long version)
     if (sys_write(io, &T_WRITE, sizeof(int)) < 0 ||
         sys_write(io, var, sizeof(var)) < 0 ||
         sys_write(io, &version, sizeof(version)) < 0)
-        sys_die("volume: write failed to send '%s-%llu'\n", name, version);
+        sys_die("volume: write failed to send '%s-%s'\n", name, sid);
 
     if (tbuf_write(buf, io) < 0)
-        sys_die("volume: write failed for '%s-%llu'\n", name, version);
+        sys_die("volume: write failed for '%s-%s'\n", name, sid);
 
     /* confirmation of the full write */
     int msg = 0;
     if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) || msg != R_WRITE)
-        sys_die("volume: write failed to confirm '%s-%llu'\n", name, version);
+        sys_die("volume: write failed to confirm '%s-%s'\n", name, sid);
 
     sys_close(io);
 }

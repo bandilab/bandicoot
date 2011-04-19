@@ -29,7 +29,7 @@ static void perf_load_store(Env *env, int count)
     rel_init(r, NULL, NULL);
 
     long time = sys_millis();
-    rel_store(wvars->vols[0][0], "perf_rel", wvars->vers[0], r);
+    rel_store(wvars->vols[0], "perf_rel", wvars->vers[0], r);
     sys_print("%8s %d tuples in %dms\n", "write", count, sys_millis() - time);
 
     rel_free(r);

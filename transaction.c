@@ -268,8 +268,9 @@ static long get_wsid(const char var[])
 
 static int rm_volume(void *elem, void *cmp)
 {
-    Vol *e = elem, *c = cmp;
-    if (e->id == c->id) {
+    Vol *e = elem;
+    long long id = *((long long*)cmp);
+    if (e->id == id) {
         vars_free(e->v);
         mem_free(e);
 
@@ -290,13 +291,13 @@ static Vol *replace_volume(long long vol_id, Vars *v)
        commit due to some network delays. It would not have the latest
        commited variables in it.
      */
-    rm(&gvols, vol, rm_volume);
+    rm(&gvols, &vol_id, rm_volume);
     gvols = add(gvols, vol);
 
     return vol;
 }
 
-/* populate volume ids for given variables */
+/* FIXME: populate volume id for given variables with optimization */
 static void set_vols(Vars *v)
 {
     for (int i = 0; i < v->len; ++i) {
@@ -305,15 +306,8 @@ static void set_vols(Vars *v)
         for (List *vit = gvols; vit != NULL; vit = vit->next) {
             Vol *vol = vit->elem;
             if (vars_scan(vol->v, var, ver) > -1) {
-                int j;
-                for (j = 0; j < MAX_VOLS; ++j)
-                    if (v->vols[i][j] == 0L) {
-                        v->vols[i][j] = vol->id;
-                        break;
-                    }
-
-                if (j == MAX_VOLS)   /* replace first volume id */
-                    v->vols[i][0] = vol->id;
+                v->vols[i] = vol->id;
+                break;
             }
         }
     }
@@ -566,6 +560,10 @@ static Vars *volume_sync(long long vol_id, Vars *in)
 
     mon_unlock(gmon);
 
+    char vol[32];
+    sys_address_print(vol, vol_id);
+    sys_print("tx: volume %s sync done\n", vol);
+
     return out;
 }
 
@@ -642,7 +640,7 @@ extern long enter(Vars *rvars, Vars *wvars, Mon *m)
 
     /* FIXME: populate wvols based on previous result */
     for (int i = 0; i < wvars->len; ++i)
-        wvars->vols[i][0] = wvol_id;
+        wvars->vols[i] = wvol_id;
     mon_unlock(gmon);
 
     return sid;
@@ -656,6 +654,7 @@ extern void tx_attach(int port)
 static void *tx_thread(void *io)
 {
     long sid = 0;
+    long long vid = 0;
 
     for (;;) {
         int msg = 0;
@@ -711,8 +710,6 @@ static void *tx_thread(void *io)
         } else if (msg == T_SYNC) {
             /* FIXME: if the sync fails we need to remove the volume from
                       the list */
-
-            long long vid;
             if (sys_readn(io, &vid, sizeof(long long)) != sizeof(long long))
                 goto exit;
 
@@ -733,8 +730,18 @@ static void *tx_thread(void *io)
 
 exit:
     if (sid != 0) {
-        sys_print("tx thread failure, reverting sid=%016X\n", sid);
+        sys_print("tx: transaction %016X failed\n", sid);
         finish(sid, REVERTED);
+    }
+
+    if (vid != 0) {
+        mon_lock(gmon);
+        rm(&gvols, &vid, rm_volume);
+        mon_unlock(gmon);
+
+        char vol[32];
+        sys_address_print(vol, vid);
+        sys_print("tx: volume %s disconnected\n", vol);
     }
 
     sys_close(io);

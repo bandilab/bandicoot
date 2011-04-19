@@ -159,6 +159,15 @@ static long long _sys_address(int port)
     return res;
 }
 
+static struct sockaddr_in sys_address_dec(long long address)
+{
+    struct sockaddr_in addr = {.sin_family = AF_INET};
+    addr.sin_port = address & 0xFFFF;
+    addr.sin_addr.s_addr = address >> 16;
+
+    return addr;
+}
+
 extern IO *sys_socket(int *port)
 {
     int sfd = net_open();
@@ -194,17 +203,11 @@ extern IO *sys_connect(long long address)
 {
     int fd = net_open();
 
-    int port = address & 0xFFFF;
-    long ip = address >> 16;
-
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = port;
-    addr.sin_addr.s_addr = ip;
+    struct sockaddr_in addr = sys_address_dec(address);
 
     if (connect(fd, (struct sockaddr*) &addr, sizeof(addr)) == -1)
         sys_die("sys: cannot connect to %s:%d\n",
-                inet_ntoa(addr.sin_addr), port);
+                inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 
     return new_io(fd, net_read, net_write, net_close);
 }
@@ -312,6 +315,12 @@ extern char **sys_list(const char *path, int *len)
     mem_free(offs);
 
     return res;
+}
+
+extern void sys_address_print(char *dest, long long address)
+{
+    struct sockaddr_in addr = sys_address_dec(address);
+    str_print(dest, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 }
 
 extern void sys_print(const char *msg, ...)

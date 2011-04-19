@@ -20,7 +20,7 @@ typedef struct {
     int len;
     char **vars;
     long *vers;
-    long long **vols;
+    long long *vols;
 } Vars;
 
 extern Vars *vars_new(int len);
