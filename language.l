@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,8 +39,30 @@ extern Env *grammar_init();
 extern void yyerror(const char*, ...);
 extern void yyparse();
 
-static const char *src_path = "";
-static int line = 1;
+static struct {
+    const char *path;
+    const char *buf;
+    int pos;
+    int len;
+    int line;
+} gsrc;
+
+static int feed_lex(void *buf, int max_size)
+{
+    int avail = gsrc.len - gsrc.pos;
+    if (avail <= 0)
+        return YY_NULL;
+
+    int size = (avail > max_size) ? max_size : avail;
+    mem_cpy(buf, gsrc.buf + gsrc.pos, size);
+    gsrc.pos += size;
+
+    return size;
+}
+
+#define YY_INPUT(buf, result, max_size) \
+    do { result = feed_lex(buf, max_size); } while (0)
+
 %}
 
 %%
@@ -122,8 +144,8 @@ static int line = 1;
 "!"                 { return '!'; }
 "="                 { return '='; }
 
-[ \t\r\n]           { if (*yytext == '\n') line++; }
-"#".*\n             { line++; }
+[ \t\r\n]           { if (*yytext == '\n') gsrc.line++; }
+"#".*\n             { gsrc.line++; }
 .                   { yyerror("invalid character '%c'", *yytext); }
 
 %%
@@ -133,17 +155,16 @@ extern int yywrap()
     return 1;
 }
 
-extern Env *env_new(const char *file)
+extern Env *env_new(const char *path, const char *program)
 {
-    yyin = fopen(file, "r");
-    if (yyin == 0)
-        sys_die("sys: cannot open source file '%s'\n", file);
-
-    src_path = file;
+    gsrc.path = path;
+    gsrc.buf = program;
+    gsrc.len = str_len(program);
+    gsrc.pos = 0;
+    gsrc.line = 1;
 
     Env *env = grammar_init();
     yyparse();
-    fclose(yyin);
 
     /* FIXME: yylex_destroy(); */
 
@@ -153,7 +174,7 @@ extern Env *env_new(const char *file)
 extern void yyerror(const char *msg, ...)
 {
     char m[MAX_FILE_PATH + str_len(msg)];
-    str_print(m, "%s:%d: %s\n", src_path, line, msg);
+    str_print(m, "%s:%d: %s\n", gsrc.path, gsrc.line, msg);
 
     va_list ap;
 

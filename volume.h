@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,6 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-extern long long vol_init();
+extern long long vol_init(int port);
 extern TBuf *vol_read(long long id, const char *name, long version);
 extern void vol_write(long long id, TBuf *buf, const char *name, long version);

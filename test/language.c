@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -143,8 +143,14 @@ static void test_params()
 
 static void test_compat()
 {
-    Env *e1 = env_new("test/progs/env_compat_1.b");
-    Env *e2 = env_new("test/progs/env_compat_2.b");
+    const char *s1 = "test/progs/env_compat_1.b";
+    const char *s2 = "test/progs/env_compat_2.b";
+
+    char *c1 = sys_load(s1);
+    char *c2 = sys_load(s2);
+
+    Env *e1 = env_new(s1, c1);
+    Env *e2 = env_new(s2, c2);
 
     if (!env_compat(e1, e1))
         fail();
@@ -155,6 +161,8 @@ static void test_compat()
 
     env_free(e1);
     env_free(e2);
+    mem_free(c1);
+    mem_free(c2);
 }
 
 static void test_tmp_var()
@@ -215,7 +223,10 @@ int main(int argc, char *argv[])
 
         change_stderr(log);
 
-        env_new(argv[1]);
+        char *code = sys_load(argv[1]);
+        env_new(argv[1], code);
+        mem_free(code);
+
         ret = PROC_OK;
     }
 

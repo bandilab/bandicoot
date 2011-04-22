@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,10 +15,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-extern void tx_server(int *port);
+extern void tx_server(const char *source, const char *state, int *port);
 extern void tx_attach(int port);
-extern void tx_deploy(const char *new_src);
 extern Vars *tx_volume_sync(long long vol_id, Vars *in);
+extern char *tx_program();
 extern long tx_enter(Vars *rvars, Vars *wvars);
 extern void tx_commit(long sid);
 extern void tx_revert(long sid);

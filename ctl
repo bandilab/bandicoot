@@ -164,8 +164,10 @@ case $cmd in
         link $PROGS $STRUCT_TESTS $PERF_TESTS
         echo
         echo "[P] ..."
-        $BIN/bandicoot deploy -v bin/volume -s test/test_defs.b
-        $BIN/bandicoot start -v bin/volume -p $PORT &
+        $BIN/bandicoot start -source "test/test_defs.b" \
+                             -data $BIN/volume \
+                             -state $BIN/state \
+                             -listen $PORT &
         pid=$!
 
         # we need to finish the initialization

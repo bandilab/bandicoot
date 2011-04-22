@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -181,7 +181,7 @@ static Vars *sync_tx(long long id)
     return tx;
 }
 
-static void *exec_server(void *arg)
+static void *serve(void *arg)
 {
     IO *cio = NULL, *sio = (IO*) arg;
     char var[MAX_NAME];
@@ -226,11 +226,12 @@ static void *exec_cleanup(void *arg)
     return NULL;
 }
 
-extern long long vol_init()
+extern long long vol_init(int port)
 {
-    int p = 0;
-    IO *io = sys_socket(&p);
-    id = sys_address(p);
+    int standalone = port != 0;
+
+    IO *io = sys_socket(&port);
+    id = sys_address(port);
     sys_address_print(name, id);
 
     /* clean up partial files */
@@ -254,8 +255,11 @@ extern long long vol_init()
     vars_free(tx);
     vars_free(sync_tx(id)); /* let the TX know immediately about the new files */
 
-    sys_thread(exec_server, io);
     sys_thread(exec_cleanup, NULL);
+    if (standalone)
+        serve(io);
+    else
+        sys_thread(serve, io);
 
     return id;
 }

@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -48,6 +48,8 @@ static const int T_FINISH = 3; /* FIXME: it looks like we need only T_COMMIT */
 static const int R_FINISH = 4;
 static const int T_SYNC = 5;
 static const int R_SYNC = 6;
+static const int T_SOURCE = 7;
+static const int R_SOURCE = 8;
 
 /* Vol keeps information about the content of a volume */
 typedef struct {
@@ -71,10 +73,16 @@ struct List {
 };
 typedef struct List List;
 
+static struct {
+    char *buf;
+    int len;
+} gcode;
+
 static char *all_vars[MAX_VARS];
+static char gstate[MAX_FILE_PATH];
+static char gstate_bak[MAX_FILE_PATH];
 static int num_vars;
 static IO* gio;
-
 static List *gents;
 static List *gvols;
 static Mon *gmon;
@@ -349,7 +357,7 @@ extern void wstate()
     char sid[SID_LEN];
     char *buf = mem_alloc(num_vars * (MAX_NAME + SID_LEN));
 
-    sys_move(fs_state_bak, fs_state);
+    sys_move(gstate_bak, gstate);
 
     int off = 0;
     for (int i = 0; i < num_vars; ++i) {
@@ -357,13 +365,13 @@ extern void wstate()
         off += str_print(buf + off, "%s,%s\n", all_vars[i], sid);
     }
 
-    IO *io = sys_open(fs_state, CREATE | WRITE);
+    IO *io = sys_open(gstate, CREATE | WRITE);
     sys_write(io, buf, off);
     sys_close(io);
 
     mem_free(buf);
 
-    sys_remove(fs_state_bak);
+    sys_remove(gstate_bak);
 }
 
 static void finish(int sid, int final_state)
@@ -448,27 +456,39 @@ extern void tx_free()
     for (int i = 0; i < num_vars; ++i)
         mem_free(all_vars[i]);
 
+    mem_free(gcode.buf);
+
     mon_unlock(gmon);
     mon_free(gmon);
 }
 
-static void tx_init()
+static void tx_init(const char *source, const char *state)
 {
     gmon = mon_new();
     gents = NULL;
     gvols = NULL;
+    gcode.buf = sys_load(source);
+    gcode.len = str_len(gcode.buf) + 1;
+    str_cpy(gstate, state);
+    str_print(gstate_bak, "%s.backup", gstate);
 
     last_sid = 1;
     num_vars = 0;
 
-    if (sys_exists(fs_state_bak))
-        sys_move(fs_state, fs_state_bak);
+    if (sys_exists(gstate_bak))
+        sys_move(gstate, gstate_bak);
+
+    /* create the state file if it does not exist */
+    IO *io = sys_open(gstate, CREATE | WRITE);
+    sys_close(io);
+
+    mon_lock(gmon);
 
     long vers[MAX_VARS];
     char *vars[MAX_VARS];
     int len;
 
-    char *buf = sys_load(fs_state);
+    char *buf = sys_load(gstate);
     char **lines = str_split(buf, '\n', &len);
     if (str_len(lines[len - 1]) == 0)
         --len;
@@ -477,7 +497,7 @@ static void tx_init()
         int cnt;
         char **name_sid = str_split(lines[i], ',', &cnt);
         if (cnt != 2)
-            sys_die("bad line %s:%d\n", fs_state, i + 1);
+            sys_die("bad line %s:%d\n", gstate, i + 1);
 
         vars[i] = str_dup(name_sid[0]);
         vers[i] = fs_str_to_sid(name_sid[1]);
@@ -488,7 +508,6 @@ static void tx_init()
     mem_free(lines);
     mem_free(buf);
 
-    mon_lock(gmon);
     num_vars = len;
 
     for (int i = 0; i < num_vars; ++i) {
@@ -501,34 +520,14 @@ static void tx_init()
         Entry *e = add_entry(sid, all_vars[i], WRITE, sid, COMMITTED);
         mon_free(e->mon);
     }
-    mon_unlock(gmon);
-}
 
-extern void tx_deploy(const char *new_src)
-{
-    char *old_src = fs_source;
-    if (sys_empty(fs_path)) {
-        IO *io = sys_open(old_src, CREATE | WRITE);
-        sys_close(io);
+    Env *env = env_new(source, gcode.buf);
 
-        io = sys_open(fs_state, CREATE | WRITE);
-        sys_close(io);
-    } else
-        tx_init();
-
-    Env *new_env = env_new(new_src);
-    Env *old_env = env_new(old_src);
-
-    if (!env_compat(old_env, new_env))
-        sys_die("cannot deploy incompatible source file '%s'\n", new_src);
-
-    int new_len = new_env->vars.len;
-    char **new_vars = new_env->vars.names;
-
-    /* create new variables  */
-    for (int i = 0; i < new_len; ++i) {
-        char *var = str_dup(new_vars[i]);
-        int idx = array_scan(all_vars, num_vars, new_vars[i]);
+    for (int i = 0; i < env->vars.len; ++i) {
+        /* FIXME: we also need to remove vars from all_vars if they do
+                  not exist in the env */
+        char *var = str_dup(env->vars.names[i]);
+        int idx = array_scan(all_vars, num_vars, env->vars.names[i]);
         if (idx < 0) {
             all_vars[num_vars++] = var;
             Entry *e = add_entry(1, var, WRITE, 1, COMMITTED);
@@ -537,10 +536,9 @@ extern void tx_deploy(const char *new_src)
     }
 
     wstate();
-    sys_cpy(old_src, new_src);
+    mon_unlock(gmon);
 
-    env_free(new_env);
-    env_free(old_env);
+    env_free(env);
 }
 
 static Vars *volume_sync(long long vol_id, Vars *in)
@@ -592,7 +590,7 @@ extern long enter(Vars *rvars, Vars *wvars, Mon *m)
 
     /* FIXME: populate wvol_id based on an algorithm
        executor id is probably required as well for the calculation */
-    long long wvol_id = ((Vol*)gvols->elem)->id;
+    long long wvol_id = ((Vol*) gvols->elem)->id;
 
     sid = ++last_sid;
     for (i = 0; i < wvars->len; ++i) {
@@ -725,6 +723,12 @@ static void *tx_thread(void *io)
             vars_write(out, io);
 
             vars_free(out);
+        } else if (msg == T_SOURCE) {
+            msg = R_SOURCE;
+            if (sys_write(io, &msg, sizeof(int)) < 0 ||
+                sys_write(io, &gcode.len, sizeof(int)) < 0 ||
+                sys_write(io, gcode.buf, gcode.len) < 0)
+                goto exit;
         }
     }
 
@@ -748,7 +752,7 @@ exit:
     return NULL;
 }
 
-static void *server_thread(void *sio)
+static void *serve(void *sio)
 {
     for (;;) {
         IO *cio = sys_accept(sio);
@@ -759,12 +763,38 @@ static void *server_thread(void *sio)
     return NULL;
 }
 
-extern void tx_server(int *port)
+extern void tx_server(const char *source, const char *state, int *port)
 {
-    tx_init();
+    int standalone = *port != 0;
+    tx_init(source, state);
 
     IO *sio = sys_socket(port);
-    sys_thread(server_thread, sio);
+    if (standalone)
+        serve(sio);
+    else {
+        sys_thread(serve, sio);
+        tx_attach(*port);
+    }
+}
+
+extern char *tx_program()
+{
+    int msg = T_SOURCE;
+    if (sys_write(gio, &msg, sizeof(int)) < 0)
+        sys_die("T_SOURCE failed\n");
+
+    int size = 0;
+    if (sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
+        msg != R_SOURCE ||
+        sys_readn(gio, &size, sizeof(int)) != sizeof(int) ||
+        size < 0 /* FIXME: || size > MAX_CODE_SIZE */)
+        sys_die("R_ENTER failed\n");
+
+    char *code = mem_alloc(size);
+    if (sys_readn(gio, code, size) != size)
+        sys_die("R_ENTER failed to retrieve the program\n");
+
+    return code;
 }
 
 extern long tx_enter(Vars *rvars, Vars *wvars)

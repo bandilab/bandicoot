@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ typedef struct {
     } fns;
 } Env;
 
-extern Env *env_new(const char *src);
+extern Env *env_new(const char *path, const char *program);
 extern void env_free(Env *env);
 
 extern Func *env_func(Env *env, const char *name);

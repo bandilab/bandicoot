@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ limitations under the License.
 static const int fs_sid_len = 17;
 
 extern char fs_path[MAX_FILE_PATH];
-extern char fs_source[MAX_FILE_PATH];
+extern char fs_source[MAX_FILE_PATH]; /* FIXME: we should not need it anymore */
 extern char fs_state[MAX_FILE_PATH];
 extern char fs_state_bak[MAX_FILE_PATH];
 

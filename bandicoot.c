@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,10 +39,9 @@ extern const char *VERSION;
 #define PROC_WAIT_SEC 5
 
 typedef struct {
-    Env *env;
     char exe[MAX_FILE_PATH];
-    char vol[MAX_FILE_PATH];
     char txp[16];
+    Mon *lock;
 } Exec;
 
 struct {
@@ -94,8 +93,14 @@ static void *exec_thread(void *arg)
     IO *sio = sys_socket(&p);
     char port[8];
     str_print(port, "%d", p);
-    char *argv[] = {x->exe, "executor", "-v", x->vol,
-                    "-p", port, "-tx", x->txp, NULL};
+    /* FIXME: -listen argument is actually -connect */
+    char *argv[] = {x->exe, "processor", "-listen", port, "-tx", x->txp, NULL};
+
+    mon_lock(x->lock); /* TODO: make env_new reentrant */
+    char *code = tx_program();
+    Env *env = env_new("net", code);
+    mem_free(code);
+    mon_unlock(x->lock);
 
     for (;;) {
         int status = -1, pid = -1;
@@ -115,10 +120,12 @@ static void *exec_thread(void *arg)
             goto exit;
         }
 
+        /* TODO: all the checks below could move into the processor */
+
         char func[MAX_NAME];
         str_cpy(func, req->path + 1);
 
-        Func *fn = env_func(x->env, func);
+        Func *fn = env_func(env, func);
         if (fn == NULL) {
             status = http_404(cio);
             goto exit;
@@ -222,7 +229,7 @@ exit:
     }
 
     sys_close(sio);
-    env_free(x->env);
+    env_free(env);
     mem_free(x);
     mem_free(arg);
 
@@ -233,92 +240,112 @@ static void usage(char *p)
 {
     sys_print("usage: %s <command> <args>\n\n", p);
     sys_print("commands:\n");
-    sys_print("  start  -v <volume> -p <port>\n");
-    sys_print("  deploy -v <volume> -s <source.file>\n\n");
+    sys_print("  start  -listen <port> -source <file> -data <dir>"
+              " -state <file>\n");
+    sys_print("  tx     -listen <port> -source <file> -state <file>\n");
+    sys_print("  volume -listen <port> -data <dir> -tx <host:port>\n");
+    sys_print("  exec   -listen <port> -tx <host:port>\n\n");
+
     sys_die(VERSION);
+}
+
+static int parse_port(char *p)
+{
+    int port = 0, e = -1;
+    port = str_int(p, &e);
+    if (e || port < 1 || port > 65535)
+        sys_die("invalid port '%s'\n", p);
+
+    return port;
+}
+
+static void multiplex(const char *exe, int tx_port, int port)
+{
+    queue_init();
+
+    Mon *env_lock = mon_new();
+    for (int i = 0; i < THREADS; ++i) {
+        Exec *e = mem_alloc(sizeof(Exec));
+        e->lock = env_lock;
+        str_cpy(e->exe, exe);
+        str_print(e->txp, "%d", tx_port);
+
+        sys_thread(exec_thread, e);
+    }
+
+    IO *sio = sys_socket(&port);
+
+    for (;;) {
+        IO *cio = sys_accept(sio);
+        queue_put(cio);
+    }
+
+    mon_free(queue.mon);
+    mon_free(env_lock);
 }
 
 int main(int argc, char *argv[])
 {
-    int p = 0, tx_port = 0;
-    char *v = NULL, *s = NULL;
+    int port = 0;
+    int tx_port = 0;
+    char *data = NULL;
+    char *state = NULL;
+    char *source = NULL;
 
     sys_init();
     if (argc < 2)
         usage(argv[0]);
 
     for (int i = 2; (i + 1) < argc; i += 2)
-        if (str_cmp(argv[i], "-p") == 0) {
-            int e = -1;
-            p = str_int(argv[i + 1], &e);
-            if (e || p < 1 || p > 65535)
-                sys_die("invalid port '%d'\n", p);
-        } else if (str_cmp(argv[i], "-tx") == 0) {
-            int e = -1;
-            tx_port = str_int(argv[i + 1], &e);
-            if (e || tx_port < 1 || tx_port > 65535)
-                sys_die("invalid tx port '%d'\n", tx_port);
-        } else if (str_cmp(argv[i], "-v") == 0)
-            v = argv[i + 1];
-        else if (str_cmp(argv[i], "-s") == 0)
-            s = argv[i + 1];
+        if (str_cmp(argv[i], "-data") == 0)
+            data = argv[i + 1];
+        else if (str_cmp(argv[i], "-source") == 0)
+            source = argv[i + 1];
+        else if (str_cmp(argv[i], "-state") == 0)
+            state = argv[i + 1];
+        else if (str_cmp(argv[i], "-listen") == 0)
+            port = parse_port(argv[i + 1]);
+        else if (str_cmp(argv[i], "-tx") == 0)
+            tx_port = parse_port(argv[i + 1]);
         else
             usage(argv[0]);
 
-    fs_init(v);
-    if (str_cmp(argv[1], "deploy") == 0 &&
-        s != NULL && v != NULL && p == 0)
+    if (str_cmp(argv[1], "start") == 0 && source != NULL && data != NULL &&
+        state != NULL && port != 0 && tx_port == 0)
     {
-        tx_deploy(s);
-        sys_print("deployed: %s -> %s\n", s, v);
-    } else if (str_cmp(argv[1], "start") == 0 &&
-               s == NULL && v != NULL && p != 0 && tx_port == 0)
-    {
-        int tx_port = 0;
-        tx_server(&tx_port);
-        tx_attach(tx_port);
-        vol_init();
-        queue_init();
+        fs_init(data);
+        tx_server(source, state, &tx_port);
 
-        for (int i = 0; i < THREADS; ++i) {
-            Exec *e = mem_alloc(sizeof(Exec));
-            e->env = env_new(fs_source);
-            str_cpy(e->vol, v);
-            str_cpy(e->exe, argv[0]);
-            str_print(e->txp, "%d", tx_port);
+        vol_init(0);
 
-            sys_thread(exec_thread, e);
-        }
+        char time[32];
+        sys_time(time);
+        sys_print("started: %s, source=%s, data=%s, state=%s, port=%d\n--\n",
+                  time, source, data, state, port);
 
-        IO *sio = sys_socket(&p);
-
-        char tmp[32];
-        sys_time(tmp);
-        sys_print("started: %s, volume=%s, port=%d\n--\n", tmp, v, p);
-
-        for (;;) {
-            IO *cio = sys_accept(sio);
-            queue_put(cio);
-        }
+        multiplex(argv[0], tx_port, port);
 
         tx_free();
-        mon_free(queue.mon);
-    } else if (str_cmp(argv[1], "executor") == 0 &&
-               s == NULL && v != NULL && p != 0 && tx_port != 0)
+    } else if (str_cmp(argv[1], "processor") == 0 && source == NULL &&
+               data == NULL && state == NULL && port != 0 && tx_port != 0)
     {
-        Env *env = env_new(fs_source);
-        IO *io = sys_connect(sys_address(p));
+        tx_attach(tx_port);
+        char *code = tx_program();
+        Env *env = env_new("net", code);
+        mem_free(code);
+
+        IO *io = sys_connect(sys_address(port));
 
         Func *fn = NULL;
         char func[MAX_NAME];
         if (sys_readn(io, func, MAX_NAME) != MAX_NAME ||
             (fn = env_func(env, func)) == NULL)
-            sys_die("executor: failed to retrieve the function name\n");
+            sys_die("processor: failed to retrieve the function name\n");
 
         TBuf *arg = NULL;
         if (fn->p.len == 1)
             if ((arg = tbuf_read(io)) == NULL)
-                sys_die("%s: failed to retrieve the parameter\n", func);
+                sys_die("processor:%s: failed to retrieve parameters\n", func);
 
         Vars *r = vars_new(fn->r.len);
         Vars *w = vars_new(fn->w.len);
@@ -327,7 +354,6 @@ int main(int argc, char *argv[])
         for (int i = 0; i < fn->w.len; ++i)
             vars_put(w, fn->w.vars[i], 0L);
 
-        tx_attach(tx_port);
         long sid = tx_enter(r, w);
 
         for (int i = 0; i < fn->p.len; ++i)
@@ -364,6 +390,22 @@ int main(int argc, char *argv[])
         vars_free(w);
         sys_close(io);
         env_free(env);
+    } else if (str_cmp(argv[1], "tx") == 0 && source != NULL &&
+               data == NULL && state != NULL && port != 0 && tx_port == 0)
+    {
+        fs_init("bin/volume"); /* FIXME */
+        tx_server(source, state, &port);
+    } else if (str_cmp(argv[1], "volume") == 0 && source == NULL &&
+               data != NULL && state == NULL && port != 0 && tx_port != 0)
+    {
+        fs_init(data);
+        tx_attach(tx_port);
+        vol_init(port);
+    } else if (str_cmp(argv[1], "exec") == 0 && source == NULL &&
+               data == NULL && state == NULL && port != 0 && tx_port != 0)
+    {
+        tx_attach(tx_port);
+        multiplex(argv[0], tx_port, port);
     } else
         usage(argv[0]);
 

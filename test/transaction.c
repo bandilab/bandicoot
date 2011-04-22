@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -448,13 +448,16 @@ static void test_chain(Action a1)
 int main(void)
 {
     int tx_port = 0;
+    char *source = "test/test_defs.b";
 
     sys_init();
     fs_init("bin/volume");
-    tx_server(&tx_port);
-    tx_attach(tx_port);
-    vol_id = vol_init();
-    env = env_new(fs_source);
+    tx_server(source, "bin/state", &tx_port);
+    vol_id = vol_init(0);
+
+    char *code = sys_load(source);
+    env = env_new(source, code);
+    mem_free(code);
 
     gmon = mon_new();
     gmon->value = 1;

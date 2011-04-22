@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@ limitations under the License.
 
 static void perf_load_store(Env *env, int count)
 {
-    Vars *wvars = vars_new(1), *rvars = vars_new(1);
+    Vars *wvars = vars_new(1), *rvars = vars_new(1), *evars = vars_new(0);
     vars_put(rvars, "perf_rel", 0L);
     vars_put(wvars, "perf_rel", 0L);
 
     Rel *r = gen_rel(0, count);
 
-    long sid = tx_enter(rvars, wvars);
+    long sid = tx_enter(evars, wvars);
     rel_init(r, NULL, NULL);
 
     long time = sys_millis();
@@ -37,7 +37,7 @@ static void perf_load_store(Env *env, int count)
 
     Head *h = env_head(env, "perf_rel");
     r = rel_load(h, "perf_rel");
-    sid = tx_enter(rvars, wvars);
+    sid = tx_enter(rvars, evars);
 
     time = sys_millis();
     rel_init(r, rvars, NULL);
@@ -52,8 +52,9 @@ static void perf_load_store(Env *env, int count)
     rel_free(r);
     tx_commit(sid);
 
-    mem_free(wvars);
-    mem_free(rvars);
+    vars_free(wvars);
+    vars_free(rvars);
+    vars_free(evars);
 }
 
 static void perf_join(int count)
@@ -280,11 +281,14 @@ static void perf_eq(int count)
 int main()
 {
     int tx_port = 0;
+    char *source = "test/test_defs.b";
     fs_init("bin/volume");
-    tx_server(&tx_port);
-    tx_attach(tx_port);
-    vol_init();
-    Env *env = env_new(fs_source);
+    tx_server(source, "bin/state", &tx_port);
+    vol_init(0);
+
+    char *code = tx_program();
+    Env *env = env_new(source, code);
+    mem_free(code);
 
     perf_load_store(env, 1 * 1000);
     perf_load_store(env, 10 * 1000);
