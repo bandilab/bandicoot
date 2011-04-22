@@ -88,7 +88,7 @@ extern long parse(const char *file, char *rel)
     return sid;
 }
 
-static TBuf *read(const char *var, long ver)
+static TBuf *read_file(const char *var, long ver)
 {
     char file[MAX_FILE_PATH];
     fpath(file, var, ver, 0);
@@ -123,29 +123,63 @@ static int read_var(IO *io, char *var, long *ver)
     return 1;
 }
 
+static TBuf *read_net(long long id, const char *name, long version)
+{
+    TBuf *res = NULL;
+
+    char var[MAX_NAME] = "";
+    str_cpy(var, name);
+
+    IO *io = sys_try_connect(id);
+    if (io == NULL)
+        goto failure;
+
+    if (sys_write(io, &T_READ, sizeof(int)) < 0 ||
+        sys_write(io, var, sizeof(var)) < 0 ||
+        sys_write(io, &version, sizeof(version)) < 0)
+        goto failure;    
+
+    res = tbuf_read(io);
+    if (res == NULL)
+        goto failure;
+
+    /* confirmation of the full read */
+    int msg = 0;
+    if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) || msg != R_READ)
+        goto failure;
+
+    return res;
+
+failure:
+    if (io != NULL)
+        sys_close(io);
+    if (res != NULL)
+        tbuf_free(res);
+
+    return NULL;
+}
+
 static void copy_file(char *var, long ver, long long vol)
 {
-    char file[MAX_FILE_PATH];
+    char file[MAX_FILE_PATH], src[32];
     fpath(file, var, ver, 0);
+    sys_address_print(src, vol);
 
     if (ver <= 1 || vol == id || sys_exists(file))
         return;
 
-    if (vol == 0) {
-        sys_print("volume: %s, file copy '%s-%016X' failed\n", name, var, ver);
+    TBuf *buf = NULL;
+    if (vol == 0 || (buf = read_net(vol, var, ver)) == NULL) {
+        sys_print("volume: %s, file copy '%s-%016X' from %s failed\n",
+                  name, var, ver, src);
         return;
     }
 
-    /* FIXME: this dies if read fails */
-    TBuf *buf = vol_read(vol, var, ver);
-    /* FIXME: this write can fail as might alread have this file
-              it can happen where the sync is behind the commit, i.e. the
-              variables passed intot the tx_volume_sync are not up to date and
-              there are newer files on the disk */
     write(var, ver, buf);
     tbuf_free(buf);
 
-    sys_print("volume: %s, file copy '%s-%016X' succeeded\n", name, var, ver);
+    sys_print("volume: %s, file copy '%s-%016X' from %s succeeded\n",
+              name, var, ver, src);
 }
 
 static Vars *sync_tx(long long id)
@@ -183,6 +217,10 @@ static Vars *sync_tx(long long id)
 
 static void *serve(void *arg)
 {
+    char tmp[32];
+    sys_time(tmp);
+    sys_print("volume: started, %s, id=%s\n", tmp, name);
+
     IO *cio = NULL, *sio = (IO*) arg;
     char var[MAX_NAME];
     long ver;
@@ -193,7 +231,7 @@ static void *serve(void *arg)
         int msg = 0;
         if (sys_readn(cio, &msg, sizeof(int)) == sizeof(int)) {
             if (msg == T_READ && read_var(cio, var, &ver)) {
-                TBuf *buf = read(var, ver);
+                TBuf *buf = read_file(var, ver);
                 if (buf != NULL) {
                     tbuf_write(buf, cio);
                     tbuf_free(buf);
@@ -266,26 +304,11 @@ extern long long vol_init(int port)
 
 extern TBuf *vol_read(long long id, const char *name, long version)
 {
-    char var[MAX_NAME] = "";
-    str_cpy(var, name);
-
-    IO *io = sys_connect(id);
-
-    if (sys_write(io, &T_READ, sizeof(int)) < 0 ||
-        sys_write(io, var, sizeof(var)) < 0 ||
-        sys_write(io, &version, sizeof(version)) < 0)
-        sys_die("volume: read failed to send '%s-%llu'\n", name, version);
-
-    TBuf *res = tbuf_read(io);
+    TBuf *res = NULL;
+    res = read_net(id, name, version);
     if (res == NULL)
-        sys_die("volume: read failed for '%s-%llu'\n", name, version);
+        sys_die("volume: read failed %s-%016X'\n", name, version);
 
-    /* confirmation of the full read */
-    int msg = 0;
-    if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) || msg != R_READ)
-        sys_die("volume: read failed to confirm '%s-%llu'\n", name, version);
-
-    sys_close(io);
     return res;
 }
 

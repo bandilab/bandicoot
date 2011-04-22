@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ extern void sys_sleep(int secs)
 extern void sys_thread(void *(*fn)(void *arg), void *arg)
 {
     pthread_t t;
-    if (pthread_create(&t, 0, fn, arg) != 0)
+    if (pthread_create(&t, NULL, fn, arg) != 0)
         sys_die("sys: cannot create a thread\n");
 
     if (pthread_detach(t) != 0)
@@ -111,11 +111,11 @@ extern int net_open()
 {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0)
-        sys_die("sys: cannot create a socket\n");
+        return -1;
 
     int on = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
-        sys_die("sys: cannot setsockopt(SO_REUSEADDR)\n");
+        return -1;
 
     return fd;
 }

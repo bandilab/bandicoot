@@ -41,7 +41,7 @@ extern const char *VERSION;
 typedef struct {
     char exe[MAX_FILE_PATH];
     char txp[16];
-    Mon *lock;
+    Env *env;
 } Exec;
 
 struct {
@@ -96,12 +96,6 @@ static void *exec_thread(void *arg)
     /* FIXME: -listen argument is actually -connect */
     char *argv[] = {x->exe, "processor", "-listen", port, "-tx", x->txp, NULL};
 
-    mon_lock(x->lock); /* TODO: make env_new reentrant */
-    char *code = tx_program();
-    Env *env = env_new("net", code);
-    mem_free(code);
-    mon_unlock(x->lock);
-
     for (;;) {
         int status = -1, pid = -1;
         IO *cio = queue_get();
@@ -125,7 +119,7 @@ static void *exec_thread(void *arg)
         char func[MAX_NAME];
         str_cpy(func, req->path + 1);
 
-        Func *fn = env_func(env, func);
+        Func *fn = env_func(x->env, func);
         if (fn == NULL) {
             status = http_404(cio);
             goto exit;
@@ -229,7 +223,7 @@ exit:
     }
 
     sys_close(sio);
-    env_free(env);
+    env_free(x->env);
     mem_free(x);
     mem_free(arg);
 
@@ -263,15 +257,16 @@ static void multiplex(const char *exe, int tx_port, int port)
 {
     queue_init();
 
-    Mon *env_lock = mon_new();
+    char *code = tx_program();
     for (int i = 0; i < THREADS; ++i) {
         Exec *e = mem_alloc(sizeof(Exec));
-        e->lock = env_lock;
+        e->env = env_new("net", code);
         str_cpy(e->exe, exe);
         str_print(e->txp, "%d", tx_port);
 
         sys_thread(exec_thread, e);
     }
+    mem_free(code);
 
     IO *sio = sys_socket(&port);
 
@@ -281,7 +276,6 @@ static void multiplex(const char *exe, int tx_port, int port)
     }
 
     mon_free(queue.mon);
-    mon_free(env_lock);
 }
 
 int main(int argc, char *argv[])

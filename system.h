@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ extern long long sys_address(int port);
 extern IO *sys_socket(int *port);
 extern IO *sys_accept(IO *socket);
 extern IO *sys_connect(long long id);
+extern IO *sys_try_connect(long long id);
 extern int sys_iready(IO *io, int millis);
 
 /* misc */

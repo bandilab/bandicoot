@@ -51,6 +51,8 @@ static const int R_SYNC = 6;
 static const int T_SOURCE = 7;
 static const int R_SOURCE = 8;
 
+static char name[32];
+
 /* Vol keeps information about the content of a volume */
 typedef struct {
     long long id;
@@ -706,8 +708,6 @@ static void *tx_thread(void *io)
                 sys_write(io, &final_state, sizeof(int)) < 0)
                 goto exit;
         } else if (msg == T_SYNC) {
-            /* FIXME: if the sync fails we need to remove the volume from
-                      the list */
             if (sys_readn(io, &vid, sizeof(long long)) != sizeof(long long))
                 goto exit;
 
@@ -718,11 +718,13 @@ static void *tx_thread(void *io)
             Vars *out = volume_sync(vid, in);
             msg = R_SYNC;
 
-            /* we can ignore io errors while responding to volume sync */
-            sys_write(io, &msg, sizeof(int));
-            vars_write(out, io);
-
+            if (sys_write(io, &msg, sizeof(int)) < 0)
+                goto exit;
+            
+            int res = vars_write(out, io);
             vars_free(out);
+            if (res < 0)
+                goto exit;
         } else if (msg == T_SOURCE) {
             msg = R_SOURCE;
             if (sys_write(io, &msg, sizeof(int)) < 0 ||
@@ -754,6 +756,9 @@ exit:
 
 static void *serve(void *sio)
 {
+    char tmp[32];
+    sys_time(tmp);
+    sys_print("tx: started, %s, id=%s\n", tmp, name);
     for (;;) {
         IO *cio = sys_accept(sio);
         sys_thread(tx_thread, cio);
@@ -769,6 +774,7 @@ extern void tx_server(const char *source, const char *state, int *port)
     tx_init(source, state);
 
     IO *sio = sys_socket(port);
+    sys_address_print(name, sys_address(*port));
     if (standalone)
         serve(sio);
     else {

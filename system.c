@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -153,6 +153,7 @@ static long long _sys_address(int port)
     if ((info = gethostbyname(host)) == NULL)
         sys_die("sys: cannot lookup the host info\n");
 
+    /* FIXME: we don't know what it returns, could be 127.0.0.1 as well */
     struct in_addr *addr = (struct in_addr*) *info->h_addr_list;
     long long res = ((long long) addr->s_addr << 16) | htons(port);
 
@@ -171,6 +172,8 @@ static struct sockaddr_in sys_address_dec(long long address)
 extern IO *sys_socket(int *port)
 {
     int sfd = net_open();
+    if (sfd < 0)
+        sys_die("sys: cannot create a socket for port %d\n", *port);
 
     struct sockaddr_in addr;
     unsigned int size = sizeof(addr);
@@ -199,17 +202,32 @@ extern IO *sys_accept(IO *sock)
     return new_io(fd, net_read, net_write, net_close);
 }
 
-extern IO *sys_connect(long long address)
+static IO *_sys_connect(struct sockaddr_in addr)
 {
+    IO *res = NULL;
     int fd = net_open();
 
-    struct sockaddr_in addr = sys_address_dec(address);
+    int sz = sizeof(addr);
 
-    if (connect(fd, (struct sockaddr*) &addr, sizeof(addr)) == -1)
+    if (fd >= 0 && connect(fd, (struct sockaddr*) &addr, sz) != -1)
+        res = new_io(fd, net_read, net_write, net_close);
+
+    return res;
+}
+
+extern IO *sys_connect(long long address) {
+    struct sockaddr_in addr = sys_address_dec(address);
+    IO *res = _sys_connect(addr);
+    if (res == NULL)
         sys_die("sys: cannot connect to %s:%d\n",
                 inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 
-    return new_io(fd, net_read, net_write, net_close);
+    return res;
+}
+
+extern IO *sys_try_connect(long long address) {
+    struct sockaddr_in addr = sys_address_dec(address);
+    return _sys_connect(addr);
 }
 
 extern int sys_exists(const char *path)
