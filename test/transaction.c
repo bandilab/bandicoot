@@ -451,9 +451,8 @@ int main(void)
     char *source = "test/test_defs.b";
 
     sys_init();
-    fs_init("bin/volume");
     tx_server(source, "bin/state", &tx_port);
-    vol_id = vol_init(0);
+    vol_id = vol_init(0, "bin/volume");
 
     char *code = sys_load(source);
     env = env_new(source, code);

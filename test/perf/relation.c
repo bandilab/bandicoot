@@ -280,11 +280,12 @@ static void perf_eq(int count)
 
 int main()
 {
+    sys_init();
+
     int tx_port = 0;
     char *source = "test/test_defs.b";
-    fs_init("bin/volume");
     tx_server(source, "bin/state", &tx_port);
-    vol_init(0);
+    vol_init(0, "bin/volume");
 
     char *code = tx_program();
     Env *env = env_new(source, code);

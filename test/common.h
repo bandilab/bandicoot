@@ -21,7 +21,6 @@ limitations under the License.
 #include "../string.h"
 #include "../number.h"
 #include "../system.h"
-#include "../fs.h"
 #include "../head.h"
 #include "../value.h"
 #include "../tuple.h"

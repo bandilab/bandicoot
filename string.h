@@ -15,6 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+extern void str_init(); /* required to initialized STR_TO_SID array */
+
 extern int str_len(const char *s);
 extern int str_cmp(const char *l, const char *r);
 extern int str_cpy(char *dest, const char *src);
@@ -34,3 +36,5 @@ extern char **str_split(char *s, char delim, int *parts);
 extern double str_real(const char *s, int *error);
 extern long long str_long(const char *s, int *error);
 extern unsigned long long str_ulong(const char *s, int *error);
+extern int str_from_sid(char *dest, long sid);
+extern long str_to_sid(char *str);

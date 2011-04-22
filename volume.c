@@ -21,7 +21,6 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 #include "number.h"
-#include "fs.h"
 #include "head.h"
 #include "value.h"
 #include "tuple.h"
@@ -29,8 +28,11 @@ limitations under the License.
 #include "summary.h"
 #include "relation.h"
 #include "transaction.h"
+#include "environment.h"
 
 #include "volume.h"
+
+char path[MAX_FILE_PATH];
 
 const int SUFFIX_LEN = 5;
 const char *SUFFIX = ".part";
@@ -43,13 +45,13 @@ static const int R_WRITE = 4;
 static char name[32];
 static long long id;
 
-static void fpath(char *res, const char *var, long sid, int part)
+static void set_path(char *res, const char *var, long sid, int part)
 {
-    res += str_cpy(res, fs_path);
+    res += str_cpy(res, path);
     res += str_cpy(res, "/");
     res += str_cpy(res, var);
     res += str_cpy(res, "-");
-    res += fs_sid_to_str(res, sid);
+    res += str_from_sid(res, sid);
     if (part)
         str_cpy(res, SUFFIX);
 }
@@ -57,9 +59,7 @@ static void fpath(char *res, const char *var, long sid, int part)
 static void vol_remove(const char *name)
 {
     char file[MAX_FILE_PATH], *f = file;
-    f += str_cpy(f, fs_path);
-    f += str_cpy(f, "/");
-    f += str_cpy(f, name);
+    str_print(f, "%s%s%s", path, "/", name);
     sys_remove(file);
 }
 
@@ -82,7 +82,7 @@ extern long parse(const char *file, char *rel)
         mem_cpy(rel, file, i);
         rel[i++] = '\0';
 
-        sid = fs_str_to_sid((char*) file + i);
+        sid = str_to_sid((char*) file + i);
     }
 
     return sid;
@@ -91,7 +91,7 @@ extern long parse(const char *file, char *rel)
 static TBuf *read_file(const char *var, long ver)
 {
     char file[MAX_FILE_PATH];
-    fpath(file, var, ver, 0);
+    set_path(file, var, ver, 0);
 
     IO *fio = sys_open(file, READ);
     TBuf *buf = tbuf_read(fio);
@@ -103,8 +103,8 @@ static TBuf *read_file(const char *var, long ver)
 static void write(const char *var, long ver, TBuf *buf)
 {
     char part[MAX_FILE_PATH], file[MAX_FILE_PATH];
-    fpath(part, var, ver, 1);
-    fpath(file, var, ver, 0);
+    set_path(part, var, ver, 1);
+    set_path(file, var, ver, 0);
 
     IO *fio = sys_open(part, CREATE | WRITE);
     tbuf_write(buf, fio);
@@ -162,7 +162,7 @@ failure:
 static void copy_file(char *var, long ver, long long vol)
 {
     char file[MAX_FILE_PATH], src[32];
-    fpath(file, var, ver, 0);
+    set_path(file, var, ver, 0);
     sys_address_print(src, vol);
 
     if (ver <= 1 || vol == id || sys_exists(file))
@@ -188,7 +188,7 @@ static Vars *sync_tx(long long id)
 
     /* init the disk state variable */
     int num_files;
-    char **files = sys_list(fs_path, &num_files);
+    char **files = sys_list(path, &num_files);
     for (int i = 0; i < num_files; ++i) {
         char var[MAX_NAME] = "";
         long ver = parse(files[i], var);
@@ -203,7 +203,7 @@ static Vars *sync_tx(long long id)
     char file[MAX_FILE_PATH];
     for (int i = 0; i < disk->len; ++i)
         if (vars_scan(tx, disk->vars[i], disk->vers[i]) < 0) {
-            fpath(file, disk->vars[i], disk->vers[i], 0);
+            set_path(file, disk->vars[i], disk->vers[i], 0);
             sys_remove(file);
         }
 
@@ -264,8 +264,43 @@ static void *exec_cleanup(void *arg)
     return NULL;
 }
 
-extern long long vol_init(int port)
+static void env_check()
 {
+    char source[MAX_FILE_PATH];
+    str_print(source, "%s/.source", path);
+
+    /* touch the file */
+    IO *io = sys_open(source, CREATE | WRITE);
+    sys_close(io);
+
+    char *old_buf = sys_load(source), *new_buf = tx_program();
+    Env *old = env_new(source, old_buf), *new = env_new("net", new_buf);
+
+    if (!env_compat(old, new))
+        sys_die("volume: incompatible volume with the tx\n");
+
+    io = sys_open(source, CREATE | WRITE);
+    sys_write(io, new_buf, str_len(new_buf));
+    sys_close(io);
+
+    env_free(old);
+    env_free(new);
+
+    mem_free(old_buf);
+    mem_free(new_buf);
+}
+
+extern long long vol_init(int port, const char *p)
+{
+    if (str_len(p) > MAX_FILE_PATH)
+        sys_die("volume: path '%s' is too long\n", p);
+
+    int plen = str_cpy(path, p) - 1;
+    for (; plen > 0 && path[plen] == '/'; --plen)
+        path[plen] = '\0';
+
+    env_check();
+
     int standalone = port != 0;
 
     IO *io = sys_socket(&port);
@@ -274,7 +309,7 @@ extern long long vol_init(int port)
 
     /* clean up partial files */
     int num_files;
-    char **files = sys_list(fs_path, &num_files);
+    char **files = sys_list(path, &num_files);
     for (int i = 0; i < num_files; ++i)
         if (is_partial(files[i]))
             vol_remove(files[i]);
@@ -315,7 +350,7 @@ extern TBuf *vol_read(long long id, const char *name, long version)
 extern void vol_write(long long id, TBuf *buf, const char *name, long version)
 {
     char var[MAX_NAME] = "", sid[MAX_NAME] = "";
-    fs_sid_to_str(sid, version);
+    str_from_sid(sid, version);
     str_cpy(var, name);
 
     IO *io = sys_connect(id);

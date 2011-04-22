@@ -12,7 +12,7 @@ CC="gcc -g -std=c99 $WARN $YACC_FLAGS"
 YACC="yacc -d"
 LEX="flex -I"
 
-LIBS="array% expression% fs% head% http% index% memory% pack% relation%"
+LIBS="array% expression% head% http% index% memory% pack% relation%"
 LIBS="$LIBS string% summary% tuple% transaction% value% version% volume%"
 LIBS="$LIBS test/common% lex.yy% y.tab%"
 STRUCT_TESTS="test/array% test/expression% test/head% test/http% test/index%"

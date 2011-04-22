@@ -38,6 +38,7 @@ limitations under the License.
 extern void sys_init()
 {
     SetLastError(0);
+    str_init();
 }
 
 extern void sys_die(const char *msg, ...)

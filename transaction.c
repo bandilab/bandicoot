@@ -20,7 +20,6 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 #include "system.h"
-#include "fs.h"
 #include "head.h"
 #include "value.h"
 #include "tuple.h"
@@ -355,15 +354,14 @@ extern void wstate()
     long vers[num_vars];
     current_state(vers);
 
-    int SID_LEN = fs_sid_len;
-    char sid[SID_LEN];
-    char *buf = mem_alloc(num_vars * (MAX_NAME + SID_LEN));
+    char sid[MAX_NAME];
+    char *buf = mem_alloc(num_vars * (MAX_NAME + MAX_NAME));
 
     sys_move(gstate_bak, gstate);
 
     int off = 0;
     for (int i = 0; i < num_vars; ++i) {
-        fs_sid_to_str(sid, vers[i]);
+        str_from_sid(sid, vers[i]);
         off += str_print(buf + off, "%s,%s\n", all_vars[i], sid);
     }
 
@@ -502,7 +500,7 @@ static void tx_init(const char *source, const char *state)
             sys_die("bad line %s:%d\n", gstate, i + 1);
 
         vars[i] = str_dup(name_sid[0]);
-        vers[i] = fs_str_to_sid(name_sid[1]);
+        vers[i] = str_to_sid(name_sid[1]);
 
         mem_free(name_sid);
     }

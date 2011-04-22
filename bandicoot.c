@@ -19,7 +19,6 @@ limitations under the License.
 #include "system.h"
 #include "memory.h"
 #include "string.h"
-#include "fs.h"
 #include "head.h"
 #include "http.h"
 #include "value.h"
@@ -307,10 +306,9 @@ int main(int argc, char *argv[])
     if (str_cmp(argv[1], "start") == 0 && source != NULL && data != NULL &&
         state != NULL && port != 0 && tx_port == 0)
     {
-        fs_init(data);
         tx_server(source, state, &tx_port);
 
-        vol_init(0);
+        vol_init(0, data);
 
         char time[32];
         sys_time(time);
@@ -387,14 +385,12 @@ int main(int argc, char *argv[])
     } else if (str_cmp(argv[1], "tx") == 0 && source != NULL &&
                data == NULL && state != NULL && port != 0 && tx_port == 0)
     {
-        fs_init("bin/volume"); /* FIXME */
         tx_server(source, state, &port);
     } else if (str_cmp(argv[1], "volume") == 0 && source == NULL &&
                data != NULL && state == NULL && port != 0 && tx_port != 0)
     {
-        fs_init(data);
         tx_attach(tx_port);
-        vol_init(port);
+        vol_init(port, data);
     } else if (str_cmp(argv[1], "exec") == 0 && source == NULL &&
                data == NULL && state == NULL && port != 0 && tx_port != 0)
     {

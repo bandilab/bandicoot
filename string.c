@@ -23,6 +23,21 @@ limitations under the License.
 #include <stdarg.h>
 #include <string.h>
 
+static char SID_TO_STR[] = {
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+static char STR_TO_SID[127];
+
+extern void str_init()
+{
+    for (int i = '0'; i <= '9'; ++i)
+        STR_TO_SID[i] = i - '0';
+    for (int i = 'A'; i <= 'F'; ++i)
+        STR_TO_SID[i] = i - 'A' + 10;
+    for (int i = 'a'; i <= 'f'; ++i)
+        STR_TO_SID[i] = i - 'a' + 10;
+}
+
 extern int str_len(const char *s)
 {
     return strlen(s);
@@ -205,3 +220,42 @@ extern char **str_split(char *buf, char delim, int *parts)
 
     return res;
 }
+
+extern long str_to_sid(char *str)
+{
+#ifdef LP64
+    int i = 0, shift = 60;
+#else
+    int i = 8, shift = 28;
+#endif
+
+    long sid = 0;
+    while (shift >= 0) {
+        sid = sid | (STR_TO_SID[(int) str[i++]] & 0x0F) << shift;
+        shift -= 4;
+    }
+
+    return sid;
+}
+
+extern int str_from_sid(char *dest, long sid)
+{
+#ifdef LP64
+    int i = 0, shift = 60;
+#else
+    int i = 0, shift = 28;
+
+    while (i < 8)
+        dest[i++] = SID_TO_STR[0];
+#endif
+
+    while (shift >= 0) {
+        dest[i++] = SID_TO_STR[(sid >> shift) & 0x0F];
+        shift -= 4;
+    }
+
+    dest[i] = '\0';
+
+    return i;
+}
+

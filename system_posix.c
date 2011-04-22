@@ -46,6 +46,7 @@ limitations under the License.
 extern void sys_init()
 {
     signal(SIGPIPE, SIG_IGN);
+    str_init();
 }
 
 extern void sys_die(const char *msg, ...)
