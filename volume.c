@@ -124,6 +124,7 @@ static int read_var(IO *io, char *var, long *ver)
 
 static TBuf *read_net(const char *vid, const char *name, long version)
 {
+    int failed = 0;
     TBuf *res = NULL;
 
     char var[MAX_NAME] = "";
@@ -131,31 +132,31 @@ static TBuf *read_net(const char *vid, const char *name, long version)
 
     IO *io = sys_try_connect(vid);
     if (io == NULL)
-        goto failure;
+        goto exit;
 
     if (sys_write(io, &T_READ, sizeof(int)) < 0 ||
         sys_write(io, var, sizeof(var)) < 0 ||
         sys_write(io, &version, sizeof(version)) < 0)
-        goto failure;    
+        goto exit;    
 
     res = tbuf_read(io);
     if (res == NULL)
-        goto failure;
+        goto exit;
 
     /* confirmation of the full read */
     int msg = 0;
     if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) || msg != R_READ)
-        goto failure;
+        failed = 1;
 
-    return res;
-
-failure:
+exit:
     if (io != NULL)
         sys_close(io);
-    if (res != NULL)
+    if (failed && res != NULL) {
         tbuf_free(res);
+        res = NULL;
+    }
 
-    return NULL;
+    return res;
 }
 
 static void copy_file(char *var, long ver, const char *vid)

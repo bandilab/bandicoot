@@ -39,7 +39,7 @@ extern const char *VERSION;
 
 typedef struct {
     char exe[MAX_FILE_PATH];
-    char txp[16];
+    char tx[MAX_ADDR];
     Env *env;
 } Exec;
 
@@ -92,7 +92,7 @@ static void *exec_thread(void *arg)
     IO *sio = sys_socket(&p);
     char port[8];
     str_print(port, "%d", p);
-    char *argv[] = {x->exe, "processor", "-p", port, "-t", x->txp, NULL};
+    char *argv[] = {x->exe, "processor", "-p", port, "-t", x->tx, NULL};
 
     for (;;) {
         int status = -1, pid = -1;
@@ -263,7 +263,7 @@ static void multiplex(const char *exe, const char *tx_addr, int port)
         Exec *e = mem_alloc(sizeof(Exec));
         e->env = env_new("net", code);
         str_cpy(e->exe, exe);
-        str_cpy(e->txp, tx_addr);
+        str_cpy(e->tx, tx_addr);
 
         sys_thread(exec_thread, e);
     }
@@ -302,9 +302,11 @@ int main(int argc, char *argv[])
             state = argv[i + 1];
         else if (str_cmp(argv[i], "-p") == 0)
             port = parse_port(argv[i + 1]);
-        else if (str_cmp(argv[i], "-t") == 0)
+        else if (str_cmp(argv[i], "-t") == 0) {
             tx_addr = argv[i + 1];
-        else
+            if (str_len(tx_addr) >= MAX_ADDR)
+                sys_die("tx address exceeds the maximum length\n");
+        } else
             usage(argv[0]);
 
     if (str_cmp(argv[1], "start") == 0 && source != NULL && data != NULL &&
