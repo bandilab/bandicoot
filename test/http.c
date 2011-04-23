@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ int main()
     */
 
     int p = 0;
-    sys_init();
+    sys_init(0);
     IO *bad_io = sys_socket(&p);
 
     if (http_200(bad_io) != -200)

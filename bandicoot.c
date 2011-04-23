@@ -92,8 +92,7 @@ static void *exec_thread(void *arg)
     IO *sio = sys_socket(&p);
     char port[8];
     str_print(port, "%d", p);
-    /* FIXME: -listen argument is actually -connect */
-    char *argv[] = {x->exe, "processor", "-listen", port, "-tx", x->txp, NULL};
+    char *argv[] = {x->exe, "processor", "-p", port, "-t", x->txp, NULL};
 
     for (;;) {
         int status = -1, pid = -1;
@@ -168,6 +167,9 @@ static void *exec_thread(void *arg)
             param = NULL;
         }
 
+        if (sys_readn(pio, &sid, sizeof(long)) != sizeof(long))
+            goto exit;
+
         if (fn->ret != NULL) {
             ret = tbuf_read(pio);
             if (ret == NULL) {
@@ -196,13 +198,12 @@ static void *exec_thread(void *arg)
         status = http_chunk(cio, NULL, 0);
 
 exit:
-        /* FIXME: get the sid so that we do not print 0s */
-        sys_print("[%016X] method '%c', path '%s', time %dms - %3d\n",
-                  sid,
-                  (req == NULL) ? '?' : req->method,
-                  (req == NULL) ? "malformed" : req->path,
-                  sys_millis() - time,
-                  status);
+        sys_log('E', "%016X method %c, path %s, time %dms - %3d\n",
+                     sid,
+                     (req == NULL) ? '?' : req->method,
+                     (req == NULL) ? "malformed" : req->path,
+                     sys_millis() - time,
+                     status);
 
         if (ret != NULL) {
             tbuf_clean(ret);
@@ -232,12 +233,13 @@ exit:
 static void usage(char *p)
 {
     sys_print("usage: %s <command> <args>\n\n", p);
-    sys_print("commands:\n");
-    sys_print("  start  -listen <port> -source <file> -data <dir>"
-              " -state <file>\n");
-    sys_print("  tx     -listen <port> -source <file> -state <file>\n");
-    sys_print("  volume -listen <port> -data <dir> -tx <host:port>\n");
-    sys_print("  exec   -listen <port> -tx <host:port>\n\n");
+    sys_print("standalone commands:\n");
+    sys_print("  start -p <port> -d <data.dir> -c <source.file>"
+              " -s <state.file>\n\n");
+    sys_print("distributed commands:\n");
+    sys_print("  tx    -p <port> -c <source.file> -s <state.file>\n");
+    sys_print("  vol   -p <port> -d <data.dir> -t <tx.host:port>\n");
+    sys_print("  exec  -p <port> -t <tx.host:port>\n\n");
 
     sys_die(VERSION);
 }
@@ -269,6 +271,8 @@ static void multiplex(const char *exe, const char *tx_addr, int port)
 
     IO *sio = sys_socket(&port);
 
+    sys_log('E', "started port=%d, tx=%s\n", port, tx_addr);
+
     for (;;) {
         IO *cio = sys_accept(sio);
         queue_put(cio);
@@ -285,20 +289,20 @@ int main(int argc, char *argv[])
     char *source = NULL;
     char *tx_addr = NULL;
 
-    sys_init();
+    sys_init(1);
     if (argc < 2)
         usage(argv[0]);
 
     for (int i = 2; (i + 1) < argc; i += 2)
-        if (str_cmp(argv[i], "-data") == 0)
+        if (str_cmp(argv[i], "-d") == 0)
             data = argv[i + 1];
-        else if (str_cmp(argv[i], "-source") == 0)
+        else if (str_cmp(argv[i], "-c") == 0)
             source = argv[i + 1];
-        else if (str_cmp(argv[i], "-state") == 0)
+        else if (str_cmp(argv[i], "-s") == 0)
             state = argv[i + 1];
-        else if (str_cmp(argv[i], "-listen") == 0)
+        else if (str_cmp(argv[i], "-p") == 0)
             port = parse_port(argv[i + 1]);
-        else if (str_cmp(argv[i], "-tx") == 0)
+        else if (str_cmp(argv[i], "-t") == 0)
             tx_addr = argv[i + 1];
         else
             usage(argv[0]);
@@ -308,13 +312,7 @@ int main(int argc, char *argv[])
     {
         int tx_port = 0;
         tx_server(source, state, &tx_port);
-
         vol_init(0, data);
-
-        char time[32];
-        sys_time(time);
-        sys_print("started: %s, source=%s, data=%s, state=%s, port=%d\n--\n",
-                  time, source, data, state, port);
 
         char addr[MAX_ADDR];
         str_print(addr, "127.0.0.1:%d", tx_port);
@@ -352,6 +350,9 @@ int main(int argc, char *argv[])
             vars_put(w, fn->w.vars[i], 0L);
 
         long sid = tx_enter(r, w);
+
+        if (sys_write(io, &sid, sizeof(long)) < 0)
+            sys_die("%s: failed to transmit\n", func);
 
         for (int i = 0; i < fn->p.len; ++i)
             rel_init(fn->p.rels[i], r, arg);
@@ -391,7 +392,7 @@ int main(int argc, char *argv[])
                data == NULL && state != NULL && port != 0 && tx_addr == NULL)
     {
         tx_server(source, state, &port);
-    } else if (str_cmp(argv[1], "volume") == 0 && source == NULL &&
+    } else if (str_cmp(argv[1], "vol") == 0 && source == NULL &&
                data != NULL && state == NULL && port != 0 && tx_addr != NULL)
     {
         tx_attach(tx_addr);

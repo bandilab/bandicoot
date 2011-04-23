@@ -554,8 +554,7 @@ static Vars *volume_sync(const char *vid, Vars *in)
 
     mon_unlock(gmon);
 
-    sys_print("tx: volume sync done\n");
-
+    sys_log('T', "volume %s sync called\n", vid);
     return out;
 }
 
@@ -692,6 +691,7 @@ static void *tx_thread(void *io)
 
             /* TODO: what if sid does not exist? */
             finish(sid, final_state);
+            long s = sid;
             sid = 0; /* at this point we cannot revert anymore */
 
             /* FIXME: we can commit and then fail to notify the client */
@@ -699,6 +699,8 @@ static void *tx_thread(void *io)
             if (sys_write(io, &msg, sizeof(int)) < 0 ||
                 sys_write(io, &final_state, sizeof(int)) < 0)
                 goto exit;
+
+            sys_log('T', "%016X finished\n", s);
         } else if (msg == T_SYNC) {
             if (sys_readn(io, vid, MAX_ADDR) != MAX_ADDR)
                 goto exit;
@@ -728,7 +730,7 @@ static void *tx_thread(void *io)
 
 exit:
     if (sid != 0) {
-        sys_print("tx: transaction %016X failed\n", sid);
+        sys_log('T', "transaction %016X failed\n", sid);
         finish(sid, REVERTED);
     }
 
@@ -737,8 +739,7 @@ exit:
         rm(&gvols, vid, rm_volume);
         mon_unlock(gmon);
 
-        char vol[32];
-        sys_print("tx: volume %s disconnected\n", vol);
+        sys_log('T', "volume %s disconnected\n", vid);
     }
 
     sys_close(io);
@@ -763,9 +764,8 @@ extern void tx_server(const char *source, const char *state, int *port)
 
     IO *sio = sys_socket(port);
 
-    char time[32];
-    sys_time(time);
-    sys_print("tx: started: %s, port=%d\n", time, *port);
+    sys_log('T', "started source=%s, state=%s, port=%d\n", 
+                 source, state, *port);
 
     if (standalone)
         serve(sio);

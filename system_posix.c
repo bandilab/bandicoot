@@ -46,10 +46,11 @@ limitations under the License.
 
 #include "system.c"
 
-extern void sys_init()
+extern void sys_init(int log)
 {
     signal(SIGPIPE, SIG_IGN);
     str_init();
+    glog = log;
 }
 
 extern void sys_die(const char *msg, ...)

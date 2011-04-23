@@ -35,10 +35,11 @@ limitations under the License.
 
 #include "system.c"
 
-extern void sys_init()
+extern void sys_init(int log)
 {
     SetLastError(0);
     str_init();
+    glog = log;
 
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data))

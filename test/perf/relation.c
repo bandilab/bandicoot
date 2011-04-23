@@ -280,7 +280,7 @@ static void perf_eq(int count)
 
 int main()
 {
-    sys_init();
+    sys_init(0);
 
     int tx_port = 0;
     char *source = "test/test_defs.b";

@@ -19,7 +19,7 @@ limitations under the License.
 
 int main(int argc, char *argv[])
 {
-    sys_init();
+    sys_init(0);
 
     if (argc == 1) {
         int p = 0;

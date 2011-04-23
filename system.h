@@ -16,7 +16,7 @@ limitations under the License.
 */
 
 /* system initialisation: signal disposition, errno etc. */
-extern void sys_init();
+extern void sys_init(int log);
 
 /* input/output */
 struct IO {
@@ -66,6 +66,7 @@ extern int sys_iready(IO *io, int millis);
 
 /* misc */
 extern void sys_print(const char *msg, ...);
+extern void sys_log(char module, const char *msg, ...);
 extern long sys_millis(); /* suitable for quick time measures only (long might
                              not be enough on 32bit systems) */
 extern void sys_time(char *buf);

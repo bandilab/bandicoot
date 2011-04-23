@@ -167,17 +167,18 @@ static void copy_file(char *var, long ver, const char *vid)
         return;
 
     TBuf *buf = NULL;
+    long time = sys_millis();
     if (str_cmp(vid, "") == 0 || (buf = read_net(vid, var, ver)) == NULL) {
-        sys_print("volume: %s, file copy '%s-%016X' from %s failed\n",
-                  gaddr, var, ver, vid);
+        sys_log('V', "file %s-%016X copy failed from %s, time %dms\n",
+                     var, ver, vid, sys_millis() - time);
         return;
     }
 
     write(var, ver, buf);
     tbuf_free(buf);
 
-    sys_print("volume: %s, file copy '%s-%016X' from %s succeeded\n",
-              gaddr, var, ver, vid);
+    sys_log('V', "file %s-%016X copy succeeded from %s, time %dms\n",
+                 var, ver, vid, sys_millis() - time);
 }
 
 static Vars *sync_tx()
@@ -215,10 +216,6 @@ static Vars *sync_tx()
 
 static void *serve(void *arg)
 {
-    char time[32];
-    sys_time(time);
-    sys_print("volume: started, %s, id=%s\n", time, gaddr);
-
     IO *cio = NULL, *sio = (IO*) arg;
     char var[MAX_NAME];
     long ver;
@@ -235,6 +232,7 @@ static void *serve(void *arg)
                     tbuf_free(buf);
                     sys_write(cio, &R_READ, sizeof(int));
                 }
+                sys_log('V', "file %s-%016X read\n", var, ver);
             } else if (msg == T_WRITE && read_var(cio, var, &ver)) {
                 TBuf *buf = tbuf_read(cio);
                 if (buf != NULL) {
@@ -242,6 +240,7 @@ static void *serve(void *arg)
                     tbuf_free(buf);
                     sys_write(cio, &R_WRITE, sizeof(int));
                 }
+                sys_log('V', "file %s-%016X written\n", var, ver);
             }
         }
 
@@ -303,6 +302,8 @@ extern char *vol_init(int port, const char *p)
 
     IO *io = sys_socket(&port);
     sys_address(gaddr, port);
+
+    sys_log('V', "started data=%s, port=%d\n", path, port);
 
     /* clean up partial files */
     int num_files;

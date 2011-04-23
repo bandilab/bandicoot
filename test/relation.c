@@ -422,7 +422,7 @@ int main()
     int tx_port = 0;
     char *source = "test/test_defs.b";
 
-    sys_init();
+    sys_init(0);
     tx_server(source, "bin/state", &tx_port);
     vol_init(0, "bin/volume");
 

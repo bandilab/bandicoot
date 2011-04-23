@@ -15,6 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+static int glog;
+
 /* defined in system_posix.c or system_win32.c */
 static int net_open();
 static void net_close(IO *io);
@@ -359,6 +361,22 @@ extern void sys_print(const char *msg, ...)
     va_end(ap);
 }
 
+extern void sys_log(char module, const char *msg, ...)
+{
+    if (!glog)
+        return;
+
+    char time[32], all[32 + str_len(msg)];
+    sys_time(time);
+    str_print(all, "[%c] %s, %s", module, time, msg);
+
+    va_list ap;
+    va_start(ap, msg);
+    vfprintf(stdout, all, ap);
+    fflush(stdout);
+    va_end(ap);
+}
+
 extern long sys_millis()
 {
     struct timeval t;
@@ -367,6 +385,7 @@ extern long sys_millis()
     return t.tv_sec * 1000L + t.tv_usec / 1000L;
 }
 
+/* FIXME: time and gmtime methods are not thread-safe */
 extern void sys_time(char *buf)
 {
     time_t t = time(NULL);
