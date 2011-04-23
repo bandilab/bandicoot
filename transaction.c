@@ -50,12 +50,10 @@ static const int R_SYNC = 6;
 static const int T_SOURCE = 7;
 static const int R_SOURCE = 8;
 
-static char name[32];
-
 /* Vol keeps information about the content of a volume */
 typedef struct {
-    long long id;
-    Vars *v;
+    char id[MAX_ADDR];
+    Vars *vars;
 } Vol;
 
 typedef struct {
@@ -64,7 +62,7 @@ typedef struct {
     int a_type; /* READ or WRITE actions */
     long version; /* either an SID to read or an SID to create/write */
     int state; /* identifies the current entry state, see defines above */
-    long long wvol_id; /* volume for write action */
+    char wvid[MAX_ADDR]; /* volume for write action */
     Mon *mon; /* monitor on which the caller/transaction is blocked if needed */
 } Entry;
 
@@ -112,8 +110,8 @@ static List *add(List *dest, void *elem)
    elem is current elem from the list to be removed
    cmp which can be used to compare the elem to */
 static void rm(List **list,
-               void *cmp,
-               int (*rm_elem)(void *elem, void *cmp))
+               const void *cmp,
+               int (*rm_elem)(void *elem, const void *cmp))
 {
     List *it = *list, **prev = list;
     while (it) {
@@ -166,7 +164,7 @@ static int is_active(const char var[], long sid)
     * committed read
     * reverted read or write
 */
-static int rm_entry(void *elem, void *cmp)
+static int rm_entry(void *elem, const void *cmp)
 {
     Entry *e = elem;
     int rm = 0;
@@ -202,10 +200,10 @@ static Entry *add_entry(long sid,
     Entry *e = (Entry*) mem_alloc(sizeof(Entry));
     e->sid = sid;
     str_cpy(e->var, var);
+    str_cpy(e->wvid, "");
     e->a_type = a_type;
     e->version = version;
     e->state = state;
-    e->wvol_id = 0L;
     e->mon = mon_new();
 
     gents = add(gents, e);
@@ -275,12 +273,11 @@ static long get_wsid(const char var[])
     return res;
 }
 
-static int rm_volume(void *elem, void *cmp)
+static int rm_volume(void *elem, const void *cmp)
 {
     Vol *e = elem;
-    long long id = *((long long*)cmp);
-    if (e->id == id) {
-        vars_free(e->v);
+    if (str_cmp(e->id, cmp) == 0) {
+        vars_free(e->vars);
         mem_free(e);
 
         return 1;
@@ -289,18 +286,18 @@ static int rm_volume(void *elem, void *cmp)
     return 0;
 }
 
-static Vol *replace_volume(long long vol_id, Vars *v)
+static Vol *replace_volume(const char *vid, Vars *vars)
 {
     Vol *vol = (Vol*) mem_alloc(sizeof(Vol));
-    vol->id = vol_id;
-    vol->v = v;
+    vol->vars = vars;
+    str_cpy(vol->id, vid);
 
     /* FIXME: we can possibly overwrite variables written via tx_commit 
        an obsolete tx_volume_sync message from a volume can arrive after a
        commit due to some network delays. It would not have the latest
        commited variables in it.
      */
-    rm(&gvols, &vol_id, rm_volume);
+    rm(&gvols, vid, rm_volume);
     gvols = add(gvols, vol);
 
     return vol;
@@ -314,20 +311,20 @@ static void set_vols(Vars *v)
         long ver = v->vers[i];
         for (List *vit = gvols; vit != NULL; vit = vit->next) {
             Vol *vol = vit->elem;
-            if (vars_scan(vol->v, var, ver) > -1) {
-                v->vols[i] = vol->id;
+            if (vars_scan(vol->vars, var, ver) > -1) {
+                str_cpy(v->vols[i], vol->id);
                 break;
             }
         }
     }
 }
 
-static Vol *get_volume(long long vol_id)
+static Vol *get_volume(const char *vid)
 {
     Vol *vol = NULL;
     for (List *it = gvols; it != NULL && vol == NULL; it = it->next) {
         Vol *v = it->elem;
-        if (v->id == vol_id)
+        if (str_cmp(v->id, vid) == 0)
             vol = v;
     }
 
@@ -391,10 +388,9 @@ static void finish(int sid, int final_state)
             if (final_state == REVERTED)
                 rsid = get_rsid(e->sid, e->var);
             else {
-                long long vol_id = e->wvol_id;
-                Vol *vol = get_volume(vol_id);
+                Vol *vol = get_volume(e->wvid);
                 if (vol != NULL)
-                    vars_put(vol->v, e->var, e->version);
+                    vars_put(vol->vars, e->var, e->version);
             }
 
             Entry *we = get_min_waiting(e->var, WRITE);
@@ -449,7 +445,7 @@ extern void tx_free()
 
     for (; gvols != NULL; gvols = next(gvols)) {
         Vol *vol = gvols->elem;
-        vars_free(vol->v);
+        vars_free(vol->vars);
         mem_free(gvols->elem);
     }
 
@@ -541,11 +537,11 @@ static void tx_init(const char *source, const char *state)
     env_free(env);
 }
 
-static Vars *volume_sync(long long vol_id, Vars *in)
+static Vars *volume_sync(const char *vid, Vars *in)
 {
     mon_lock(gmon);
 
-    replace_volume(vol_id, in);
+    replace_volume(vid, in);
 
     /* populate out variable with the (WRITE/COMMITED) variables */
     Vars *out = vars_new(0);
@@ -558,9 +554,7 @@ static Vars *volume_sync(long long vol_id, Vars *in)
 
     mon_unlock(gmon);
 
-    char vol[32];
-    sys_address_print(vol, vol_id);
-    sys_print("tx: volume %s sync done\n", vol);
+    sys_print("tx: volume sync done\n");
 
     return out;
 }
@@ -588,9 +582,9 @@ extern long enter(Vars *rvars, Vars *wvars, Mon *m)
 
     mon_lock(gmon);
 
-    /* FIXME: populate wvol_id based on an algorithm
-       executor id is probably required as well for the calculation */
-    long long wvol_id = ((Vol*) gvols->elem)->id;
+    /* FIXME: populate wvid based on an algorithm executor id is probably
+              required as well for the calculation */
+    const char *wvid = ((Vol*) gvols->elem)->id;
 
     sid = ++last_sid;
     for (i = 0; i < wvars->len; ++i) {
@@ -600,7 +594,7 @@ extern long enter(Vars *rvars, Vars *wvars, Mon *m)
             state = RUNNABLE;
 
         we[i] = add_entry(sid, var, WRITE, sid, state);
-        we[i]->wvol_id = wvol_id;
+        str_cpy(we[i]->wvid, wvid);
 
         rw = 1;
     }
@@ -638,21 +632,21 @@ extern long enter(Vars *rvars, Vars *wvars, Mon *m)
 
     /* FIXME: populate wvols based on previous result */
     for (int i = 0; i < wvars->len; ++i)
-        wvars->vols[i] = wvol_id;
+        str_cpy(wvars->vols[i], wvid);
     mon_unlock(gmon);
 
     return sid;
 }
 
-extern void tx_attach(int port)
+extern void tx_attach(const char *address)
 {
-    gio = sys_connect(sys_address(port));
+    gio = sys_connect(address);
 }
 
 static void *tx_thread(void *io)
 {
     long sid = 0;
-    long long vid = 0;
+    char vid[MAX_ADDR] = "";
 
     for (;;) {
         int msg = 0;
@@ -706,7 +700,7 @@ static void *tx_thread(void *io)
                 sys_write(io, &final_state, sizeof(int)) < 0)
                 goto exit;
         } else if (msg == T_SYNC) {
-            if (sys_readn(io, &vid, sizeof(long long)) != sizeof(long long))
+            if (sys_readn(io, vid, MAX_ADDR) != MAX_ADDR)
                 goto exit;
 
             Vars *in = vars_read(io);
@@ -738,13 +732,12 @@ exit:
         finish(sid, REVERTED);
     }
 
-    if (vid != 0) {
+    if (str_cmp(vid, "") != 0) {
         mon_lock(gmon);
-        rm(&gvols, &vid, rm_volume);
+        rm(&gvols, vid, rm_volume);
         mon_unlock(gmon);
 
         char vol[32];
-        sys_address_print(vol, vid);
         sys_print("tx: volume %s disconnected\n", vol);
     }
 
@@ -754,9 +747,6 @@ exit:
 
 static void *serve(void *sio)
 {
-    char tmp[32];
-    sys_time(tmp);
-    sys_print("tx: started, %s, id=%s\n", tmp, name);
     for (;;) {
         IO *cio = sys_accept(sio);
         sys_thread(tx_thread, cio);
@@ -772,12 +762,18 @@ extern void tx_server(const char *source, const char *state, int *port)
     tx_init(source, state);
 
     IO *sio = sys_socket(port);
-    sys_address_print(name, sys_address(*port));
+
+    char time[32];
+    sys_time(time);
+    sys_print("tx: started: %s, port=%d\n", time, *port);
+
     if (standalone)
         serve(sio);
     else {
         sys_thread(serve, sio);
-        tx_attach(*port);
+        char address[MAX_ADDR];
+        str_print(address, "127.0.0.1:%d", *port);
+        tx_attach(address);
     }
 }
 
@@ -856,11 +852,11 @@ extern void tx_revert(long sid)
     net_finish(sid, REVERTED);
 }
 
-extern Vars *tx_volume_sync(long long vol_id, Vars *in)
+extern Vars *tx_volume_sync(const char *vid, Vars *in)
 {
     int msg = T_SYNC;
     if (sys_write(gio, &msg, sizeof(int)) < 0 ||
-        sys_write(gio, &vol_id, sizeof(long long)) < 0)
+        sys_write(gio, vid, MAX_ADDR) < 0)
         sys_die("T_SYNC failed\n");
 
     Vars *out = NULL;
@@ -901,9 +897,9 @@ extern void tx_state()
               "VOLUME", "VARIABLE", "SID");
     for (List *it = gvols; it != NULL; it = it->next) {
         Vol *vol = it->elem;
-        for (int i = 0; i < vol->v->len; ++i)
+        for (int i = 0; i < vol->vars->len; ++i)
             sys_print("%-8d %-32s %-8d\n",
-                      vol->id, vol->v->vars[i], vol->v->vers[i]);
+                      vol->id, vol->vars->vars[i], vol->vars->vers[i]);
     }
 
     mon_unlock(gmon);

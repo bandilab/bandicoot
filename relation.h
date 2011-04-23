@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ typedef struct {
     int size;
     int len;
     char **vars;
+    char **vols;
     long *vers;
-    long long *vols;
 } Vars;
 
 extern Vars *vars_new(int len);
@@ -70,7 +70,7 @@ extern Rel *rel_tmp(Rel *r, Rel *clones[], int cnt);
 extern Rel *rel_load(Head *head, const char *name);
 
 /* relations passed to both rel_store & rel_eq must be rel_init()'ed */
-extern void rel_store(long long vol_id, const char *name, long vers, Rel *r);
+extern void rel_store(const char *vid, const char *name, long vers, Rel *r);
 extern int rel_eq(Rel *l, Rel *r);
 
 extern Rel *rel_join(Rel *l, Rel *r);

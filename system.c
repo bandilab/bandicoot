@@ -143,30 +143,41 @@ extern int sys_iready(IO *io, int sec)
     return ready == 1 && FD_ISSET(io->fd, &rfds);
 }
 
-static long long _sys_address(int port)
+extern void sys_address(char *result, int port)
 {
-    char host[255];
-    if (gethostname(host, 255) < 0)
-        sys_die("sys: cannot lookup the host name\n");
+    if (gethostname(result, MAX_ADDR) < 0)
+        sys_die("sys: cannot lookup the local host name\n");
 
-    struct hostent *info;
-    if ((info = gethostbyname(host)) == NULL)
-        sys_die("sys: cannot lookup the host info\n");
-
-    /* FIXME: we don't know what it returns, could be 127.0.0.1 as well */
-    struct in_addr *addr = (struct in_addr*) *info->h_addr_list;
-    long long res = ((long long) addr->s_addr << 16) | htons(port);
-
-    return res;
+    str_print(result + str_len(result), ":%d", port);
 }
 
-static struct sockaddr_in sys_address_dec(long long address)
+static struct sockaddr_in sys_address_dec(const char *address)
 {
-    struct sockaddr_in addr = {.sin_family = AF_INET};
-    addr.sin_port = address & 0xFFFF;
-    addr.sin_addr.s_addr = address >> 16;
+    int colon = str_idx(address, ":");
+    if (colon < 0)
+        sys_die("sys: invalid address '%s'\n", address);
+    colon += 1;
 
-    return addr;
+    char host[colon];
+    mem_cpy(host, address, colon);
+    host[colon - 1] = '\0';
+
+    struct addrinfo hints;
+    mem_set(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    struct addrinfo *info = NULL;
+    if (getaddrinfo(host, address + colon, &hints, &info))
+        sys_die("sys: address lookup failure '%s'\n", address);
+
+    /* FIXME: we pick up only the first address from the list. */
+
+    struct sockaddr_in res;
+    mem_cpy(&res, info->ai_addr, sizeof(res));
+    freeaddrinfo(info);
+
+    return res;
 }
 
 extern IO *sys_socket(int *port)
@@ -215,7 +226,8 @@ static IO *_sys_connect(struct sockaddr_in addr)
     return res;
 }
 
-extern IO *sys_connect(long long address) {
+extern IO *sys_connect(const char *address)
+{
     struct sockaddr_in addr = sys_address_dec(address);
     IO *res = _sys_connect(addr);
     if (res == NULL)
@@ -225,7 +237,9 @@ extern IO *sys_connect(long long address) {
     return res;
 }
 
-extern IO *sys_try_connect(long long address) {
+/* FIXME: this method dies in case of a name lookup failure */
+extern IO *sys_try_connect(const char *address)
+{
     struct sockaddr_in addr = sys_address_dec(address);
     return _sys_connect(addr);
 }
@@ -333,12 +347,6 @@ extern char **sys_list(const char *path, int *len)
     mem_free(offs);
 
     return res;
-}
-
-extern void sys_address_print(char *dest, long long address)
-{
-    struct sockaddr_in addr = sys_address_dec(address);
-    str_print(dest, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 }
 
 extern void sys_print(const char *msg, ...)

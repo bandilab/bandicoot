@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,13 +34,18 @@ static void *vars_p(Vars *v)
     return ((void*) v->vars) + v->size * sizeof(void*);
 }
 
+static void *vols_p(Vars *v)
+{
+    return ((void*) v->vols) + v->size * sizeof(void*);
+}
+
 static void vars_init(Vars *v)
 {
     for (int i = 0; i < v->size; ++i) {
         v->vars[i] = vars_p(v) + i * MAX_NAME;
-        for (int j = 0; j < MAX_NAME; ++j)
-            v->vars[i][j] = '\0';
-        v->vols[i] = 0L;
+        v->vars[i][0] = '\0';
+        v->vols[i] = vols_p(v) + i * MAX_ADDR;
+        v->vols[i][0] = '\0';
         v->vers[i] = 0L;
     }
 }
@@ -51,8 +56,8 @@ extern Vars *vars_new(int len)
     res->size = len;
     res->len = 0;
     res->vars = mem_alloc(len * (sizeof(void*) + MAX_NAME));
+    res->vols = mem_alloc(len * (sizeof(void*) + MAX_ADDR));
     res->vers = mem_alloc(len * sizeof(long));
-    res->vols = mem_alloc(len * sizeof(long long));
 
     vars_init(res);
 
@@ -64,7 +69,7 @@ extern void vars_cpy(Vars *dest, Vars *src)
     dest->len = 0;
     for (int i = 0; i < src->len; ++i) {
         vars_put(dest, src->vars[i], src->vers[i]);
-        dest->vols[i] = src->vols[i];
+        str_cpy(dest->vols[i], src->vols[i]);
     }
 }
 
@@ -94,8 +99,8 @@ extern Vars *vars_read(IO *io)
     if (sys_readn(io, v->vers, size) != size)
         goto failure;
 
-    size = len * sizeof(long long);
-    if (sys_readn(io, v->vols, size) != size)
+    size = len * MAX_ADDR;
+    if (sys_readn(io, vols_p(v), size) != size)
         goto failure;
 
     return v;
@@ -112,7 +117,7 @@ extern int vars_write(Vars *v, IO *io)
     if (sys_write(io, &v->len, sizeof(v->len)) < 0 ||
         sys_write(io, vars_p(v), v->len * MAX_NAME) < 0 ||
         sys_write(io, v->vers, v->len * sizeof(long)) < 0 ||
-        sys_write(io, v->vols, v->len * sizeof(long long)) < 0)
+        sys_write(io, vols_p(v), v->len * MAX_ADDR) < 0)
         return -1;
 
     return sizeof(v->len) +
@@ -123,20 +128,20 @@ extern void vars_put(Vars *v, const char *var, long ver)
 {
     if (v->len == v->size) {
         char **vars = v->vars;
+        char **vols = v->vols;
         long *vers = v->vers;
-        long long *vols = v->vols;
 
         v->size += MAX_VARS;
         v->vars = mem_alloc(v->size * (sizeof(void*) + MAX_NAME));
+        v->vols = mem_alloc(v->size * (sizeof(void*) + MAX_ADDR));
         v->vers = mem_alloc(v->size * sizeof(long));
-        v->vols = mem_alloc(v->size * sizeof(long long));
 
         vars_init(v);
 
         for (int i = 0; i < v->len; ++i) {
             str_cpy(v->vars[i], vars[i]);
+            str_cpy(v->vols[i], vols[i]);
             v->vers[i] = vers[i];
-            v->vols[i] = vols[i];
         }
         mem_free(vars);
         mem_free(vers);
@@ -145,7 +150,6 @@ extern void vars_put(Vars *v, const char *var, long ver)
 
     str_cpy(v->vars[v->len], var);
     v->vers[v->len] = ver;
-    v->vols[v->len] = 0L;
     v->len++;
 }
 
@@ -619,9 +623,9 @@ extern Rel *rel_sum_unary(Rel *r,
     return res;
 }
 
-extern void rel_store(long long vol_id, const char *name, long vers, Rel *r)
+extern void rel_store(const char *vid, const char *name, long vers, Rel *r)
 {
-    vol_write(vol_id, r->body, name, vers);
+    vol_write(vid, r->body, name, vers);
 }
 
 extern int rel_eq(Rel *l, Rel *r)

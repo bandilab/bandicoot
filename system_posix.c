@@ -15,6 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#define _POSIX_SOURCE
+#define _BSD_SOURCE
+
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -135,11 +138,6 @@ extern int net_port(int fd)
         sys_die("sys: cannot lookup the socket details\n");
 
     return ntohs(addr.sin_port);
-}
-
-extern long long sys_address(int port)
-{
-    return _sys_address(port);
 }
 
 extern Mon *mon_new()

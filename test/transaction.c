@@ -34,7 +34,7 @@ static Proc p1, p2, p3, cp;
 static char current_test[30];
 static Mon *gmon;
 static int seq;
-static long long vol_id;
+static char *vid;
 
 static void sem_inc(Mon *m)
 {
@@ -200,7 +200,7 @@ static void test_basics()
     long sid = tx_enter(r, w);
     long ver = r->vers[0];
 
-    if (r->vols[0] != vol_id)
+    if (str_cmp(r->vols[0], vid) != 0)
         fail();
 
     Rel *rel = rel_load(env_head(env, r->vars[0]), r->vars[0]);
@@ -222,7 +222,7 @@ static void test_basics()
 
     sid = tx_enter(r, w);
 
-    if (w->vols[0] != vol_id)
+    if (str_cmp(w->vols[0], vid) != 0)
         fail();
 
     tx_revert(sid);
@@ -452,7 +452,7 @@ int main(void)
 
     sys_init();
     tx_server(source, "bin/state", &tx_port);
-    vol_id = vol_init(0, "bin/volume");
+    vid = vol_init(0, "bin/volume");
 
     char *code = sys_load(source);
     env = env_new(source, code);

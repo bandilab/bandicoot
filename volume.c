@@ -42,8 +42,7 @@ static const int R_READ = 2;
 static const int T_WRITE = 3;
 static const int R_WRITE = 4;
 
-static char name[32];
-static long long id;
+static char gaddr[MAX_ADDR];
 
 static void set_path(char *res, const char *var, long sid, int part)
 {
@@ -123,14 +122,14 @@ static int read_var(IO *io, char *var, long *ver)
     return 1;
 }
 
-static TBuf *read_net(long long id, const char *name, long version)
+static TBuf *read_net(const char *vid, const char *name, long version)
 {
     TBuf *res = NULL;
 
     char var[MAX_NAME] = "";
     str_cpy(var, name);
 
-    IO *io = sys_try_connect(id);
+    IO *io = sys_try_connect(vid);
     if (io == NULL)
         goto failure;
 
@@ -159,19 +158,18 @@ failure:
     return NULL;
 }
 
-static void copy_file(char *var, long ver, long long vol)
+static void copy_file(char *var, long ver, const char *vid)
 {
-    char file[MAX_FILE_PATH], src[32];
+    char file[MAX_FILE_PATH];
     set_path(file, var, ver, 0);
-    sys_address_print(src, vol);
 
-    if (ver <= 1 || vol == id || sys_exists(file))
+    if (ver <= 1 || sys_exists(file))
         return;
 
     TBuf *buf = NULL;
-    if (vol == 0 || (buf = read_net(vol, var, ver)) == NULL) {
+    if (str_cmp(vid, "") == 0 || (buf = read_net(vid, var, ver)) == NULL) {
         sys_print("volume: %s, file copy '%s-%016X' from %s failed\n",
-                  name, var, ver, src);
+                  gaddr, var, ver, vid);
         return;
     }
 
@@ -179,10 +177,10 @@ static void copy_file(char *var, long ver, long long vol)
     tbuf_free(buf);
 
     sys_print("volume: %s, file copy '%s-%016X' from %s succeeded\n",
-              name, var, ver, src);
+              gaddr, var, ver, vid);
 }
 
-static Vars *sync_tx(long long id)
+static Vars *sync_tx()
 {
     Vars *disk = vars_new(0);
 
@@ -197,7 +195,7 @@ static Vars *sync_tx(long long id)
     }
     mem_free(files);
 
-    Vars *tx = tx_volume_sync(id, disk);
+    Vars *tx = tx_volume_sync(gaddr, disk);
 
     /* remove old versions */
     char file[MAX_FILE_PATH];
@@ -217,9 +215,9 @@ static Vars *sync_tx(long long id)
 
 static void *serve(void *arg)
 {
-    char tmp[32];
-    sys_time(tmp);
-    sys_print("volume: started, %s, id=%s\n", tmp, name);
+    char time[32];
+    sys_time(time);
+    sys_print("volume: started, %s, id=%s\n", time, gaddr);
 
     IO *cio = NULL, *sio = (IO*) arg;
     char var[MAX_NAME];
@@ -258,7 +256,7 @@ static void *exec_cleanup(void *arg)
 {
     for (;;) {
         sys_sleep(30);
-        vars_free(sync_tx(id));
+        vars_free(sync_tx());
     }
 
     return NULL;
@@ -290,7 +288,7 @@ static void env_check()
     mem_free(new_buf);
 }
 
-extern long long vol_init(int port, const char *p)
+extern char *vol_init(int port, const char *p)
 {
     if (str_len(p) > MAX_FILE_PATH)
         sys_die("volume: path '%s' is too long\n", p);
@@ -304,8 +302,7 @@ extern long long vol_init(int port, const char *p)
     int standalone = port != 0;
 
     IO *io = sys_socket(&port);
-    id = sys_address(port);
-    sys_address_print(name, id);
+    sys_address(gaddr, port);
 
     /* clean up partial files */
     int num_files;
@@ -315,7 +312,7 @@ extern long long vol_init(int port, const char *p)
             vol_remove(files[i]);
     mem_free(files);
 
-    Vars *tx = sync_tx(id);
+    Vars *tx = sync_tx();
 
     /* create new empty files */
     for (int i = 0; i < tx->len; ++i)
@@ -326,7 +323,7 @@ extern long long vol_init(int port, const char *p)
         }
 
     vars_free(tx);
-    vars_free(sync_tx(id)); /* let the TX know immediately about the new files */
+    vars_free(sync_tx()); /* let the TX know immediately about the new files */
 
     sys_thread(exec_cleanup, NULL);
     if (standalone)
@@ -334,30 +331,30 @@ extern long long vol_init(int port, const char *p)
     else
         sys_thread(serve, io);
 
-    return id;
+    return gaddr;
 }
 
-extern TBuf *vol_read(long long id, const char *name, long version)
+extern TBuf *vol_read(const char *vid, const char *name, long ver)
 {
     TBuf *res = NULL;
-    res = read_net(id, name, version);
+    res = read_net(vid, name, ver);
     if (res == NULL)
-        sys_die("volume: read failed %s-%016X'\n", name, version);
+        sys_die("volume: read failed %s-%016X'\n", name, ver);
 
     return res;
 }
 
-extern void vol_write(long long id, TBuf *buf, const char *name, long version)
+extern void vol_write(const char *vid, TBuf *buf, const char *name, long ver)
 {
     char var[MAX_NAME] = "", sid[MAX_NAME] = "";
-    str_from_sid(sid, version);
+    str_from_sid(sid, ver);
     str_cpy(var, name);
 
-    IO *io = sys_connect(id);
+    IO *io = sys_connect(vid);
 
     if (sys_write(io, &T_WRITE, sizeof(int)) < 0 ||
         sys_write(io, var, sizeof(var)) < 0 ||
-        sys_write(io, &version, sizeof(version)) < 0)
+        sys_write(io, &ver, sizeof(ver)) < 0)
         sys_die("volume: write failed to send '%s-%s'\n", name, sid);
 
     if (tbuf_write(buf, io) < 0)

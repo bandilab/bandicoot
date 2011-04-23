@@ -371,9 +371,13 @@ static void check_vars(Vars *v)
     if (str_cmp(v->vars[2], "a3") != 0 || v->vers[2] != 3)
         fail();
 
-    for (int i = 0; i < 3; ++i)
-        if (v->vols[i] != i + 3)
+    for (int i = 0; i < 3; ++i) {
+        char exp[MAX_NAME];
+        str_print(exp, "%d", i + 3);
+
+        if (str_cmp(v->vols[i], exp) != 0)
             fail();
+    }
 }
 
 static void test_vars()
@@ -385,7 +389,7 @@ static void test_vars()
         vars_put(v[i], "a2", 2);
         vars_put(v[i], "a3", 3);
         for (int j = 0; j < 3; ++j)
-            v[i]->vols[j]= j + 3;
+            str_print(v[i]->vols[j], "%d", j + 3);
 
         check_vars(v[i]);
 

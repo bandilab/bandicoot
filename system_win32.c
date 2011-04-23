@@ -39,6 +39,10 @@ extern void sys_init()
 {
     SetLastError(0);
     str_init();
+
+    WSADATA wsa_data;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data))
+        sys_die("sys: cannot initialise winsock2\n");
 }
 
 extern void sys_die(const char *msg, ...)
@@ -127,20 +131,8 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
         sys_die("sys: cannot create a thread\n");
 }
 
-static void wsa_start()
-{
-    static int init;
-    if (init == 0) {
-        WSADATA wsa_data;
-        if (WSAStartup(MAKEWORD(2, 2), &wsa_data))
-            sys_die("sys: cannot initialise winsock2\n");
-    }
-}
-
 extern int net_open()
 {
-    wsa_start();
-
     SOCKET fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == INVALID_SOCKET)
         return -1;
@@ -166,12 +158,6 @@ extern int net_port(int fd)
         sys_die("sys: cannot lookup the socket details\n");
 
     return ntohs(addr.sin_port);
-}
-
-extern long long sys_address(int port)
-{
-    wsa_start();
-    return _sys_address(port);
 }
 
 extern Mon *mon_new()

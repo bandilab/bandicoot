@@ -57,15 +57,14 @@ extern void sys_exit(char status);
 extern void sys_die(const char *msg, ...);
 
 /* networking */
-extern long long sys_address(int port);
+extern void sys_address(char *result, int port);
 extern IO *sys_socket(int *port);
 extern IO *sys_accept(IO *socket);
-extern IO *sys_connect(long long id);
-extern IO *sys_try_connect(long long id);
+extern IO *sys_connect(const char *address);
+extern IO *sys_try_connect(const char *address);
 extern int sys_iready(IO *io, int millis);
 
 /* misc */
-extern void sys_address_print(char *dest, long long address);
 extern void sys_print(const char *msg, ...);
 extern long sys_millis(); /* suitable for quick time measures only (long might
                              not be enough on 32bit systems) */

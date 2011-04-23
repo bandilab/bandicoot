@@ -252,7 +252,7 @@ static int parse_port(char *p)
     return port;
 }
 
-static void multiplex(const char *exe, int tx_port, int port)
+static void multiplex(const char *exe, const char *tx_addr, int port)
 {
     queue_init();
 
@@ -261,7 +261,7 @@ static void multiplex(const char *exe, int tx_port, int port)
         Exec *e = mem_alloc(sizeof(Exec));
         e->env = env_new("net", code);
         str_cpy(e->exe, exe);
-        str_print(e->txp, "%d", tx_port);
+        str_cpy(e->txp, tx_addr);
 
         sys_thread(exec_thread, e);
     }
@@ -280,10 +280,10 @@ static void multiplex(const char *exe, int tx_port, int port)
 int main(int argc, char *argv[])
 {
     int port = 0;
-    int tx_port = 0;
     char *data = NULL;
     char *state = NULL;
     char *source = NULL;
+    char *tx_addr = NULL;
 
     sys_init();
     if (argc < 2)
@@ -299,13 +299,14 @@ int main(int argc, char *argv[])
         else if (str_cmp(argv[i], "-listen") == 0)
             port = parse_port(argv[i + 1]);
         else if (str_cmp(argv[i], "-tx") == 0)
-            tx_port = parse_port(argv[i + 1]);
+            tx_addr = argv[i + 1];
         else
             usage(argv[0]);
 
     if (str_cmp(argv[1], "start") == 0 && source != NULL && data != NULL &&
-        state != NULL && port != 0 && tx_port == 0)
+        state != NULL && port != 0 && tx_addr == NULL)
     {
+        int tx_port = 0;
         tx_server(source, state, &tx_port);
 
         vol_init(0, data);
@@ -315,24 +316,28 @@ int main(int argc, char *argv[])
         sys_print("started: %s, source=%s, data=%s, state=%s, port=%d\n--\n",
                   time, source, data, state, port);
 
-        multiplex(argv[0], tx_port, port);
+        char addr[MAX_ADDR];
+        str_print(addr, "127.0.0.1:%d", tx_port);
+        multiplex(argv[0], addr, port);
 
         tx_free();
     } else if (str_cmp(argv[1], "processor") == 0 && source == NULL &&
-               data == NULL && state == NULL && port != 0 && tx_port != 0)
+               data == NULL && state == NULL && port != 0 && tx_addr != NULL)
     {
-        tx_attach(tx_port);
+        tx_attach(tx_addr);
         char *code = tx_program();
         Env *env = env_new("net", code);
         mem_free(code);
 
-        IO *io = sys_connect(sys_address(port));
+        char addr[MAX_ADDR];
+        str_print(addr, "127.0.0.1:%d", port);
+        IO *io = sys_connect(addr);
 
         Func *fn = NULL;
         char func[MAX_NAME];
         if (sys_readn(io, func, MAX_NAME) != MAX_NAME ||
             (fn = env_func(env, func)) == NULL)
-            sys_die("processor: failed to retrieve the function name\n");
+            sys_die("processor: failed to retrieve a function name\n");
 
         TBuf *arg = NULL;
         if (fn->p.len == 1)
@@ -383,19 +388,19 @@ int main(int argc, char *argv[])
         sys_close(io);
         env_free(env);
     } else if (str_cmp(argv[1], "tx") == 0 && source != NULL &&
-               data == NULL && state != NULL && port != 0 && tx_port == 0)
+               data == NULL && state != NULL && port != 0 && tx_addr == NULL)
     {
         tx_server(source, state, &port);
     } else if (str_cmp(argv[1], "volume") == 0 && source == NULL &&
-               data != NULL && state == NULL && port != 0 && tx_port != 0)
+               data != NULL && state == NULL && port != 0 && tx_addr != NULL)
     {
-        tx_attach(tx_port);
+        tx_attach(tx_addr);
         vol_init(port, data);
     } else if (str_cmp(argv[1], "exec") == 0 && source == NULL &&
-               data == NULL && state == NULL && port != 0 && tx_port != 0)
+               data == NULL && state == NULL && port != 0 && tx_addr != NULL)
     {
-        tx_attach(tx_port);
-        multiplex(argv[0], tx_port, port);
+        tx_attach(tx_addr);
+        multiplex(argv[0], tx_addr, port);
     } else
         usage(argv[0]);
 
