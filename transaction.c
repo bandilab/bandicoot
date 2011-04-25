@@ -583,7 +583,11 @@ extern long enter(Vars *rvars, Vars *wvars, Mon *m)
 
     /* FIXME: populate wvid based on an algorithm executor id is probably
               required as well for the calculation */
-    const char *wvid = ((Vol*) gvols->elem)->id;
+    char wvid[MAX_ADDR] = "";
+    for (List *it = gvols; it != NULL; it = it->next) {
+        Vol *vol = it->elem;
+        str_cpy(wvid, vol->id);
+    }
 
     sid = ++last_sid;
     for (i = 0; i < wvars->len; ++i) {
