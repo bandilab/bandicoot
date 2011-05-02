@@ -18,7 +18,6 @@ limitations under the License.
 static int glog;
 
 /* defined in system_posix.c or system_win32.c */
-static int net_open();
 static void net_close(IO *io);
 static int net_port(int fd);
 
@@ -60,6 +59,24 @@ static void fs_close(IO *io)
         sys_die("sys: cannot close file descriptor\n");
 }
 
+static int net_open()
+{
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0)
+        return -1;
+
+    char on[sizeof(int)];
+    mem_set(on, 1, sizeof(on));
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, on, sizeof(on)) == -1)
+        return -1;
+
+    mem_set(on, 1, sizeof(on));
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, on, sizeof(on)) == -1)
+        return -1;
+
+    return fd;
+}
+
 static int net_read(IO *io, void *buf, int size)
 {
     int r = recv(io->fd, buf, size, 0);
@@ -86,6 +103,9 @@ static IO *_sys_open(const char *path, int mode, int binary)
 
     if (mode & CREATE)
         flags |= O_CREAT;
+
+    if (mode & TRUNCATE)
+        flags |= O_TRUNC;
 
     int fd = open(path, flags | binary, S_IRUSR | S_IWUSR);
     if (fd < 0)
@@ -219,9 +239,7 @@ static IO *_sys_connect(struct sockaddr_in addr)
 {
     IO *res = NULL;
     int fd = net_open();
-
     int sz = sizeof(addr);
-
     if (fd >= 0 && connect(fd, (struct sockaddr*) &addr, sz) != -1)
         res = new_io(fd, net_read, net_write, net_close);
 

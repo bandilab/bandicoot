@@ -14,8 +14,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+#include <winsock2.h>
 #include <windows.h>
-#include <winsock.h>
 #include <ws2tcpip.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -130,19 +131,6 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
 
     if (h == NULL)
         sys_die("sys: cannot create a thread\n");
-}
-
-extern int net_open()
-{
-    SOCKET fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd == INVALID_SOCKET)
-        return -1;
-
-    char on = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
-        return -1;
-
-    return fd;
 }
 
 extern void net_close(IO *io)

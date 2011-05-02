@@ -277,7 +277,7 @@ static void env_check()
     if (!env_compat(old, new))
         sys_die("volume: incompatible volume with the tx\n");
 
-    io = sys_open(source, CREATE | WRITE);
+    io = sys_open(source, TRUNCATE | WRITE);
     sys_write(io, new_buf, str_len(new_buf));
     sys_close(io);
 

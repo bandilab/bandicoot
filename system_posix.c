@@ -25,6 +25,7 @@ limitations under the License.
 #include <sys/socket.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <dirent.h>
@@ -110,19 +111,6 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
 
     if (pthread_detach(t) != 0)
         sys_die("sys: cannot detach from a thread\n");
-}
-
-extern int net_open()
-{
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0)
-        return -1;
-
-    int on = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
-        return -1;
-
-    return fd;
 }
 
 extern void net_close(IO *io)

@@ -28,8 +28,9 @@ struct IO {
 typedef struct IO IO;
 
 static const int CREATE = 0x01;
-static const int READ = 0x02;
-static const int WRITE = 0x04;
+static const int TRUNCATE = 0x02;
+static const int READ = 0x04;
+static const int WRITE = 0x08;
 
 extern IO *sys_open(const char *path, int mode);
 extern int sys_read(IO *io, void *buf, int size);
