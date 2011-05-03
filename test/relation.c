@@ -47,7 +47,7 @@ static int equal(Rel *left, const char *name)
     Rel *right = load(name);
     Vars *wvars = vars_new(0);
 
-    long sid = tx_enter(rvars, wvars);
+    long sid = tx_enter("", rvars, wvars);
 
     rel_init(left, rvars, arg);
     rel_init(right, rvars, arg);
@@ -69,7 +69,7 @@ static int count(const char *name)
     Rel *r = load(name);
     Vars *wvars = vars_new(0);
 
-    long sid = tx_enter(rvars, wvars);
+    long sid = tx_enter("", rvars, wvars);
 
     rel_init(r, rvars, arg);
 
@@ -129,7 +129,7 @@ static void test_store()
     Vars *wvars = vars_new(1);
     vars_put(wvars, "one_r1_cpy", 0L);
 
-    long sid = tx_enter(rvars, wvars);
+    long sid = tx_enter("", rvars, wvars);
     rel_init(r, rvars, arg);
 
     rel_store(wvars->vols[0], "one_r1_cpy", wvars->vers[0], r);

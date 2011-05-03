@@ -82,6 +82,19 @@ extern int str_idx(const char *s, const char *seq)
     return (pos == 0) ? -1 : pos - s;
 }
 
+extern int str_match(const char *s1, const char *s2, char until)
+{
+    int i = 0;
+    for (; s1[i] != '\0' && s1[i] != until; ++i)
+        ;
+
+    int j = 0;
+    for (; j <= i && s2[j] != '\0' && s2[j] != until && s1[j] == s2[j]; ++j)
+        ;
+
+    return i == j && s1[i] == s2[j];
+}
+
 static int is_space(char ch)
 {
     return ch == '\r' || ch == '\n' || ch == ' ' || ch == '\t';

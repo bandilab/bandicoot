@@ -25,7 +25,7 @@ static void perf_load_store(Env *env, int count)
 
     Rel *r = gen_rel(0, count);
 
-    long sid = tx_enter(evars, wvars);
+    long sid = tx_enter("", evars, wvars);
     rel_init(r, NULL, NULL);
 
     long time = sys_millis();
@@ -37,7 +37,7 @@ static void perf_load_store(Env *env, int count)
 
     Head *h = env_head(env, "perf_rel");
     r = rel_load(h, "perf_rel");
-    sid = tx_enter(rvars, evars);
+    sid = tx_enter("", rvars, evars);
 
     time = sys_millis();
     rel_init(r, rvars, NULL);

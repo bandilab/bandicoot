@@ -19,7 +19,7 @@ extern void tx_server(const char *source, const char *state, int *port);
 extern void tx_attach(const char *address);
 extern Vars *tx_volume_sync(const char *vid, Vars *in);
 extern char *tx_program();
-extern long tx_enter(Vars *rvars, Vars *wvars);
+extern long tx_enter(const char *eid, Vars *rvars, Vars *wvars);
 extern void tx_commit(long sid);
 extern void tx_revert(long sid);
 extern void tx_state();

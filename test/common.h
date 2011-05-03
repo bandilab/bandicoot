@@ -47,7 +47,7 @@ extern Tuple *tuple_dec(void *mem, int *len);
 extern int tuple_enc(Tuple *t, void *buf);
 
 /* from transaction.c */
-extern long enter(Vars *rvars, Vars *wvars, Mon *m);
+extern long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m);
 extern void commit(long sid);
 extern void revert(long sid);
 

@@ -305,6 +305,16 @@ static void test_split()
     mem_free(s);
 }
 
+static void test_match()
+{
+    if (str_match("hello", "world", '\0'))
+        fail();
+    if (!str_match("hello", "hello", '\0'))
+        fail();
+    if (!str_match("localhost:12345", "localhost:54321", ':'))
+        fail();
+}
+
 int main()
 {
     test_cpy();
@@ -314,6 +324,7 @@ int main()
     test_idx();
     test_trim();
     test_split();
+    test_match();
 
     return 0;
 }

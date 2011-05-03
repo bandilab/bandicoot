@@ -330,7 +330,7 @@ int main(int argc, char *argv[])
         mem_free(code);
 
         char addr[MAX_ADDR];
-        str_print(addr, "127.0.0.1:%d", port);
+        sys_address(addr, port);
         IO *io = sys_connect(addr);
 
         Func *fn = NULL;
@@ -351,7 +351,7 @@ int main(int argc, char *argv[])
         for (int i = 0; i < fn->w.len; ++i)
             vars_put(w, fn->w.vars[i], 0L);
 
-        long sid = tx_enter(r, w);
+        long sid = tx_enter(addr, r, w);
 
         if (sys_write(io, &sid, sizeof(long)) < 0)
             sys_die("%s: failed to transmit\n", func);

@@ -151,7 +151,7 @@ static void *exec_thread(void *arg)
 
             sem_wait(gmon, value);
 
-            sid = enter(rvars, wvars, gmon);
+            sid = enter("", rvars, wvars, gmon);
         }
     }
 
@@ -197,7 +197,7 @@ static void test_basics()
     Vars *w = vars_new(0), *r = vars_new(1);
     vars_put(r, "tx_empty", 0L);
 
-    long sid = tx_enter(r, w);
+    long sid = tx_enter("", r, w);
     long ver = r->vers[0];
 
     if (str_cmp(r->vols[0], vid) != 0)
@@ -220,7 +220,7 @@ static void test_basics()
     w = vars_new(1);
     vars_put(w, "tx_empty", 0L);
 
-    sid = tx_enter(r, w);
+    sid = tx_enter("", r, w);
 
     if (str_cmp(w->vols[0], vid) != 0)
         fail();
@@ -235,7 +235,7 @@ static void test_basics()
     w = vars_new(0);
     vars_put(r, "tx_empty", 0L);
 
-    sid = tx_enter(r, w);
+    sid = tx_enter("", r, w);
 
     if (ver != r->vers[0])
         fail();

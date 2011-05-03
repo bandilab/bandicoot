@@ -178,8 +178,8 @@ static int rm_entry(void *elem, const void *cmp)
 
         if (sid < rsid && !act)
             rm = 1;
-    } else if ((e->a_type == READ && e->state == COMMITTED)
-                    || e->state == REVERTED)
+    } else if ((e->a_type == READ && e->state == COMMITTED) ||
+               e->state == REVERTED)
     {
         rm = 1;
     }
@@ -303,22 +303,6 @@ static Vol *replace_volume(const char *vid, Vars *vars)
     return vol;
 }
 
-/* FIXME: populate volume id for given variables with optimization */
-static void set_vols(Vars *v)
-{
-    for (int i = 0; i < v->len; ++i) {
-        char *var = v->vars[i];
-        long ver = v->vers[i];
-        for (List *vit = gvols; vit != NULL; vit = vit->next) {
-            Vol *vol = vit->elem;
-            if (vars_scan(vol->vars, var, ver) > -1) {
-                str_cpy(v->vols[i], vol->id);
-                break;
-            }
-        }
-    }
-}
-
 static Vol *get_volume(const char *vid)
 {
     Vol *vol = NULL;
@@ -329,6 +313,32 @@ static Vol *get_volume(const char *vid)
     }
 
     return vol;
+}
+
+static Vol *closest_vol(char *vid, const char *addr, const char *var, long ver)
+{
+    Vol *res = NULL;
+    for (List *it = gvols; it != NULL; it = it->next) {
+        Vol *vol = it->elem;
+
+        if (str_len(var) == 0 || ver < 1L ||
+            vars_scan(vol->vars, var, ver) > -1)
+            res = it->elem;
+
+        if (res != NULL && str_match(addr, vol->id, ':'))
+            break;
+    }
+
+    if (res != NULL)
+        str_cpy(vid, res->id);
+
+    return res;
+}
+
+static void set_vols(Vars *v, const char *addr)
+{
+    for (int i = 0; i < v->len; ++i)
+        closest_vol(v->vols[i], addr, v->vars[i], v->vers[i]);
 }
 
 static void current_state(long vers[])
@@ -550,7 +560,7 @@ static Vars *volume_sync(const char *vid, Vars *in)
         if (e->a_type == WRITE && e->state == COMMITTED)
             vars_put(out, e->var, e->version);
     }
-    set_vols(out);
+    set_vols(out, vid);
 
     mon_unlock(gmon);
 
@@ -572,27 +582,22 @@ static void wait(Vars *s, Entry *entries[])
 }
 
 /* the m input parameter is for testing purposes (test/transaction.c) */
-extern long enter(Vars *rvars, Vars *wvars, Mon *m)
+extern long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
 {
-    long sid;
-    int i, state, rw = 0;
-    const char *var;
-    Entry *re[rvars->len], *we[wvars->len];
+    int rw = 0;
+    long sid = 0;
+    Entry *re[rvars->len];
+    Entry *we[wvars->len];
 
     mon_lock(gmon);
 
-    /* FIXME: populate wvid based on an algorithm executor id is probably
-              required as well for the calculation */
-    char wvid[MAX_ADDR] = "";
-    for (List *it = gvols; it != NULL; it = it->next) {
-        Vol *vol = it->elem;
-        str_cpy(wvid, vol->id);
-    }
+    char wvid[MAX_ADDR];
+    closest_vol(wvid, eid, "", 0);
 
     sid = ++last_sid;
-    for (i = 0; i < wvars->len; ++i) {
-        var = wvars->vars[i];
-        state = WAITING;
+    for (int i = 0; i < wvars->len; ++i) {
+        const char *var = wvars->vars[i];
+        int state = WAITING;
         if (get_wsid(var) == -1)
             state = RUNNABLE;
 
@@ -601,12 +606,12 @@ extern long enter(Vars *rvars, Vars *wvars, Mon *m)
 
         rw = 1;
     }
-    for (i = 0; i < rvars->len; ++i) {
-        var = rvars->vars[i];
+
+    for (int i = 0; i < rvars->len; ++i) {
+        const char *var = rvars->vars[i];
         long rsid = get_rsid(sid, var);
 
-        state = RUNNABLE;
-
+        int state = RUNNABLE;
         if (rw) {
             long wsid = get_wsid(var);
             if (wsid > -1L && sid > wsid) {
@@ -631,11 +636,11 @@ extern long enter(Vars *rvars, Vars *wvars, Mon *m)
     wait(wvars, we);
 
     mon_lock(gmon);
-    set_vols(rvars);
 
-    /* FIXME: populate wvols based on previous result */
+    set_vols(rvars, eid);
     for (int i = 0; i < wvars->len; ++i)
         str_cpy(wvars->vols[i], wvid);
+
     mon_unlock(gmon);
 
     return sid;
@@ -660,6 +665,10 @@ static void *tx_thread(void *io)
             if (sid != 0)
                 goto exit;
 
+            char eid[MAX_ADDR] = "";
+            if (sys_readn(io, eid, MAX_ADDR) != MAX_ADDR)
+                goto exit;
+
             Vars *rvars = vars_read(io);
             if (rvars == NULL)
                 goto exit;
@@ -670,7 +679,7 @@ static void *tx_thread(void *io)
                 goto exit;
             }
 
-            sid = enter(rvars, wvars, NULL);
+            sid = enter(eid, rvars, wvars, NULL);
 
             msg = R_ENTER;
             if (sys_write(io, &msg, sizeof(int)) < 0 ||
@@ -801,10 +810,11 @@ extern char *tx_program()
     return code;
 }
 
-extern long tx_enter(Vars *rvars, Vars *wvars)
+extern long tx_enter(const char *eid, Vars *rvars, Vars *wvars)
 {
     int msg = T_ENTER;
     if (sys_write(gio, &msg, sizeof(int)) < 0 ||
+        sys_write(gio, eid, MAX_ADDR) < 0 ||
         vars_write(rvars, gio) < 0 ||
         vars_write(wvars, gio) < 0)
         sys_die("T_ENTER failed\n");
