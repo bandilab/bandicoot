@@ -1,5 +1,8 @@
 test/progs/assign_bad_types_err.b:17: invalid type in assignment, expects rel {x: real, y: real, }, found rel {id: int, name: string, }
 test/progs/assign_bad_wvar_err.b:11: unknown variable 'does_not_exist'
+test/progs/assign_diff_bad_types_err.b:17: use of semidiff with no commmon attributes (rel {x: real, y: real, } and rel {x: int, y: string, })
+test/progs/assign_join_bad_types_err.b:16: attribute 'x' is of different type in right rel {x: real, y: real, }
+test/progs/assign_union_bad_types_err.b:17: use of union with different types (rel {x: real, y: real, } and rel {id: int, name: string, })
 test/progs/func_bad_res_type_err.b:16: invalid type in return, expects rel {r: real, }, found rel {x: real, y: real, }
 test/progs/func_missing_ret_stmt_err.b:12: missing return statement in a function with defined return type
 test/progs/func_redecl_err.b:17: function 'svc_name' already defined

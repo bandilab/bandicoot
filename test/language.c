@@ -130,8 +130,16 @@ static void test_primitive_exprs()
 static void test_assign()
 {
     OK("assign_basic.b");
+    OK("assign_union.b");
+    OK("assign_diff.b");
+    OK("assign_semidiff.b");
+    OK("assign_join.b");
+    OK("assign_semijoin.b");
     FAIL("assign_bad_wvar_err.b");
     FAIL("assign_bad_types_err.b");
+    FAIL("assign_union_bad_types_err.b");
+    FAIL("assign_diff_bad_types_err.b");
+    FAIL("assign_join_bad_types_err.b");
 }
 
 static void test_params()

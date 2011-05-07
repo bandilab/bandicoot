@@ -68,6 +68,7 @@ static L_Stmts stmt_create(L_Stmt_Type type,
                            Head *rel_type,
                            const char *name,
                            L_Rel *e);
+static L_Stmts stmt_short(const char *name, L_Rel *e, L_Rel_Type node_type);
 static L_Stmts stmt_merge(L_Stmts l, L_Stmts r);
 static L_Stmts stmt_empty();
 
@@ -96,7 +97,7 @@ static void add_func(const char *name,
 %token TK_REL TK_FN TK_RETURN
 %token TK_INT TK_LONG TK_REAL TK_STRING
 %token TK_PROJECT TK_RENAME TK_SELECT TK_EXTEND TK_SUMMARY
-%token TK_EQ TK_NEQ TK_AND TK_OR
+%token TK_EQ TK_NEQ TK_AND TK_OR TK_LTE TK_GTE
 
 %token <name> TK_NAME
 %token <val> TK_INT_VAL TK_LONG_VAL TK_REAL_VAL TK_STRING_VAL
@@ -184,6 +185,9 @@ stmt_assigns:
 
 stmt_assign:
       TK_NAME '=' rel_expr ';'      { $$ = stmt_create(ASSIGN, NULL, $1, $3); }
+    | TK_NAME '+' '=' rel_expr ';'  { $$ = stmt_short($1, $4, UNION); }
+    | TK_NAME '-' '=' rel_expr ';'  { $$ = stmt_short($1, $4, DIFF); }
+    | TK_NAME '*' '=' rel_expr ';'  { $$ = stmt_short($1, $4, JOIN); }
     | TK_NAME ':' '=' rel_expr ';'  { $$ = stmt_create(TEMP, NULL, $1, $4); }
     ;
 
@@ -306,6 +310,8 @@ prim_bool_cmp_expr:
     | prim_bool_cmp_expr TK_NEQ prim_add_expr   { $$ = p_op($1, $3, NEQ); }
     | prim_bool_cmp_expr '>' prim_add_expr      { $$ = p_op($1, $3, GT); }
     | prim_bool_cmp_expr '<' prim_add_expr      { $$ = p_op($1, $3, LT); }
+    | prim_bool_cmp_expr TK_LTE prim_add_expr   { $$ = p_op($1, $3, LTE); }
+    | prim_bool_cmp_expr TK_GTE prim_add_expr   { $$ = p_op($1, $3, GTE); }
     ;
 
 prim_expr:
@@ -607,6 +613,10 @@ static Expr *p_convert(Head *h, L_Expr *e, L_Expr_Type parent_type)
             res = expr_gt(l, r);
         } else if (t == LT) {
             res = expr_lt(l, r);
+        } else if (t == GTE) {
+            res = expr_gte(l, r);
+        } else if (t == LTE) {
+            res = expr_lte(l, r);
         } else if (t == SUM) {
             if (l->type == String)
                 yyerror("SUM operator does not support String type");
@@ -834,6 +844,12 @@ static L_Stmts stmt_create(L_Stmt_Type type,
                     .names[0] = str_dup(name),
                     .bodies[0] = e };
     return res;
+}
+
+static L_Stmts stmt_short(const char *name, L_Rel *e, L_Rel_Type node_type)
+{
+    L_Rel *b = r_binary(r_load(name), e, node_type);
+    return stmt_create(ASSIGN, NULL, name, b);
 }
 
 static L_Stmts stmt_merge(L_Stmts l, L_Stmts r)

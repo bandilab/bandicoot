@@ -167,8 +167,10 @@ static void *exec_thread(void *arg)
             param = NULL;
         }
 
-        if (sys_readn(pio, &sid, sizeof(long)) != sizeof(long))
+        if (sys_readn(pio, &sid, sizeof(long)) != sizeof(long)) {
+            status = http_500(cio);
             goto exit;
+        }
 
         if (fn->ret != NULL) {
             ret = tbuf_read(pio);

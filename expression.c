@@ -220,6 +220,16 @@ extern Expr *expr_lt(Expr *l, Expr *r)
     return expr_binary(Int, l, r, op_lt);
 }
 
+static void op_lte(Expr *dest, Expr *l, Expr *r)
+{
+    e_int(dest) = cmp(l, r) <= 0;
+}
+
+extern Expr *expr_lte(Expr *l, Expr *r)
+{
+    return expr_binary(Int, l, r, op_lte);
+}
+
 static void op_gt(Expr *dest, Expr *l, Expr *r)
 {
     e_int(dest) = cmp(l, r) > 0;
@@ -228,6 +238,16 @@ static void op_gt(Expr *dest, Expr *l, Expr *r)
 extern Expr *expr_gt(Expr *l, Expr *r)
 {
     return expr_binary(Int, l, r, op_gt);
+}
+
+static void op_gte(Expr *dest, Expr *l, Expr *r)
+{
+    e_int(dest) = cmp(l, r) >= 0;
+}
+
+extern Expr *expr_gte(Expr *l, Expr *r)
+{
+    return expr_binary(Int, l, r, op_gte);
 }
 
 static void op_sum(Expr *dest, Expr *l, Expr *r)

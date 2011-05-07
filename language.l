@@ -131,7 +131,9 @@ static int feed_lex(void *buf, int max_size)
 "*"                 { return '*'; }
 "/"                 { return '/'; }
 "<"                 { return '<'; }
+"<="                { return TK_LTE; }
 ">"                 { return '>'; }
+">="                { return TK_GTE; }
 "{"                 { return '{'; }
 "}"                 { return '}'; }
 "("                 { return '('; }

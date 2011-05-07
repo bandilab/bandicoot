@@ -73,16 +73,32 @@ static void test_cmp_ops()
                          expr_str("BacvfeaG"));
     Expr *e_ngt = expr_gt(expr_str("hello world!"),
                           expr_str("hello world!"));
+    Expr *e_gte = expr_gte(expr_str("hello world!"),
+                           expr_str("hello world!"));
+    Expr *e_lte = expr_lte(expr_str("hello world!"),
+                           expr_str("hello world!"));
+    Expr *e_ngte = expr_gte(expr_str("hello a"),
+                            expr_str("hello world!"));
+    Expr *e_nlte = expr_lte(expr_str("hello world!"),
+                            expr_str("hello a"));
 
-    if (expr_bool_val(e_eq, 0) == 0)
+    if (!expr_bool_val(e_eq, NULL))
         fail();
-    if (expr_bool_val(e_neq, 0) != 0)
+    if (expr_bool_val(e_neq, NULL))
         fail();
-    if (expr_bool_val(e_gt, 0) == 0)
+    if (!expr_bool_val(e_gt, NULL))
         fail();
-    if (expr_bool_val(e_lt, 0) == 0)
+    if (!expr_bool_val(e_lt, NULL))
         fail();
-    if (expr_bool_val(e_ngt, 0) != 0)
+    if (expr_bool_val(e_ngt, NULL))
+        fail();
+    if (!expr_bool_val(e_gte, NULL))
+        fail();
+    if (!expr_bool_val(e_lte, NULL))
+        fail();
+    if (expr_bool_val(e_ngte, NULL))
+        fail();
+    if (expr_bool_val(e_nlte, NULL))
         fail();
 
     expr_free(e_eq);
@@ -90,6 +106,23 @@ static void test_cmp_ops()
     expr_free(e_lt);
     expr_free(e_gt);
     expr_free(e_ngt);
+    expr_free(e_gte);
+    expr_free(e_lte);
+    expr_free(e_ngte);
+    expr_free(e_nlte);
+
+    e_gte = expr_gte(expr_real(0.9),
+                     expr_real(0.5));
+    e_lte = expr_lte(expr_int(-1),
+                     expr_int(1));
+
+    if (!expr_bool_val(e_gte, NULL))
+        fail();
+    if (!expr_bool_val(e_lte, NULL))
+        fail();
+
+    expr_free(e_gte);
+    expr_free(e_lte);
 }
 
 static void test_arithmetic()
