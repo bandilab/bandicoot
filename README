@@ -1,7 +1,15 @@
 Bandicoot - http://bandilab.org
 
 Compatibility Notes
-    * The Bandicoot v2 volume structure is not backward compatible. Therefore
-      it is not possible to run the v2 on top of a volume created by an older
-      version. To migrate the data it is required to export all your data
-      first, and then re-import it back.
+
+* v3: startup arguments have changed.
+
+  The deploy action has been removed, and the start action has more parameters.
+  Also, more actions have been added for a distributed version. Please do
+  ./bandicoot to see the usage info.
+
+* v2: volume structure is not backward compatible.
+
+  Therefore it is not possible to run the v2 on top of a volume created by an
+  older version. To migrate the data it is required to export all your data
+  first, and then re-import it back.
