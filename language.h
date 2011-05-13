@@ -19,8 +19,8 @@ typedef enum { LOAD, CLONE, PROJECT, RENAME, SELECT,
                EXTEND, JOIN, UNION, DIFF, SUMMARY } L_Rel_Type;
 
 typedef enum { ATTR, VALUE, NOT, EQ, NEQ, AND,
-               OR, GT, LT, GTE, LTE, SUM, SUB, MUL, DIV,
-               NEG, POS } L_Expr_Type;
+               OR, GT, LT, GTE, LTE, SUM, SUB,
+               MUL, DIV, NEG, POS, FUNC } L_Expr_Type;
 
 typedef enum { CNT, MIN, MAX, AVG, ADD } L_Sum_Type;
 

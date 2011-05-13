@@ -61,6 +61,7 @@ static void r_free(L_Rel *r);
 static L_Expr *p_attr(const char *name);
 static L_Expr *p_value(L_Value val, Type t);
 static L_Expr *p_op(L_Expr *l, L_Expr *r, L_Expr_Type node_type);
+static L_Expr *p_func(const char *name, L_Expr *e);
 static void p_free(L_Expr *e);
 static int is_constant(L_Expr *e);
 
@@ -278,6 +279,9 @@ prim_const_expr:
 prim_simple_expr:
       prim_const_expr                           { $$ = $1; }
     | '(' prim_expr ')'                         { $$ = $2; }
+    | TK_INT '(' prim_expr ')'                  { $$ = p_func("int", $3); }
+    | TK_REAL '(' prim_expr ')'                 { $$ = p_func("real", $3); }
+    | TK_LONG '(' prim_expr ')'                 { $$ = p_func("long", $3); }
     ;
 
 prim_top_expr:
@@ -287,8 +291,8 @@ prim_top_expr:
 
 prim_unary_expr:
       prim_top_expr                             { $$ = $1; }
-    | '!' prim_unary_expr                       { $$ = p_op($2, 0, NOT); }
-    | '-' prim_simple_expr                      { $$ = p_op($2, 0, NEG); }
+    | '!' prim_unary_expr                       { $$ = p_op($2, NULL, NOT); }
+    | '-' prim_simple_expr                      { $$ = p_op($2, NULL, NEG); }
     | '+' prim_simple_expr                      { $$ = $2; }
     ;
 
@@ -590,6 +594,21 @@ static Expr *p_convert(Head *h, L_Expr *e, L_Expr_Type parent_type)
         else
             yyerror("NEG operator does not support '%s' type",
                     type_to_str(l->type));
+    } else if (t == FUNC) {
+        Type to;
+        if (str_cmp("int", e->name) == 0)
+            to = Int;
+        else if (str_cmp("real", e->name) == 0)
+            to = Real;
+        else if (str_cmp("long", e->name) == 0)
+            to = Long;
+        else
+            yyerror("unknown function '%s' in primitive expression", e->name);
+
+        if (l->type == String)
+            yyerror("conversion from string is not supported");
+
+        res = expr_conv(l, to);
     } else {
         if (l->type != r->type)
             yyerror("expressions must be of the same type, found '%s' and '%s'",
@@ -1100,6 +1119,16 @@ static L_Expr *p_attr(const char *name)
     L_Expr *res = p_alloc(ATTR);
     str_cpy(res->name, name);
     res->is_const = 0;
+
+    return res;
+}
+
+static L_Expr *p_func(const char *name, L_Expr *e)
+{
+    L_Expr *res = p_alloc(FUNC);
+    str_cpy(res->name, name);
+    res->is_const = 0;
+    res->left = e;
 
     return res;
 }

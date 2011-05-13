@@ -113,6 +113,7 @@ static void test_primitive_exprs()
 {
     OK("primitive_expr_basic.b");
     OK("primitive_expr_ops.b");
+    OK("primitive_expr_conv.b");
     FAIL("primitive_expr_not_string_err.b");
     FAIL("primitive_expr_not_real_err.b");
     FAIL("primitive_expr_eq_err.b");
@@ -125,6 +126,10 @@ static void test_primitive_exprs()
     FAIL("primitive_expr_sub_err.b");
     FAIL("primitive_expr_mul_err.b");
     FAIL("primitive_expr_div_err.b");
+    FAIL("primitive_expr_unknown_func_err.b");
+    FAIL("primitive_expr_conv_str_to_int_err.b");
+    FAIL("primitive_expr_conv_str_to_real_err.b");
+    FAIL("primitive_expr_conv_str_to_long_err.b");
 }
 
 static void test_assign()

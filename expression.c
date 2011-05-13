@@ -111,14 +111,14 @@ static void eval_not(Expr *e, Tuple *t)
     e_int(e) = !e_int(do_eval(e->ctxt, t));
 }
 
-static void free_not(Expr *e)
+static void free_unary(Expr *e)
 {
     expr_free(e->ctxt);
 }
 
 extern Expr *expr_not(Expr *e)
 {
-    Expr *res = alloc(Int, 0, eval_not, free_not);
+    Expr *res = alloc(Int, 0, eval_not, free_unary);
     res->ctxt = e;
     return res;
 }
@@ -308,6 +308,56 @@ static void op_mul(Expr *dest, Expr *l, Expr *r)
 extern Expr *expr_mul(Expr *l, Expr *r)
 {
     return expr_binary(l->type, l, r, op_mul);
+}
+
+static void eval_to_int(Expr *dest, Tuple *t)
+{
+    Expr *src = do_eval(dest->ctxt, t);
+    if (src->type == Int)
+        e_int(dest) = e_int(src);
+    else if (src->type == Real)
+        e_int(dest) = (int) e_real(src);
+    else if (src->type == Long)
+        e_int(dest) = (int) e_long(src);
+}
+
+static void eval_to_real(Expr *dest, Tuple *t)
+{
+    Expr *src = do_eval(dest->ctxt, t);
+    if (src->type == Int)
+        e_real(dest) = (double) e_int(src);
+    else if (src->type == Real)
+        e_real(dest) = e_real(src);
+    else if (src->type == Long)
+        e_real(dest) = (double) e_long(src);
+}
+
+static void eval_to_long(Expr *dest, Tuple *t)
+{
+    Expr *src = do_eval(dest->ctxt, t);
+    if (src->type == Int)
+        e_long(dest) = e_int(src);
+    else if (src->type == Real)
+        e_long(dest) = (long long) e_real(src);
+    else if (src->type == Long)
+        e_long(dest) = e_long(src);
+}
+
+/* TODO: implement to/from string conversions and string concatenation */
+extern Expr *expr_conv(Expr *e, Type t)
+{
+    void (*eval)(Expr *self, Tuple *t) = NULL;
+    if (t == Int)
+        eval = eval_to_int;
+    else if (t == Real)
+        eval = eval_to_real;
+    else if (t == Long)
+        eval = eval_to_long;
+
+    Expr *res = alloc(t, 0, eval, free_unary);
+    res->ctxt = e;
+
+    return res;
 }
 
 extern int expr_bool_val(Expr *e, Tuple *t)

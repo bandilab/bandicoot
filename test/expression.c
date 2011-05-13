@@ -264,6 +264,48 @@ static void test_compound()
     mem_free(h);
 }
 
+static void test_conv_eval(Expr *l, Expr *r)
+{
+    Expr *e = expr_eq(l, r);
+    if (!expr_bool_val(e, NULL))
+        fail();
+
+    expr_free(e);
+}
+
+static void test_conv()
+{
+    test_conv_eval(
+            expr_conv(expr_int(123), Int),
+            expr_int(123));
+    test_conv_eval(
+            expr_conv(expr_int(123), Real),
+            expr_real(123.0));
+    test_conv_eval(
+            expr_conv(expr_int(123), Long),
+            expr_long(123LL));
+
+    test_conv_eval(
+            expr_conv(expr_real(123.12), Int),
+            expr_int(123));
+    test_conv_eval(
+            expr_conv(expr_real(123.12), Real),
+            expr_real(123.12));
+    test_conv_eval(
+            expr_conv(expr_real(123.12), Long),
+            expr_long(123LL));
+
+    test_conv_eval(
+            expr_conv(expr_long(123LL), Int),
+            expr_int(123));
+    test_conv_eval(
+            expr_conv(expr_long(123LL), Real),
+            expr_real(123.0));
+    test_conv_eval(
+            expr_conv(expr_long(123LL), Long),
+            expr_long(123LL));
+}
+
 int main()
 {
     test_bool_vals();
@@ -272,6 +314,7 @@ int main()
     test_arithmetic();
     test_attr();
     test_compound();
+    test_conv();
 
     return 0;
 }
