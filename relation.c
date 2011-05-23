@@ -31,7 +31,7 @@ limitations under the License.
 
 static void *vars_p(Vars *v)
 {
-    return ((void*) v->vars) + v->size * sizeof(void*);
+    return ((void*) v->names) + v->size * sizeof(void*);
 }
 
 static void *vols_p(Vars *v)
@@ -42,8 +42,8 @@ static void *vols_p(Vars *v)
 static void vars_init(Vars *v)
 {
     for (int i = 0; i < v->size; ++i) {
-        v->vars[i] = vars_p(v) + i * MAX_NAME;
-        v->vars[i][0] = '\0';
+        v->names[i] = vars_p(v) + i * MAX_NAME;
+        v->names[i][0] = '\0';
         v->vols[i] = vols_p(v) + i * MAX_ADDR;
         v->vols[i][0] = '\0';
         v->vers[i] = 0L;
@@ -55,7 +55,7 @@ extern Vars *vars_new(int len)
     Vars *res = mem_alloc(sizeof(Vars));
     res->size = len;
     res->len = 0;
-    res->vars = mem_alloc(len * (sizeof(void*) + MAX_NAME));
+    res->names = mem_alloc(len * (sizeof(void*) + MAX_NAME));
     res->vols = mem_alloc(len * (sizeof(void*) + MAX_ADDR));
     res->vers = mem_alloc(len * sizeof(long));
 
@@ -68,14 +68,14 @@ extern void vars_cpy(Vars *dest, Vars *src)
 {
     dest->len = 0;
     for (int i = 0; i < src->len; ++i) {
-        vars_put(dest, src->vars[i], src->vers[i]);
+        vars_put(dest, src->names[i], src->vers[i]);
         str_cpy(dest->vols[i], src->vols[i]);
     }
 }
 
 extern void vars_free(Vars *v)
 {
-    mem_free(v->vars);
+    mem_free(v->names);
     mem_free(v->vers);
     mem_free(v->vols);
     mem_free(v);
@@ -127,28 +127,28 @@ extern int vars_write(Vars *v, IO *io)
 extern void vars_put(Vars *v, const char *var, long ver)
 {
     if (v->len == v->size) {
-        char **vars = v->vars;
+        char **names = v->names;
         char **vols = v->vols;
         long *vers = v->vers;
 
         v->size += MAX_VARS;
-        v->vars = mem_alloc(v->size * (sizeof(void*) + MAX_NAME));
+        v->names = mem_alloc(v->size * (sizeof(void*) + MAX_NAME));
         v->vols = mem_alloc(v->size * (sizeof(void*) + MAX_ADDR));
         v->vers = mem_alloc(v->size * sizeof(long));
 
         vars_init(v);
 
         for (int i = 0; i < v->len; ++i) {
-            str_cpy(v->vars[i], vars[i]);
+            str_cpy(v->names[i], names[i]);
             str_cpy(v->vols[i], vols[i]);
             v->vers[i] = vers[i];
         }
-        mem_free(vars);
+        mem_free(names);
         mem_free(vers);
         mem_free(vols);
     }
 
-    str_cpy(v->vars[v->len], var);
+    str_cpy(v->names[v->len], var);
     v->vers[v->len] = ver;
     v->len++;
 }
@@ -157,7 +157,7 @@ extern int vars_scan(Vars *v, char const *var, long ver)
 {
     int idx = -1;
     for (int i = 0; i < v->len && idx < 0; ++i)
-        if (str_cmp(var, v->vars[i]) == 0 && ver == v->vers[i])
+        if (str_cmp(var, v->names[i]) == 0 && ver == v->vers[i])
             idx = i;
 
     return idx;
@@ -235,7 +235,7 @@ static void init_load(Rel *r, Vars *rvars, TBuf *arg)
 {
     Ctxt *c = r->ctxt;
 
-    int pos = array_scan(rvars->vars, rvars->len, c->name);
+    int pos = array_scan(rvars->names, rvars->len, c->name);
     r->body = vol_read(rvars->vols[pos], c->name, rvars->vers[pos]);
 }
 

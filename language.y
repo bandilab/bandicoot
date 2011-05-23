@@ -356,9 +356,9 @@ extern void env_free(Env *env)
     for (int x = 0; x < env->fns.len; ++x) {
         Func *fn = env->fns.funcs[x];
         for (int j = 0; j < fn->r.len; ++j)
-            mem_free(fn->r.vars[j]);
+            mem_free(fn->r.names[j]);
         for (int j = 0; j < fn->w.len; ++j) {
-            mem_free(fn->w.vars[j]);
+            mem_free(fn->w.names[j]);
             rel_free(fn->w.rels[j]);
         }
         for (int j = 0; j < fn->t.len; ++j) {
@@ -952,7 +952,7 @@ static void add_func(const char *name,
             fn->p.rels[fn->p.len++] = rel_tmp(body, t_clones[i], t_cnts[i]);
         } else {
             body = r_convert(stmts.bodies[i], stmts, i, t_clones);
-            append_rvars(stmts.bodies[i], fn->r.vars, &fn->r.len);
+            append_rvars(stmts.bodies[i], fn->r.names, &fn->r.len);
         }
 
         if (stmts.types[i] == ASSIGN) {
@@ -973,7 +973,7 @@ static void add_func(const char *name,
                 yyerror("invalid type in assignment, expects %s, found %s",
                         wstr, bstr);
 
-            fn->w.vars[fn->w.len] = str_dup(wvar);
+            fn->w.names[fn->w.len] = str_dup(wvar);
             fn->w.rels[fn->w.len++] = body; 
         } else if (stmts.types[i] == RETURN) {
             if (res_type == NULL)

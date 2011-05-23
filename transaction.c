@@ -43,7 +43,7 @@ static const long MAX_LONG = 0x7FFFFFFF;
 
 static const int T_ENTER = 1;
 static const int R_ENTER = 2;
-static const int T_FINISH = 3; /* FIXME: it looks like we need only T_COMMIT */
+static const int T_FINISH = 3;
 static const int R_FINISH = 4;
 static const int T_SYNC = 5;
 static const int R_SYNC = 6;
@@ -58,7 +58,7 @@ typedef struct {
 
 typedef struct {
     long sid; /* transaction identifier */
-    char var[MAX_NAME]; /* variable name */
+    char name[MAX_NAME]; /* variable name */
     int a_type; /* READ or WRITE actions */
     long version; /* either an SID to read or an SID to create/write */
     int state; /* identifies the current entry state, see defines above */
@@ -77,10 +77,13 @@ static struct {
     int len;
 } gcode;
 
-static char *all_vars[MAX_VARS];
+static struct {
+    char *names[MAX_VARS];
+    int len;
+} gvars;
+
 static char gstate[MAX_FILE_PATH];
 static char gstate_bak[MAX_FILE_PATH];
-static int num_vars;
 static IO* gio;
 static List *gents;
 static List *gvols;
@@ -131,14 +134,14 @@ static void rm(List **list,
 }
 
 /* determines a version to read */
-static long get_rsid(long sid, const char var[])
+static long get_rsid(long sid, const char name[])
 {
     long res = -1;
 
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED
-                && e->sid < sid && e->sid > res && str_cmp(e->var, var) == 0)
+                && e->sid < sid && e->sid > res && str_cmp(e->name, name) == 0)
             res = e->sid;
     }
 
@@ -146,14 +149,14 @@ static long get_rsid(long sid, const char var[])
 }
 
 /* returns true if a given sid of a variable is active (being read) */
-static int is_active(const char var[], long sid)
+static int is_active(const char name[], long sid)
 {
     int res = 0;
 
     for (List *it = gents; !res && it != NULL; it = it->next) {
         Entry *e = it->elem;
         res = (e->state == RUNNABLE && e->a_type == READ
-                && e->version == sid && str_cmp(e->var, var) == 0);
+                && e->version == sid && str_cmp(e->name, name) == 0);
     }
 
     return res;
@@ -170,11 +173,11 @@ static int rm_entry(void *elem, const void *cmp)
     int rm = 0;
     if (e->a_type == WRITE && e->state == COMMITTED) {
         long sid = e->sid;
-        char *var = e->var;
+        char *name = e->name;
 
-        long rsid = get_rsid(MAX_LONG, var);
+        long rsid = get_rsid(MAX_LONG, name);
 
-        int act = is_active(var, sid);
+        int act = is_active(name, sid);
 
         if (sid < rsid && !act)
             rm = 1;
@@ -191,7 +194,7 @@ static int rm_entry(void *elem, const void *cmp)
 }
 
 static Entry *add_entry(long sid,
-                        const char var[],
+                        const char name[],
                         int a_type,
                         long version,
                         int state)
@@ -199,7 +202,7 @@ static Entry *add_entry(long sid,
 
     Entry *e = (Entry*) mem_alloc(sizeof(Entry));
     e->sid = sid;
-    str_cpy(e->var, var);
+    str_cpy(e->name, name);
     str_cpy(e->wvid, "");
     e->a_type = a_type;
     e->version = version;
@@ -224,7 +227,7 @@ static List *list_entries(long sid)
     return dest;
 }
 
-static Entry *get_min_waiting(const char var[], int a_type)
+static Entry *get_min_waiting(const char name[], int a_type)
 {
     long min_sid = MAX_LONG;
     Entry *res = 0;
@@ -232,7 +235,7 @@ static Entry *get_min_waiting(const char var[], int a_type)
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->state == WAITING && e->sid < min_sid
-                && e->a_type == a_type && str_cmp(e->var, var) == 0)
+                && e->a_type == a_type && str_cmp(e->name, name) == 0)
         {
             res = e;
             min_sid = e->sid;
@@ -242,28 +245,28 @@ static Entry *get_min_waiting(const char var[], int a_type)
     return res;
 }
 
-static List *list_waiting(long sid, const char var[], int a_type)
+static List *list_waiting(long sid, const char name[], int a_type)
 {
     List *dest = NULL;
 
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->state == WAITING && e->sid <= sid
-                && e->a_type == a_type && str_cmp(e->var, var) == 0)
+                && e->a_type == a_type && str_cmp(e->name, name) == 0)
             dest = add(dest, e);
     }
 
     return dest;
 }
 
-static long get_wsid(const char var[])
+static long get_wsid(const char name[])
 {
     long res = -1;
 
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == RUNNABLE
-                && str_cmp(e->var, var) == 0)
+                && str_cmp(e->name, name) == 0)
         {
             res = e->sid;
             break;
@@ -292,11 +295,6 @@ static Vol *replace_volume(const char *vid, Vars *vars)
     vol->vars = vars;
     str_cpy(vol->id, vid);
 
-    /* FIXME: we can possibly overwrite variables written via tx_commit 
-       an obsolete tx_volume_sync message from a volume can arrive after a
-       commit due to some network delays. It would not have the latest
-       commited variables in it.
-     */
     rm(&gvols, vid, rm_volume);
     gvols = add(gvols, vol);
 
@@ -315,41 +313,41 @@ static Vol *get_volume(const char *vid)
     return vol;
 }
 
-static Vol *closest_vol(char *vid, const char *addr, const char *var, long ver)
+static void closest_vol(char *vid, const char *addr, const char *name, long ver)
 {
-    Vol *res = NULL;
+    Vol *v = NULL;
+    str_cpy(vid, "");
+
     for (List *it = gvols; it != NULL; it = it->next) {
         Vol *vol = it->elem;
 
-        if (str_len(var) == 0 || ver < 1L ||
-            vars_scan(vol->vars, var, ver) > -1)
-            res = it->elem;
+        if (str_len(name) == 0 || ver < 1L ||
+            vars_scan(vol->vars, name, ver) > -1)
+            v = it->elem;
 
-        if (res != NULL && str_match(addr, vol->id, ':'))
+        if (v != NULL && str_match(addr, vol->id, ':'))
             break;
     }
 
-    if (res != NULL)
-        str_cpy(vid, res->id);
-
-    return res;
+    if (v != NULL)
+        str_cpy(vid, v->id);
 }
 
 static void set_vols(Vars *v, const char *addr)
 {
     for (int i = 0; i < v->len; ++i)
-        closest_vol(v->vols[i], addr, v->vars[i], v->vers[i]);
+        closest_vol(v->vols[i], addr, v->names[i], v->vers[i]);
 }
 
 static void current_state(long vers[])
 {
-    for (int i = 0; i < num_vars; ++i)
+    for (int i = 0; i < gvars.len; ++i)
         vers[i] = 0;
 
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED) {
-            int idx = array_scan(all_vars, num_vars, e->var);
+            int idx = array_scan(gvars.names, gvars.len, e->name);
             if (vers[idx] < e->version)
                 vers[idx] = e->version;
         }
@@ -358,18 +356,18 @@ static void current_state(long vers[])
 
 extern void wstate()
 {
-    long vers[num_vars];
+    long vers[gvars.len];
     current_state(vers);
 
     char sid[MAX_NAME];
-    char *buf = mem_alloc(num_vars * (MAX_NAME + MAX_NAME));
+    char *buf = mem_alloc(gvars.len * (MAX_NAME + MAX_NAME));
 
     sys_move(gstate_bak, gstate);
 
     int off = 0;
-    for (int i = 0; i < num_vars; ++i) {
+    for (int i = 0; i < gvars.len; ++i) {
         str_from_sid(sid, vers[i]);
-        off += str_print(buf + off, "%s,%s\n", all_vars[i], sid);
+        off += str_print(buf + off, "%s,%s\n", gvars.names[i], sid);
     }
 
     IO *io = sys_open(gstate, CREATE | WRITE);
@@ -396,14 +394,14 @@ static void finish(int sid, int final_state)
 
             long rsid = e->version;
             if (final_state == REVERTED)
-                rsid = get_rsid(e->sid, e->var);
+                rsid = get_rsid(e->sid, e->name);
             else {
                 Vol *vol = get_volume(e->wvid);
                 if (vol != NULL)
-                    vars_put(vol->vars, e->var, e->version);
+                    vars_put(vol->vars, e->name, e->version);
             }
 
-            Entry *we = get_min_waiting(e->var, WRITE);
+            Entry *we = get_min_waiting(e->name, WRITE);
 
             long wsid = MAX_LONG;
             if (we != NULL) {
@@ -411,7 +409,7 @@ static void finish(int sid, int final_state)
                 sig = add(sig, we);
             }
 
-            List *rents = list_waiting(wsid, e->var, READ);
+            List *rents = list_waiting(wsid, e->name, READ);
             for (; rents != NULL; rents = next(rents)) {
                 Entry *re = rents->elem;
                 re->version = rsid;
@@ -459,8 +457,8 @@ extern void tx_free()
         mem_free(gvols->elem);
     }
 
-    for (int i = 0; i < num_vars; ++i)
-        mem_free(all_vars[i]);
+    for (int i = 0; i < gvars.len; ++i)
+        mem_free(gvars.names[i]);
 
     mem_free(gcode.buf);
 
@@ -479,7 +477,7 @@ static void tx_init(const char *source, const char *state)
     str_print(gstate_bak, "%s.backup", gstate);
 
     last_sid = 1;
-    num_vars = 0;
+    gvars.len = 0;
 
     if (sys_exists(gstate_bak))
         sys_move(gstate, gstate_bak);
@@ -491,7 +489,7 @@ static void tx_init(const char *source, const char *state)
     mon_lock(gmon);
 
     long vers[MAX_VARS];
-    char *vars[MAX_VARS];
+    char *names[MAX_VARS];
     int len;
 
     char *buf = sys_load(gstate);
@@ -505,7 +503,7 @@ static void tx_init(const char *source, const char *state)
         if (cnt != 2)
             sys_die("bad line %s:%d\n", gstate, i + 1);
 
-        vars[i] = str_dup(name_sid[0]);
+        names[i] = str_dup(name_sid[0]);
         vers[i] = str_to_sid(name_sid[1]);
 
         mem_free(name_sid);
@@ -514,29 +512,29 @@ static void tx_init(const char *source, const char *state)
     mem_free(lines);
     mem_free(buf);
 
-    num_vars = len;
+    gvars.len = len;
 
-    for (int i = 0; i < num_vars; ++i) {
-        all_vars[i] = vars[i];
+    for (int i = 0; i < gvars.len; ++i) {
+        gvars.names[i] = names[i];
         long sid = vers[i];
 
         if (sid > last_sid)
             last_sid = sid;
 
-        Entry *e = add_entry(sid, all_vars[i], WRITE, sid, COMMITTED);
+        Entry *e = add_entry(sid, gvars.names[i], WRITE, sid, COMMITTED);
         mon_free(e->mon);
     }
 
     Env *env = env_new(source, gcode.buf);
 
     for (int i = 0; i < env->vars.len; ++i) {
-        /* FIXME: we also need to remove vars from all_vars if they do
+        /* FIXME: we also need to remove vars from gvars if they do
                   not exist in the env */
-        char *var = str_dup(env->vars.names[i]);
-        int idx = array_scan(all_vars, num_vars, env->vars.names[i]);
+        char *name = str_dup(env->vars.names[i]);
+        int idx = array_scan(gvars.names, gvars.len, env->vars.names[i]);
         if (idx < 0) {
-            all_vars[num_vars++] = var;
-            Entry *e = add_entry(1, var, WRITE, 1, COMMITTED);
+            gvars.names[gvars.len++] = name;
+            Entry *e = add_entry(1, name, WRITE, 1, COMMITTED);
             mon_free(e->mon);
         }
     }
@@ -558,7 +556,7 @@ static Vars *volume_sync(const char *vid, Vars *in)
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED)
-            vars_put(out, e->var, e->version);
+            vars_put(out, e->name, e->version);
     }
     set_vols(out, vid);
 
@@ -591,36 +589,36 @@ extern long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
 
     mon_lock(gmon);
 
-    char wvid[MAX_ADDR];
+    char wvid[MAX_ADDR] = "";
     closest_vol(wvid, eid, "", 0);
 
     sid = ++last_sid;
     for (int i = 0; i < wvars->len; ++i) {
-        const char *var = wvars->vars[i];
+        const char *name = wvars->names[i];
         int state = WAITING;
-        if (get_wsid(var) == -1)
+        if (get_wsid(name) == -1)
             state = RUNNABLE;
 
-        we[i] = add_entry(sid, var, WRITE, sid, state);
+        we[i] = add_entry(sid, name, WRITE, sid, state);
         str_cpy(we[i]->wvid, wvid);
 
         rw = 1;
     }
 
     for (int i = 0; i < rvars->len; ++i) {
-        const char *var = rvars->vars[i];
-        long rsid = get_rsid(sid, var);
+        const char *name = rvars->names[i];
+        long rsid = get_rsid(sid, name);
 
         int state = RUNNABLE;
         if (rw) {
-            long wsid = get_wsid(var);
+            long wsid = get_wsid(name);
             if (wsid > -1L && sid > wsid) {
                 rsid = -1L;
                 state = WAITING;
             }
         }
 
-        re[i] = add_entry(sid, var, READ, rsid, state);
+        re[i] = add_entry(sid, name, READ, rsid, state);
     }
 
     mon_unlock(gmon);
@@ -903,7 +901,7 @@ extern void tx_state()
         else sys_die("tx: unknown state %d\n", e->state);
 
         sys_print("%-8d %-32s %-5s %-8d %-9s\n",
-                  e->sid, e->var, a_type, e->version, state);
+                  e->sid, e->name, a_type, e->version, state);
 
     }
 
@@ -913,7 +911,7 @@ extern void tx_state()
         Vol *vol = it->elem;
         for (int i = 0; i < vol->vars->len; ++i)
             sys_print("%-8d %-32s %-8d\n",
-                      vol->id, vol->vars->vars[i], vol->vars->vers[i]);
+                      vol->id, vol->vars->names[i], vol->vars->vers[i]);
     }
 
     mon_unlock(gmon);

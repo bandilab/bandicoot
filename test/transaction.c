@@ -136,7 +136,7 @@ static void *exec_thread(void *arg)
             }
             rel_free(rel);
         } else if (action == TX_WRITE) {
-            rel_store(wvars->vols[0], wvars->vars[0], wvars->vers[0], rel);
+            rel_store(wvars->vols[0], wvars->names[0], wvars->vers[0], rel);
             rel_free(rel);
         }
 
@@ -203,7 +203,7 @@ static void test_basics()
     if (str_cmp(r->vols[0], vid) != 0)
         fail();
 
-    Rel *rel = rel_load(env_head(env, r->vars[0]), r->vars[0]);
+    Rel *rel = rel_load(env_head(env, r->names[0]), r->names[0]);
 
     rel_init(rel, r, NULL);
     if (count(rel) != 0)

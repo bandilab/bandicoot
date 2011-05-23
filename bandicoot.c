@@ -349,9 +349,9 @@ int main(int argc, char *argv[])
         Vars *r = vars_new(fn->r.len);
         Vars *w = vars_new(fn->w.len);
         for (int i = 0; i < fn->r.len; ++i)
-            vars_put(r, fn->r.vars[i], 0L);
+            vars_put(r, fn->r.names[i], 0L);
         for (int i = 0; i < fn->w.len; ++i)
-            vars_put(w, fn->w.vars[i], 0L);
+            vars_put(w, fn->w.names[i], 0L);
 
         long sid = tx_enter(addr, r, w);
 
@@ -366,7 +366,7 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < fn->w.len; ++i) {
             rel_init(fn->w.rels[i], r, arg);
-            rel_store(w->vols[i], w->vars[i], w->vers[i], fn->w.rels[i]);
+            rel_store(w->vols[i], w->names[i], w->vers[i], fn->w.rels[i]);
         }
 
         if (fn->ret != NULL) {

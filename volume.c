@@ -44,11 +44,16 @@ static const int R_WRITE = 4;
 
 static char gaddr[MAX_ADDR];
 
-static void set_path(char *res, const char *var, long sid, int part)
+struct {
+    char names[MAX_VARS][MAX_NAME];
+    int len;
+} gvars;
+
+static void set_path(char *res, const char *name, long sid, int part)
 {
     res += str_cpy(res, path);
     res += str_cpy(res, "/");
-    res += str_cpy(res, var);
+    res += str_cpy(res, name);
     res += str_cpy(res, "-");
     res += str_from_sid(res, sid);
     if (part)
@@ -87,10 +92,10 @@ extern long parse(const char *file, char *rel)
     return sid;
 }
 
-static TBuf *read_file(const char *var, long ver)
+static TBuf *read_file(const char *name, long ver)
 {
     char file[MAX_FILE_PATH];
-    set_path(file, var, ver, 0);
+    set_path(file, name, ver, 0);
 
     IO *fio = sys_open(file, READ);
     TBuf *buf = tbuf_read(fio);
@@ -99,11 +104,11 @@ static TBuf *read_file(const char *var, long ver)
     return buf;
 }
 
-static void write(const char *var, long ver, TBuf *buf)
+static void write(const char *name, long ver, TBuf *buf)
 {
     char part[MAX_FILE_PATH], file[MAX_FILE_PATH];
-    set_path(part, var, ver, 1);
-    set_path(file, var, ver, 0);
+    set_path(part, name, ver, 1);
+    set_path(file, name, ver, 0);
 
     IO *fio = sys_open(part, CREATE | WRITE);
     tbuf_write(buf, fio);
@@ -111,9 +116,9 @@ static void write(const char *var, long ver, TBuf *buf)
     sys_move(file, part);
 }
 
-static int read_var(IO *io, char *var, long *ver)
+static int read_var(IO *io, char *name, long *ver)
 {
-    if (sys_readn(io, var, MAX_NAME) != MAX_NAME)
+    if (sys_readn(io, name, MAX_NAME) != MAX_NAME)
         return 0;
 
     if (sys_readn(io, ver, sizeof(long)) != sizeof(long))
@@ -127,15 +132,15 @@ static TBuf *read_net(const char *vid, const char *name, long version)
     int failed = 0;
     TBuf *res = NULL;
 
-    char var[MAX_NAME] = "";
-    str_cpy(var, name);
+    char v[MAX_NAME] = "";
+    str_cpy(v, name);
 
     IO *io = sys_try_connect(vid);
     if (io == NULL)
         goto exit;
 
     if (sys_write(io, &T_READ, sizeof(int)) < 0 ||
-        sys_write(io, var, sizeof(var)) < 0 ||
+        sys_write(io, v, sizeof(v)) < 0 ||
         sys_write(io, &version, sizeof(version)) < 0)
         goto exit;    
 
@@ -159,41 +164,58 @@ exit:
     return res;
 }
 
-static void copy_file(char *var, long ver, const char *vid)
+static void copy_file(char *name, long ver, const char *vid)
 {
     char file[MAX_FILE_PATH];
-    set_path(file, var, ver, 0);
+    set_path(file, name, ver, 0);
 
     if (ver <= 1 || sys_exists(file))
         return;
 
     TBuf *buf = NULL;
     long time = sys_millis();
-    if (str_cmp(vid, "") == 0 || (buf = read_net(vid, var, ver)) == NULL) {
+    if (str_cmp(vid, "") == 0 || (buf = read_net(vid, name, ver)) == NULL) {
         sys_log('V', "file %s-%016X copy failed from %s, time %dms\n",
-                     var, ver, vid, sys_millis() - time);
+                     name, ver, vid, sys_millis() - time);
         return;
     }
 
-    write(var, ver, buf);
+    write(name, ver, buf);
     tbuf_free(buf);
 
     sys_log('V', "file %s-%016X copy succeeded from %s, time %dms\n",
-                 var, ver, vid, sys_millis() - time);
+                 name, ver, vid, sys_millis() - time);
 }
 
+/* FIXME: sync_tx needs to improve
+   The below implementation is a safe one which executes the whole
+   synchronization with in a transaction (writes to all variables). This
+   ensures that:
+    * volume does not send partial var list (not yet commited/reverted) to the
+      tx
+    * the list of variables we get from tx is not only consistent but up to
+      date and is not going to get outdated until we finish the copying of the
+      missing files from other volumes
+*/
 static Vars *sync_tx()
 {
+    char addr[MAX_ADDR] = "";
+    Vars *r = vars_new(0), *w = vars_new(gvars.len);
+    for (int i = 0; i < gvars.len; ++i)
+        vars_put(w, gvars.names[i], 0L);
+
+    long sid = tx_enter(addr, r, w);
+
     Vars *disk = vars_new(0);
 
     /* init the disk state variable */
     int num_files;
     char **files = sys_list(path, &num_files);
     for (int i = 0; i < num_files; ++i) {
-        char var[MAX_NAME] = "";
-        long ver = parse(files[i], var);
+        char name[MAX_NAME] = "";
+        long ver = parse(files[i], name);
         if (ver > 0)
-            vars_put(disk, var, ver);
+            vars_put(disk, name, ver);
     }
     mem_free(files);
 
@@ -202,14 +224,16 @@ static Vars *sync_tx()
     /* remove old versions */
     char file[MAX_FILE_PATH];
     for (int i = 0; i < disk->len; ++i)
-        if (vars_scan(tx, disk->vars[i], disk->vers[i]) < 0) {
-            set_path(file, disk->vars[i], disk->vers[i], 0);
+        if (vars_scan(tx, disk->names[i], disk->vers[i]) < 0) {
+            set_path(file, disk->names[i], disk->vers[i], 0);
             sys_remove(file);
         }
 
     /* sync with other volumes */
     for (int i = 0; i < tx->len; ++i)
-        copy_file(tx->vars[i], tx->vers[i], tx->vols[i]);
+        copy_file(tx->names[i], tx->vers[i], tx->vols[i]);
+
+    tx_revert(sid); /* revert is mandatory as this is an artificial tx */
 
     vars_free(disk);
     return tx;
@@ -218,7 +242,7 @@ static Vars *sync_tx()
 static void *serve(void *arg)
 {
     IO *cio = NULL, *sio = (IO*) arg;
-    char var[MAX_NAME];
+    char name[MAX_NAME];
     long ver;
 
     for (;;) {
@@ -226,22 +250,22 @@ static void *serve(void *arg)
 
         int msg = 0;
         if (sys_readn(cio, &msg, sizeof(int)) == sizeof(int)) {
-            if (msg == T_READ && read_var(cio, var, &ver)) {
-                TBuf *buf = read_file(var, ver);
+            if (msg == T_READ && read_var(cio, name, &ver)) {
+                TBuf *buf = read_file(name, ver);
                 if (buf != NULL) {
                     tbuf_write(buf, cio);
                     tbuf_free(buf);
                     sys_write(cio, &R_READ, sizeof(int));
                 }
-                sys_log('V', "file %s-%016X read\n", var, ver);
-            } else if (msg == T_WRITE && read_var(cio, var, &ver)) {
+                sys_log('V', "file %s-%016X read\n", name, ver);
+            } else if (msg == T_WRITE && read_var(cio, name, &ver)) {
                 TBuf *buf = tbuf_read(cio);
                 if (buf != NULL) {
-                    write(var, ver, buf);
+                    write(name, ver, buf);
                     tbuf_free(buf);
                     sys_write(cio, &R_WRITE, sizeof(int));
                 }
-                sys_log('V', "file %s-%016X written\n", var, ver);
+                sys_log('V', "file %s-%016X written\n", name, ver);
             }
         }
 
@@ -281,6 +305,10 @@ static void env_check()
     sys_write(io, new_buf, str_len(new_buf));
     sys_close(io);
 
+    gvars.len = new->vars.len;
+    for (int i = 0; i < new->vars.len; ++i)
+        str_cpy(gvars.names[i], new->vars.names[i]);
+
     env_free(old);
     env_free(new);
 
@@ -314,18 +342,18 @@ extern char *vol_init(int port, const char *p)
             vol_remove(files[i]);
     mem_free(files);
 
-    Vars *tx = sync_tx();
-
     /* create new empty files */
-    for (int i = 0; i < tx->len; ++i)
-        if (tx->vers[i] == 1) {
+    char file[MAX_FILE_PATH];
+    for (int i = 0; i < gvars.len; ++i) {
+        set_path(file, gvars.names[i], 1L, 0);
+        if (!sys_exists(file)) {
             TBuf *buf = tbuf_new();
-            write(tx->vars[i], tx->vers[i], buf);
+            write(gvars.names[i], 1L, buf);
             tbuf_free(buf);
         }
+    }
 
-    vars_free(tx);
-    vars_free(sync_tx()); /* let the TX know immediately about the new files */
+    vars_free(sync_tx()); /* let the TX know immediately about the content */
 
     sys_thread(exec_cleanup, NULL);
     if (standalone)
@@ -336,36 +364,36 @@ extern char *vol_init(int port, const char *p)
     return gaddr;
 }
 
-extern TBuf *vol_read(const char *vid, const char *name, long ver)
+extern TBuf *vol_read(const char *vid, const char *var, long ver)
 {
     TBuf *res = NULL;
-    res = read_net(vid, name, ver);
+    res = read_net(vid, var, ver);
     if (res == NULL)
-        sys_die("volume: read failed %s-%016X'\n", name, ver);
+        sys_die("volume: read failed %s-%016X'\n", var, ver);
 
     return res;
 }
 
-extern void vol_write(const char *vid, TBuf *buf, const char *name, long ver)
+extern void vol_write(const char *vid, TBuf *buf, const char *var, long ver)
 {
-    char var[MAX_NAME] = "", sid[MAX_NAME] = "";
+    char v[MAX_NAME] = "", sid[MAX_NAME] = "";
     str_from_sid(sid, ver);
-    str_cpy(var, name);
+    str_cpy(v, var);
 
     IO *io = sys_connect(vid);
 
     if (sys_write(io, &T_WRITE, sizeof(int)) < 0 ||
-        sys_write(io, var, sizeof(var)) < 0 ||
+        sys_write(io, v, sizeof(v)) < 0 ||
         sys_write(io, &ver, sizeof(ver)) < 0)
-        sys_die("volume: write failed to send '%s-%s'\n", name, sid);
+        sys_die("volume: write failed to send '%s-%s'\n", v, sid);
 
     if (tbuf_write(buf, io) < 0)
-        sys_die("volume: write failed for '%s-%s'\n", name, sid);
+        sys_die("volume: write failed for '%s-%s'\n", v, sid);
 
     /* confirmation of the full write */
     int msg = 0;
     if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) || msg != R_WRITE)
-        sys_die("volume: write failed to confirm '%s-%s'\n", name, sid);
+        sys_die("volume: write failed to confirm '%s-%s'\n", v, sid);
 
     sys_close(io);
 }

@@ -20,12 +20,12 @@ typedef struct {
 
     struct {
         int len;
-        char *vars[MAX_VARS];
+        char *names[MAX_VARS];
     } r;
 
     struct {
         int len;
-        char *vars[MAX_STMTS];
+        char *names[MAX_STMTS];
         Rel *rels[MAX_STMTS];
     } w;
 

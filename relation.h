@@ -18,7 +18,7 @@ limitations under the License.
 typedef struct {
     int size;
     int len;
-    char **vars;
+    char **names;
     char **vols;
     long *vers;
 } Vars;

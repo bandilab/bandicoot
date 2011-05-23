@@ -364,11 +364,11 @@ static void check_vars(Vars *v)
     if (v == NULL || v->len != 3)
         fail();
 
-    if (str_cmp(v->vars[0], "a1") != 0 || v->vers[0] != 1)
+    if (str_cmp(v->names[0], "a1") != 0 || v->vers[0] != 1)
         fail();
-    if (str_cmp(v->vars[1], "a2") != 0 || v->vers[1] != 2)
+    if (str_cmp(v->names[1], "a2") != 0 || v->vers[1] != 2)
         fail();
-    if (str_cmp(v->vars[2], "a3") != 0 || v->vers[2] != 3)
+    if (str_cmp(v->names[2], "a3") != 0 || v->vers[2] != 3)
         fail();
 
     for (int i = 0; i < 3; ++i) {
