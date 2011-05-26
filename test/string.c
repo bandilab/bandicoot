@@ -17,6 +17,9 @@ limitations under the License.
 
 #include "common.h"
 
+#include <float.h>
+#include <stdio.h>
+
 static void test_cpy()
 {
     int i;
@@ -171,6 +174,12 @@ static void test_real()
 
     d = str_real("32aa.cbd", &error);
     if (!error)
+        fail();
+
+    char dblmax[320];
+    sprintf(dblmax, "%f", DBL_MAX);
+    d = str_real(dblmax, &error);
+    if(error || (d != DBL_MAX))
         fail();
 }
 

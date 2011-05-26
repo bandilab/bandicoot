@@ -168,7 +168,6 @@ extern int str_int(const char *s, int *error)
     return sign * val;
 }
 
-/* FIXME: we need to check the logic, test with DBL_MAX fails */
 extern double str_real(const char *s, int *error)
 {
     *error = 0;
@@ -176,7 +175,7 @@ extern double str_real(const char *s, int *error)
     int sign;
     s = get_sign(s, &sign, error);
 
-    double val;
+    register long double val;
     for (val = 0; *s && *s != '.' && !*error; ++s)
         if (is_digit(*s))
             val = 10 * val + (*s - '0');
@@ -196,7 +195,7 @@ extern double str_real(const char *s, int *error)
             *error = 1;
     }
 
-    return sign * val;
+    return (double) sign * val;
 }
 
 extern char *str_trim(char *s)
