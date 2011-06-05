@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,6 +32,9 @@ limitations under the License.
 #include "language.h"
 #include "environment.h"
 
+/* TODO: make line numbers reported in yyerror more accurate, especially
+         for r_convert() and p_convert() which are currently called on
+         function reduction */
 extern void yyerror(const char *, ...);
 extern int yylex();
 
@@ -730,16 +733,30 @@ static Rel *r_convert_node(L_Rel *rel,
             extends[i] = p_convert(l->head, attrs.exprs[i], POS);
         }
 
+        if (l->head->len + attrs.len > MAX_ATTRS)
+            yyerror("extend result type exceeds the maximum number "
+                    "of attributes (%d)", MAX_ATTRS);
+
         res = rel_extend(l, attrs.names, extends, attrs.len);
     } else if (t == JOIN) {
+        int num_attrs = l->head->len + r->head->len;
+
         for (int i = 0; i < l->head->len; ++i) {
             char *n = l->head->names[i];
             Type t; int pos;
-            if (head_attr(r->head, n, &pos, &t))
+            if (head_attr(r->head, n, &pos, &t)) {
+                num_attrs--;
+
                 if (t != l->head->types[i])
                     yyerror("attribute '%s' is of different type in right %s",
                             n, lhstr);
+            }
         }
+
+        if (num_attrs > MAX_ATTRS)
+            yyerror("join result type exceeds the maximum number "
+                    "of attributes (%d)", MAX_ATTRS);
+
         res = rel_join(l, r);
     } else if (t == UNION) {
         if (!head_eq(l->head, r->head))
@@ -807,8 +824,13 @@ static Rel *r_convert_node(L_Rel *rel,
 
         if (r == NULL)
             res = rel_sum_unary(l, attrs.names, attrs.types, sums, attrs.len);
-        else
+        else {
+            if (r->head->len + attrs.len > MAX_ATTRS)
+                yyerror("summary result type exceeds the maximum number "
+                        "of attributes (%d)", MAX_ATTRS);
+
             res = rel_sum(l, r, attrs.names, attrs.types, sums, attrs.len);
+        }
     }
     return res;
 }

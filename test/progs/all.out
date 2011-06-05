@@ -3,11 +3,14 @@ test/progs/assign_bad_wvar_err.b:11: unknown variable 'does_not_exist'
 test/progs/assign_diff_bad_types_err.b:17: use of semidiff with no commmon attributes (rel {x: real, y: real, } and rel {x: int, y: string, })
 test/progs/assign_join_bad_types_err.b:16: attribute 'x' is of different type in right rel {x: real, y: real, }
 test/progs/assign_union_bad_types_err.b:17: use of union with different types (rel {x: real, y: real, } and rel {id: int, name: string, })
+test/progs/extend_attr_exists_err.b:11: attribute 'x' already exists in rel {x: real, y: real, }
+test/progs/extend_max_attrs_err.b:20: extend result type exceeds the maximum number of attributes (64)
 test/progs/func_bad_res_type_err.b:16: invalid type in return, expects rel {r: real, }, found rel {x: real, y: real, }
 test/progs/func_missing_ret_stmt_err.b:12: missing return statement in a function with defined return type
 test/progs/func_redecl_err.b:17: function 'svc_name' already defined
 test/progs/func_unexp_ret_stmt_err.b:12: unexpected return in function with void result type
 test/progs/func_unknown_res_type_err.b:9: unknown type 'unknown_t'
+test/progs/join_max_attrs_err.b:28: join result type exceeds the maximum number of attributes (64)
 test/progs/join_types_err.b:18: attribute 'x' is of different type in right rel {x: real, y: real, }
 test/progs/literal_int_overflow_neg_err.b:8: int constant value overflow 2147483649
 test/progs/literal_int_overflow_pos_err.b:8: int constant value overflow 2147483648
@@ -56,6 +59,8 @@ test/progs/summary_attr_exists_err.b:16: attribute 'salary' already exists in pe
 test/progs/summary_common_err.b:14: use of summary with no commmon attributes (rel {salary: int, } and rel {name: string, })
 test/progs/summary_def_err.b:8: invalid type of default value, expected 'int', found real
 test/progs/summary_expr_err.b:8: only constant expressions are allowed for default values
+test/progs/summary_max_attrs_binary_err.b:27: summary result type exceeds the maximum number of attributes (64)
+test/progs/summary_max_attrs_unary_err.b:26: number of attributes exceeds the maximum (64)
 test/progs/summary_str_err.b:8: invalid type of default value: string
 test/progs/tmp_var_max_read_1_err.b:16: number of reads of 'p' exceeds the maximum (128)
 test/progs/tmp_var_max_read_2_err.b:22: number of reads of 'p' exceeds the maximum (128)

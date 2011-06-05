@@ -77,7 +77,9 @@ static void test_join()
 {
     OK("join_basic.b");
     OK("join_cart.b");
+    OK("join_max_attrs.b");
     FAIL("join_types_err.b");
+    FAIL("join_max_attrs_err.b");
 }
 
 static void test_union()
@@ -196,6 +198,8 @@ static void test_summary()
     FAIL("summary_expr_err.b");
     FAIL("summary_common_err.b");
     FAIL("summary_attr_exists_err.b");
+    FAIL("summary_max_attrs_unary_err.b");
+    FAIL("summary_max_attrs_binary_err.b");
 }
 
 static void test_literal()
@@ -205,6 +209,13 @@ static void test_literal()
     FAIL("literal_int_overflow_neg_err.b");
     FAIL("literal_long_overflow_pos_err.b");
     FAIL("literal_long_overflow_neg_err.b");
+}
+
+static void test_extend()
+{
+    OK("extend_basic.b");
+    FAIL("extend_attr_exists_err.b");
+    FAIL("extend_max_attrs_err.b");
 }
 
 int main(int argc, char *argv[])
@@ -230,6 +241,7 @@ int main(int argc, char *argv[])
         test_tmp_var();
         test_summary();
         test_literal();
+        test_extend();
     } else {
         char log[MAX_FILE_PATH];
         str_print(log, "%s.log", argv[1]);
