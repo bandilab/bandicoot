@@ -150,7 +150,6 @@ static void *exec_thread(void *arg)
             goto exit;
         }
 
-        /* FIXME: sys_accept might fail (and cause sys_die). */
         pio = sys_accept(sio);
 
         if (sys_write(pio, func, MAX_NAME) < 0) {

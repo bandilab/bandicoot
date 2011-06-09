@@ -111,7 +111,7 @@ extern char sys_wait(int pid)
     WaitForSingleObject(ph, INFINITE);
 
     DWORD result = -1;
-    if(!GetExitCodeProcess(ph, &result))
+    if (!GetExitCodeProcess(ph, &result))
         sys_die("sys: cannot get process %d exit code\n", pid);
 
     CloseHandle(ph);
@@ -131,6 +131,19 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
 
     if (h == NULL)
         sys_die("sys: cannot create a thread\n");
+}
+
+extern IO *sys_accept(IO *sock)
+{
+    int fd = -1;
+    do {
+        fd = accept(sock->fd, NULL, NULL);
+    } while ((fd < 0) && (WSAGetLastError() == WSAECONNABORTED));
+
+    if (fd < 0)
+        sys_die("sys: cannot accept incoming connection\n");
+
+    return new_io(fd, net_read, net_write, net_close);
 }
 
 extern void net_close(IO *io)

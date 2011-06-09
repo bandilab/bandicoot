@@ -113,6 +113,19 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
         sys_die("sys: cannot detach from a thread\n");
 }
 
+extern IO *sys_accept(IO *sock)
+{
+    int fd = -1;
+    do {
+        fd = accept(sock->fd, NULL, NULL);
+    } while ((fd < 0) && (errno == ECONNABORTED));
+
+    if (fd < 0)
+        sys_die("sys: cannot accept incoming connection\n");
+
+    return new_io(fd, net_read, net_write, net_close);
+}
+
 extern void net_close(IO *io)
 {
     if (close(io->fd) < 0)

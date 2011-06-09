@@ -92,6 +92,11 @@ compile()
     do
         echo "[C] $i.o"
         $CC $DIST_CFLAGS -c -o $i.o $i.c
+        if [ "$?" != "0" ]
+        then
+            echo "Compilation error. Abort."
+            exit 1
+        fi
     done
 }
 
@@ -103,6 +108,11 @@ link()
         e=`echo $BIN/$obj | sed 's/\.o//g'`
         echo "[L] $e"
         $CC $DIST_CFLAGS -o $e $libs $obj $LINK
+        if [ "$?" != "0" ]
+        then
+            echo "Linking error. Abort."
+            exit 1
+        fi
     done
 }
 
@@ -223,7 +233,7 @@ case $cmd in
         fi
         ;;
     todos)
-        find . -regex '.*\.[chly]' -exec egrep -H -i 'fixme|todo|think' {} \;
+        find . -regex '.*\.[chly]' -exec egrep -n -H -i 'fixme|todo|think' {} \;
         ;;
     dist)
         if [ "$2" != "-m32" ] && [ "$2" != "-m64" ]

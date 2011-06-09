@@ -226,15 +226,6 @@ extern IO *sys_socket(int *port)
     return new_io(sfd, net_read, net_write, net_close);
 }
 
-extern IO *sys_accept(IO *sock)
-{
-    int fd = accept(sock->fd, NULL, NULL);
-    if (fd < 0)
-        sys_die("sys: cannot accept incoming connection\n");
-
-    return new_io(fd, net_read, net_write, net_close);
-}
-
 static IO *_sys_connect(struct sockaddr_in addr)
 {
     IO *res = NULL;

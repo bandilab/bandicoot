@@ -79,7 +79,7 @@ extern int str_print(char *res, const char *msg, ...)
 extern int str_idx(const char *s, const char *seq)
 {
     char *pos = strstr(s, seq);
-    return (pos == 0) ? -1 : pos - s;
+    return (pos == NULL) ? -1 : pos - s;
 }
 
 extern int str_match(const char *s1, const char *s2, char until)
