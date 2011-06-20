@@ -165,6 +165,44 @@ extern int sys_iready(IO *io, int sec)
     return ready == 1 && FD_ISSET(io->fd, &rfds);
 }
 
+extern void sys_exchange(IO *io1, int *cnt1, IO *io2, int *cnt2)
+{
+    int sz = 8192;
+    char *buf = mem_alloc(sz);
+    *cnt1 = 0;
+    *cnt2 = 0;
+
+    /* loop until one of the IOs is not closed or there is an error */
+    fd_set read;
+    for (;;) {
+        FD_ZERO(&read);
+        FD_SET(io1->fd, &read);
+        FD_SET(io2->fd, &read);
+        int len = 1 + (io1->fd > io2->fd ? io1->fd : io2->fd);
+
+        int ready = select(len, &read, NULL, NULL, NULL);
+
+        if (ready < 0 && errno != EINTR)
+            sys_die("sys: exchange failed\n");
+
+        if (FD_ISSET(io1->fd, &read)) {
+            int read = sys_read(io1, buf, sz);
+            if (read <= 0 || read != sys_write(io2, buf, read))
+                break;
+            (*cnt1)++;
+        }
+
+        if (FD_ISSET(io2->fd, &read)) {
+            int read = sys_read(io2, buf, sz);
+            if (read <= 0 || read != sys_write(io1, buf, read))
+                break;
+            (*cnt2)++;
+        }
+    }
+
+    mem_free(buf);
+}
+
 extern void sys_address(char *result, int port)
 {
     if (gethostname(result, MAX_ADDR) < 0)

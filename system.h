@@ -64,6 +64,7 @@ extern IO *sys_accept(IO *socket);
 extern IO *sys_connect(const char *address);
 extern IO *sys_try_connect(const char *address);
 extern int sys_iready(IO *io, int millis);
+extern void sys_exchange(IO *io1, int *cnt1, IO *io2, int *cnt2);
 
 /* misc */
 extern void sys_print(const char *msg, ...);

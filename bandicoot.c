@@ -40,7 +40,6 @@ extern const char *VERSION;
 typedef struct {
     char exe[MAX_FILE_PATH];
     char tx[MAX_ADDR];
-    Env *env;
 } Exec;
 
 struct {
@@ -95,55 +94,11 @@ static void *exec_thread(void *arg)
     char *argv[] = {x->exe, "processor", "-p", port, "-t", x->tx, NULL};
 
     for (;;) {
-        int status = -1, pid = -1;
         IO *cio = queue_get();
         IO *pio = NULL;
-        long sid = 0, time = sys_millis();
-        TBuf *param = NULL, *ret = NULL;
+        int status = 0, pid = -1, cio_cnt = 0, pio_cnt = 0;
 
-        Http_Req *req = http_parse(cio);
-        if (req == NULL) {
-            status = http_400(cio);
-            goto exit;
-        }
-
-        if (req->method == OPTIONS) {
-            status = http_opts(cio);
-            goto exit;
-        }
-
-        /* TODO: all the checks below could move into the processor */
-
-        char func[MAX_NAME];
-        str_cpy(func, req->path + 1);
-
-        Func *fn = env_func(x->env, func);
-        if (fn == NULL) {
-            status = http_404(cio);
-            goto exit;
-        }
-
-        if ((fn->p.len == 1 && req->method != POST) ||
-            (fn->p.len == 0 && req->method == POST))
-        {
-            status = http_405(cio);
-            goto exit;
-        } if (fn->p.len == 1) {
-            Head *head = NULL;
-            param = rel_pack_sep(req->body, &head);
-
-            int eq = 0;
-            if (head != NULL) {
-                eq = head_eq(head, fn->p.rels[0]->head);
-                mem_free(head);
-            }
-
-            if (param == NULL || !eq) {
-                status = http_400(cio);
-                goto exit;
-            }
-        }
-
+        /* creating processor */
         pid = sys_exec(argv);
         if (!sys_iready(sio, PROC_WAIT_SEC)) {
             status = http_500(cio);
@@ -152,70 +107,14 @@ static void *exec_thread(void *arg)
 
         pio = sys_accept(sio);
 
-        if (sys_write(pio, func, MAX_NAME) < 0) {
+        /* sends HTTP 500 if the processor dies without sending data
+           to the client */
+        sys_exchange(cio, &cio_cnt, pio, &pio_cnt);
+        if (pio_cnt == 0)
             status = http_500(cio);
-            goto exit;
-        }
-
-        if (fn->p.len == 1) {
-            if (tbuf_write(param, pio) < 0) {
-                status = http_500(cio);
-                goto exit;
-            }
-            tbuf_free(param);
-            param = NULL;
-        }
-
-        if (sys_readn(pio, &sid, sizeof(long)) != sizeof(long)) {
-            status = http_500(cio);
-            goto exit;
-        }
-
-        if (fn->ret != NULL) {
-            ret = tbuf_read(pio);
-            if (ret == NULL) {
-                status = http_500(cio);
-                goto exit;
-            }
-        }
-
-        int failed = -1;
-        if (sys_readn(pio, &failed, sizeof(int)) != sizeof(int) || failed) {
-            status = http_500(cio);
-            goto exit;
-        }
-
-        status = http_200(cio);
-        if (ret != NULL) {
-            int size;
-            char *res = rel_unpack(fn->ret->head, ret, &size);
-            status = http_chunk(cio, res, size);
-
-            mem_free(res);
-            tbuf_free(ret);
-            ret = NULL;
-        }
-
-        status = http_chunk(cio, NULL, 0);
-
 exit:
-        sys_log('E', "%016X method %c, path %s, time %dms - %3d\n",
-                     sid,
-                     (req == NULL) ? '?' : req->method,
-                     (req == NULL) ? "malformed" : req->path,
-                     sys_millis() - time,
-                     status);
-
-        if (ret != NULL) {
-            tbuf_clean(ret);
-            tbuf_free(ret);
-        }
-        if (param != NULL) {
-            tbuf_clean(param);
-            tbuf_free(param);
-        }
-        if (req != NULL)
-            mem_free(req);
+        if (status != 0)
+            sys_log('E', "failed with status %d\n", status);
         if (pid != -1)
             sys_wait(pid);
         if (pio != NULL)
@@ -224,11 +123,134 @@ exit:
     }
 
     sys_close(sio);
-    env_free(x->env);
     mem_free(x);
-    mem_free(arg);
 
     return NULL;
+}
+
+static void processor(const char *tx_addr, int port)
+{
+    int status = -1;
+    long sid = 0, time = sys_millis();
+
+    TBuf *arg = NULL;
+    Vars *r = NULL, *w = NULL;
+
+    /* connect to the control thread */
+    char addr[MAX_ADDR];
+    sys_address(addr, port);
+    IO *io = sys_connect(addr);
+
+    Http_Req *req = http_parse(io);
+    if (req == NULL) {
+        status = http_400(io);
+        goto exit;
+    }
+
+    if (req->method == OPTIONS) {
+        status = http_opts(io);
+        goto exit;
+    }
+
+    /* get env from the tx */
+    tx_attach(tx_addr);
+    char *code = tx_program();
+    Env *env = env_new("net", code);
+    mem_free(code);
+
+    /* compare the request with the function defintion */
+    Func *fn = env_func(env, req->path + 1);
+    if (fn == NULL) {
+        status = http_404(io);
+        goto exit;
+    }
+
+    if ((fn->p.len == 1 && req->method != POST) ||
+        (fn->p.len == 0 && req->method == POST))
+    {
+        status = http_405(io);
+        goto exit;
+    } if (fn->p.len == 1) {
+        Head *head = NULL;
+        arg = rel_pack_sep(req->body, &head);
+
+        int eq = 0;
+        if (head != NULL) {
+            eq = head_eq(head, fn->p.rels[0]->head);
+            mem_free(head);
+        }
+
+        if (arg == NULL || !eq) {
+            status = http_400(io);
+            goto exit;
+        }
+    }
+
+    /* start a transaction */
+    r = vars_new(fn->r.len);
+    w = vars_new(fn->w.len);
+    for (int i = 0; i < fn->r.len; ++i)
+        vars_put(r, fn->r.names[i], 0L);
+    for (int i = 0; i < fn->w.len; ++i)
+        vars_put(w, fn->w.names[i], 0L);
+
+    sid = tx_enter(addr, r, w);
+
+    /* execute the function body */
+    for (int i = 0; i < fn->p.len; ++i)
+        rel_init(fn->p.rels[i], r, arg);
+
+    for (int i = 0; i < fn->t.len; ++i)
+        rel_init(fn->t.rels[i], r, arg);
+
+    for (int i = 0; i < fn->w.len; ++i) {
+        rel_init(fn->w.rels[i], r, arg);
+        rel_store(w->vols[i], w->names[i], w->vers[i], fn->w.rels[i]);
+    }
+
+    if (fn->ret != NULL)
+        rel_init(fn->ret, r, arg);
+
+    /* need to set to NULL do avoid double-free in exit */
+    arg = NULL;
+
+    /* TODO: commit should not happen if the client has closed the connection */
+    tx_commit(sid);
+
+    /* confirm a success and send the result back */
+    status = http_200(io);
+    if (fn->ret != NULL) {
+        int size;
+        char *res = rel_unpack(fn->ret->head, fn->ret->body, &size);
+        status = http_chunk(io, res, size);
+
+        mem_free(res);
+        tbuf_free(fn->ret->body);
+        fn->ret->body = NULL;
+    }
+    status = http_chunk(io, NULL, 0);
+
+exit:
+    sys_log('E', "%016X method %c, path %s, time %dms - %3d\n",
+                 sid,
+                 (req == NULL) ? '?' : req->method,
+                 (req == NULL) ? "malformed" : req->path,
+                 sys_millis() - time,
+                 status);
+
+    if (r != NULL)
+        vars_free(r);
+    if (w != NULL)
+        vars_free(w);
+    if (env != NULL)
+        env_free(env);
+    if (arg != NULL) {
+        tbuf_clean(arg);
+        tbuf_free(arg);
+    }
+    if (req != NULL)
+        mem_free(req);
+    sys_close(io);
 }
 
 static void usage(char *p)
@@ -259,16 +281,13 @@ static void multiplex(const char *exe, const char *tx_addr, int port)
 {
     queue_init();
 
-    char *code = tx_program();
     for (int i = 0; i < THREADS; ++i) {
         Exec *e = mem_alloc(sizeof(Exec));
-        e->env = env_new("net", code);
         str_cpy(e->exe, exe);
         str_cpy(e->tx, tx_addr);
 
         sys_thread(exec_thread, e);
     }
-    mem_free(code);
 
     IO *sio = sys_socket(&port);
 
@@ -325,72 +344,7 @@ int main(int argc, char *argv[])
     } else if (str_cmp(argv[1], "processor") == 0 && source == NULL &&
                data == NULL && state == NULL && port != 0 && tx_addr != NULL)
     {
-        tx_attach(tx_addr);
-        char *code = tx_program();
-        Env *env = env_new("net", code);
-        mem_free(code);
-
-        char addr[MAX_ADDR];
-        sys_address(addr, port);
-        IO *io = sys_connect(addr);
-
-        Func *fn = NULL;
-        char func[MAX_NAME];
-        if (sys_readn(io, func, MAX_NAME) != MAX_NAME ||
-            (fn = env_func(env, func)) == NULL)
-            sys_die("processor: failed to retrieve a function name\n");
-
-        TBuf *arg = NULL;
-        if (fn->p.len == 1)
-            if ((arg = tbuf_read(io)) == NULL)
-                sys_die("processor:%s: failed to retrieve parameters\n", func);
-
-        Vars *r = vars_new(fn->r.len);
-        Vars *w = vars_new(fn->w.len);
-        for (int i = 0; i < fn->r.len; ++i)
-            vars_put(r, fn->r.names[i], 0L);
-        for (int i = 0; i < fn->w.len; ++i)
-            vars_put(w, fn->w.names[i], 0L);
-
-        long sid = tx_enter(addr, r, w);
-
-        if (sys_write(io, &sid, sizeof(long)) < 0)
-            sys_die("%s: failed to transmit\n", func);
-
-        for (int i = 0; i < fn->p.len; ++i)
-            rel_init(fn->p.rels[i], r, arg);
-
-        for (int i = 0; i < fn->t.len; ++i)
-            rel_init(fn->t.rels[i], r, arg);
-
-        for (int i = 0; i < fn->w.len; ++i) {
-            rel_init(fn->w.rels[i], r, arg);
-            rel_store(w->vols[i], w->names[i], w->vers[i], fn->w.rels[i]);
-        }
-
-        if (fn->ret != NULL) {
-            rel_init(fn->ret, r, arg);
-            if (tbuf_write(fn->ret->body, io) < 0)
-                sys_die("%s: failed to transmit the result\n", func);
-        }
-
-        tx_commit(sid);
-
-        int failed = 0;
-        if (sys_write(io, &failed, sizeof(int)) < 0)
-            sys_die("%s: failed to transmit the result flag\n", func);
-
-        /* FIXME: confirm that the commit was successful
-        tx_commit(sid);
-        int succeeded = 1;
-        if (sys_write(io, &succeeded, sizeof(int)) < 0)
-            sys_die("%s: failed to transmit the result flag\n", func);
-        */
-
-        vars_free(r);
-        vars_free(w);
-        sys_close(io);
-        env_free(env);
+        processor(tx_addr, port);
     } else if (str_cmp(argv[1], "tx") == 0 && source != NULL &&
                data == NULL && state != NULL && port != 0 && tx_addr == NULL)
     {
