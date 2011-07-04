@@ -51,7 +51,7 @@ static void test_rel_vars()
     FAIL("rel_var_unknown_type_err.b");
     FAIL("rel_var_reassign_err.b");
     FAIL("rel_var_redecl_err.b");
-    FAIL("rel_var_redecl2_err.b");
+    FAIL("rel_var_redecl_2_err.b");
     FAIL("rel_var_name_err.b");
     FAIL("rel_var_read_after_assign_err.b");
     FAIL("rel_var_max_vars_err.b");
@@ -65,6 +65,8 @@ static void test_func()
     FAIL("func_bad_res_type_err.b");
     FAIL("func_unexp_ret_stmt_err.b");
     FAIL("func_missing_ret_stmt_err.b");
+    FAIL("func_missing_ret_stmt_2_err.b");
+    FAIL("func_stmt_exceeded_err.b");
 }
 
 static void test_load()
@@ -154,6 +156,7 @@ static void test_params()
     OK("params_basic.b");
     FAIL("params_rel_unknown_type_err.b");
     FAIL("params_rel_unknown_param_err.b");
+    FAIL("params_rel_redecl_param_err.b");
 }
 
 static void test_compat()
@@ -185,8 +188,6 @@ static void test_tmp_var()
     OK("tmp_var_basic.b");
     FAIL("tmp_var_unknown_err.b");
     FAIL("tmp_var_redecl_err.b");
-    FAIL("tmp_var_max_read_1_err.b");
-    FAIL("tmp_var_max_read_2_err.b");
 }
 
 static void test_summary()

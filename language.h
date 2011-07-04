@@ -15,9 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-typedef enum { LOAD, CLONE, PROJECT, RENAME, SELECT,
-               EXTEND, JOIN, UNION, DIFF, SUMMARY } L_Rel_Type;
-
 typedef enum { ATTR, VALUE, NOT, EQ, NEQ, AND,
                OR, GT, LT, GTE, LTE, SUM, SUB,
                MUL, DIV, NEG, POS, FUNC } L_Expr_Type;
@@ -58,26 +55,7 @@ struct L_Attrs {
     struct L_Sum sums[MAX_ATTRS];
 };
 
-struct L_Rel {
-    L_Rel_Type node_type;
-    char var[MAX_NAME];
-    struct L_Attrs attrs;
-    struct L_Expr *expr;
-    struct L_Rel *left;
-    struct L_Rel *right;
-};
-
-struct L_Stmts {
-    int len;
-    L_Stmt_Type types[MAX_STMTS];
-    Head *heads[MAX_STMTS];
-    char *names[MAX_STMTS];
-    struct L_Rel *bodies[MAX_STMTS];
-};
-
 typedef union L_Value L_Value;
 typedef struct L_Attrs L_Attrs;
 typedef struct L_Expr L_Expr;
-typedef struct L_Rel L_Rel;
 typedef struct L_Sum L_Sum;
-typedef struct L_Stmts L_Stmts;

@@ -33,11 +33,12 @@ limitations under the License.
 #include "environment.h"
 
 /* TODO: make line numbers reported in yyerror more accurate, especially
-         for r_convert() and p_convert() which are currently called on
+         for p_convert() which are currently called on
          function reduction */
 extern void yyerror(const char *, ...);
 extern int yylex();
 
+static Func *gfunc = NULL;
 static Env *genv = NULL;
 
 /* rel { a: string, ... } */
@@ -54,12 +55,15 @@ static void attr_free(L_Attrs attrs);
 static Head *rel_head(L_Attrs attrs);
 static Head *inline_rel(char *name, Head *head);
 
-static L_Rel *r_load(const char *var);
-static L_Rel *r_unary(L_Rel *l, L_Attrs attrs, L_Rel_Type node_type);
-static L_Rel *r_binary(L_Rel *l, L_Rel *r, L_Rel_Type node_type);
-static L_Rel *r_select(L_Rel *l, L_Expr *expr);
-static L_Rel *r_sum(L_Rel *r, L_Rel *per, L_Attrs attrs);
-static void r_free(L_Rel *r);
+static Rel *r_load(const char *name);
+static Rel *r_project(Rel *r, L_Attrs attrs);
+static Rel *r_rename(Rel *r, L_Attrs attrs);
+static Rel *r_select(Rel *r, L_Expr *expr);
+static Rel *r_extend(Rel *r, L_Attrs attrs);
+static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs);
+static Rel *r_join(Rel *l, Rel *r);
+static Rel *r_union(Rel *l, Rel *r);
+static Rel *r_diff(Rel *l, Rel *r);
 
 static L_Expr *p_attr(const char *name);
 static L_Expr *p_value(L_Value val, Type t);
@@ -68,22 +72,18 @@ static L_Expr *p_func(const char *name, L_Expr *e);
 static void p_free(L_Expr *e);
 static int is_constant(L_Expr *e);
 
-static L_Stmts stmt_create(L_Stmt_Type type, 
-                           Head *rel_type,
-                           const char *name,
-                           L_Rel *e);
-static L_Stmts stmt_short(const char *name, L_Rel *e, L_Rel_Type node_type);
-static L_Stmts stmt_merge(L_Stmts l, L_Stmts r);
-static L_Stmts stmt_empty();
+static void stmt_create(L_Stmt_Type type, const char *name, Rel *r);
+static void stmt_short(const char *name, Rel *r);
 
 static L_Sum sum_create(const char *func, const char *attr, L_Expr *def);
 
 static void add_head(const char *name, Head *head);
 static void add_relvar(const char *rel, const char *var);
-static void add_func(const char *name,
-                     L_Stmts params,
-                     Head *res_type,
-                     L_Stmts stmts);
+
+static void fn_start(char dest[MAX_NAME], const char *name);
+static void fn_param_create(const char *name, Head *h);
+static void fn_res_create(Head *h);
+static void fn_add(const char *name);
 %}
 
 %union {
@@ -91,11 +91,10 @@ static void add_func(const char *name,
     Head *head;
 
     L_Value val;
-    L_Rel *rel;
     L_Expr *expr;
     L_Attrs attrs;
     L_Sum sum;
-    L_Stmts stmts;
+    Rel *rel;
 };
 
 %token TK_REL TK_FN TK_RETURN
@@ -115,8 +114,8 @@ static void add_func(const char *name,
 %type <expr> prim_const_expr prim_simple_expr prim_top_expr prim_unary_expr
 %type <expr> prim_mul_expr prim_add_expr prim_bool_cmp_expr prim_expr
 %type <sum> sum_func
-%type <stmts> func_params func_body stmt_return stmt_assign stmt_assigns
-%type <head> rel_head func_res
+%type <head> rel_head
+%type <name> func_name
 
 %%
 
@@ -153,46 +152,53 @@ relvar_decl:
     ;
 
 func_decl:
-      TK_FN TK_NAME '(' func_params ')' func_res '{' func_body '}'
-        { add_func($2, $4, $6, $8); }
+      TK_FN func_name '(' func_params ')' func_res '{' func_body '}'
+        { fn_add($2); }
+    ;
+
+func_name:
+      TK_NAME   { fn_start($$, $1); }
     ;
 
 func_res:
-      ':' TK_NAME           { $$ = inline_rel($2, NULL); }
-    | ':' TK_REL rel_head   { $$ = inline_rel(NULL, $3); }
-    |                       { $$ = inline_rel(NULL, NULL); }
+      ':' TK_NAME           { fn_res_create(inline_rel($2, NULL)); }
+    | ':' TK_REL rel_head   { fn_res_create(inline_rel(NULL, $3)); }
+    |                       { fn_res_create(inline_rel(NULL, NULL)); }
     ;
 
 func_params:
       TK_NAME ':' TK_NAME
-        { $$ = stmt_create(PARAM, inline_rel($3, NULL), $1, NULL); }
+        { fn_param_create($1, inline_rel($3, NULL)); }
     | TK_NAME ':' TK_REL rel_head
-        { $$ = stmt_create(PARAM, inline_rel(NULL, $4), $1, NULL); }
-    |
-        { $$ = stmt_empty(); }
+        { fn_param_create($1, inline_rel(NULL, $4)); }
+    |   { }
     ;
 
 func_body:
-      stmt_return               { $$ = $1; }
-    | stmt_assigns              { $$ = $1; }
-    | stmt_assigns stmt_return  { $$ = stmt_merge($1, $2); }
+      stmt_return
+    | stmt_assigns
+    | stmt_assigns stmt_return
+    |
     ;
 
 stmt_return:
-      TK_RETURN rel_expr ';'    { $$ = stmt_create(RETURN, NULL, "", $2); }
+      TK_RETURN rel_expr ';'    { stmt_create(RETURN, "", $2); }
     ;
 
 stmt_assigns:
-      stmt_assign                   { $$ = $1; }
-    | stmt_assigns stmt_assign      { $$ = stmt_merge($1, $2); }
+      stmt_assign
+    | stmt_assigns stmt_assign
     ;
 
 stmt_assign:
-      TK_NAME '=' rel_expr ';'      { $$ = stmt_create(ASSIGN, NULL, $1, $3); }
-    | TK_NAME '+' '=' rel_expr ';'  { $$ = stmt_short($1, $4, UNION); }
-    | TK_NAME '-' '=' rel_expr ';'  { $$ = stmt_short($1, $4, DIFF); }
-    | TK_NAME '*' '=' rel_expr ';'  { $$ = stmt_short($1, $4, JOIN); }
-    | TK_NAME ':' '=' rel_expr ';'  { $$ = stmt_create(TEMP, NULL, $1, $4); }
+      TK_NAME '=' rel_expr ';'      { stmt_create(ASSIGN, $1, $3); }
+    | TK_NAME '+' '=' rel_expr ';'
+        { stmt_create(ASSIGN, $1, r_union(r_load($1), $4)); }
+    | TK_NAME '-' '=' rel_expr ';'
+        { stmt_create(ASSIGN, $1, r_diff(r_load($1), $4)); }
+    | TK_NAME '*' '=' rel_expr ';'
+        { stmt_create(ASSIGN, $1, r_join(r_load($1), $4)); }
+    | TK_NAME ':' '=' rel_expr ';'  { stmt_create(TEMP, $1, $4); }
     ;
 
 rel_prim_expr:
@@ -204,13 +210,13 @@ rel_post_expr:
       rel_prim_expr
         { $$ = $1; }
     | rel_post_expr TK_PROJECT '(' project_attrs ')'
-        { $$ = r_unary($1, $4, PROJECT); }
+        { $$ = r_project($1, $4); }
     | rel_post_expr TK_RENAME '(' rename_attrs ')'
-        { $$ = r_unary($1, $4, RENAME); }
+        { $$ = r_rename($1, $4); }
     | rel_post_expr TK_SELECT '(' prim_expr ')'
         { $$ = r_select($1, $4); }
     | rel_post_expr TK_EXTEND '(' extend_attrs ')'
-        { $$ = r_unary($1, $4, EXTEND); }
+        { $$ = r_extend($1, $4); }
     | rel_post_expr TK_SUMMARY '(' sum_attrs ')'
         { $$ = r_sum($1, NULL, $4); }
     | '(' rel_post_expr ',' rel_post_expr ')' TK_SUMMARY '(' sum_attrs ')'
@@ -219,13 +225,13 @@ rel_post_expr:
 
 rel_mul_expr:
       rel_post_expr                     { $$ = $1; }
-    | rel_mul_expr '*' rel_post_expr    { $$ = r_binary($1, $3, JOIN); }
+    | rel_mul_expr '*' rel_post_expr    { $$ = r_join($1, $3); }
     ;
 
 rel_expr:
       rel_mul_expr                      { $$ = $1; }
-    | rel_expr '+' rel_mul_expr         { $$ = r_binary($1, $3, UNION); }
-    | rel_expr '-' rel_mul_expr         { $$ = r_binary($1, $3, DIFF); }
+    | rel_expr '+' rel_mul_expr         { $$ = r_union($1, $3); }
+    | rel_expr '-' rel_mul_expr         { $$ = r_diff($1, $3); }
     ;
 
 project_attrs:
@@ -346,6 +352,9 @@ static void print_head(char *dest, Head *h)
     dest[off] = '\0';
 }
 
+/* FIXME: the tbuf_clean needs to called for TEMP and PARAM relations
+    ideally this is not exposed and is handled within the relations themselves
+ */
 extern void env_free(Env *env)
 {
     for (int i = 0; i < env->vars.len; ++i)
@@ -366,11 +375,17 @@ extern void env_free(Env *env)
         }
         for (int j = 0; j < fn->t.len; ++j) {
             mem_free(fn->t.names[j]);
-            rel_free(fn->t.rels[j]);
+            Rel *r = fn->t.rels[j];
+            if (r->body != NULL)
+                tbuf_clean(r->body);
+            rel_free(r);
         }
         for (int j = 0; j < fn->p.len; ++j) {
             mem_free(fn->p.names[j]);
-            rel_free(fn->p.rels[j]);
+            Rel *r = fn->p.rels[j];
+            if (r->body != NULL)
+                tbuf_clean(r->body);
+            rel_free(r);
         }
         if (fn->ret != NULL)
             rel_free(fn->ret);
@@ -661,257 +676,60 @@ static Expr *p_convert(Head *h, L_Expr *e, L_Expr_Type parent_type)
     return res;
 }
 
-static Rel *r_convert_node(L_Rel *rel,
-                           Rel *l,
-                           Rel *r,
-                           L_Stmts stmts,
-                           int pos,
-                           Rel *clones[MAX_STMTS][MAX_VARS])
+static void stmt_create(L_Stmt_Type type, const char *name, Rel *r)
 {
-    Rel *res = NULL;
-    char lhstr[MAX_HEAD_STR_LEN], rhstr[MAX_HEAD_STR_LEN];
+    Func *fn = gfunc;
 
-    if (l != NULL)
-        print_head(lhstr, l->head);
+    if (fn->w.len + fn->t.len + fn->p.len >= MAX_STMTS)
+        yyerror("number of statements exceeds the maximum (%d)", MAX_STMTS);
 
-    if (r != NULL)
-        print_head(rhstr, r->head);
+    if (type == ASSIGN) {
+        int idx = array_scan(fn->w.names, fn->w.len, name);
+        if (idx != -1)
+            yyerror("cannot reassign variable '%s'", name);
 
-    L_Attrs attrs = rel->attrs;
-    L_Rel_Type t = rel->node_type;
-    if (t == LOAD) {
-        int tv_idx = array_scan(stmts.names, pos, rel->var);
-        int rv_idx = array_scan(genv->vars.names, genv->vars.len, rel->var);
+        idx = array_scan(genv->vars.names, genv->vars.len, name);
+        if (idx == -1)
+            yyerror("unknown variable '%s'", name);
 
-        if (tv_idx >= 0 && tv_idx < pos && rv_idx < 0) { /* local */
-            rel->node_type = CLONE;
-            for (int i = 0; i < MAX_VARS; ++i) {
-                if (clones[tv_idx][i] != NULL) {
-                    res = clones[tv_idx][i];
-                    clones[tv_idx][i] = NULL;
-                    break;
-                }
-            }
-        } else if (tv_idx < 0 && rv_idx >= 0) { /* global */
-            res = rel_load(env_head(genv, rel->var), rel->var);
-        } else if (rv_idx < 0) {
-            yyerror("unknown variable '%s'", rel->var);
-        } else
-            yyerror("variable '%s' cannot be read (it was modified by "
-                    "one of the previous statements)", rel->var);
-    } else if (t == PROJECT) {
-        for (int i = 0; i < attrs.len; ++i)
-            if (!head_find(l->head, attrs.names[i]))
-                yyerror("unknown attribute '%s' in %s", attrs.names[i], lhstr);
+        Head *wh = genv->vars.heads[idx];
+        char wstr[MAX_HEAD_STR_LEN], bstr[MAX_HEAD_STR_LEN];
+        print_head(wstr, wh);
+        print_head(bstr, r->head);
 
-        res = rel_project(l, attrs.names, attrs.len);
-    } else if (t == RENAME) {
-        char **renames = attrs.renames;
-        
-        for (int i = 0; i < attrs.len; ++i) {
-            int j = array_scan(renames, attrs.len, renames[i]);
- 
-            /* TODO: below checks are too strict, we should be able to do
-                      x { a, b, c } - rename(x: a => b, b => c, c => d); */
-            if (!head_find(l->head, attrs.names[i]))
-                yyerror("unknown attribute '%s' in %s", attrs.names[i], lhstr);
-            if (head_find(l->head, renames[i]) || (j > -1 && j != i))
-                yyerror("attribute '%s' already exists in %s",
-                        renames[i], lhstr);
-        }
+        if (!head_eq(r->head, wh))
+            yyerror("invalid type in assignment, expects %s, found %s",
+                    wstr, bstr);
 
-        res = rel_rename(l, attrs.names, renames, attrs.len);
-    } else if (t == SELECT) {
-        res = rel_select(l, p_convert(l->head, rel->expr, POS));
-    } else if (t == EXTEND) {
-        Expr *extends[MAX_ATTRS];
-        for (int i = 0; i < attrs.len; ++i) {
-            if (head_find(l->head, attrs.names[i]))
-                yyerror("attribute '%s' already exists in %s",
-                        attrs.names[i], lhstr);
+        fn->w.names[fn->w.len] = str_dup(name);
+        fn->w.rels[fn->w.len++] = r;
+    } else if (type == RETURN) {
+        if (fn->head == NULL)
+            yyerror("unexpected return in function with void result type");
 
-            extends[i] = p_convert(l->head, attrs.exprs[i], POS);
-        }
+        Head *h = r->head;
 
-        if (l->head->len + attrs.len > MAX_ATTRS)
-            yyerror("extend result type exceeds the maximum number "
-                    "of attributes (%d)", MAX_ATTRS);
+        char hstr[MAX_HEAD_STR_LEN], res_str[MAX_HEAD_STR_LEN];
+        print_head(hstr, h);
+        print_head(res_str, fn->head);
 
-        res = rel_extend(l, attrs.names, extends, attrs.len);
-    } else if (t == JOIN) {
-        int num_attrs = l->head->len + r->head->len;
+        int pos;
+        Type t;
+        for (int i = 0; i < fn->head->len; ++i)
+            if (!head_attr(h, fn->head->names[i], &pos, &t) ||
+                t != fn->head->types[i])
+                yyerror("invalid type in return, expects %s, found %s",
+                        res_str, hstr);
 
-        for (int i = 0; i < l->head->len; ++i) {
-            char *n = l->head->names[i];
-            Type t; int pos;
-            if (head_attr(r->head, n, &pos, &t)) {
-                num_attrs--;
+        fn->ret = rel_project(r, fn->head->names, fn->head->len);
+    } else if (type == TEMP) {
+        if ((array_scan(fn->t.names, fn->t.len, name) != -1) ||
+            (array_scan(genv->vars.names, genv->vars.len, name) != -1))
+            yyerror("variable '%s' already defined", name);
 
-                if (t != l->head->types[i])
-                    yyerror("attribute '%s' is of different type in right %s",
-                            n, lhstr);
-            }
-        }
-
-        if (num_attrs > MAX_ATTRS)
-            yyerror("join result type exceeds the maximum number "
-                    "of attributes (%d)", MAX_ATTRS);
-
-        res = rel_join(l, r);
-    } else if (t == UNION) {
-        if (!head_eq(l->head, r->head))
-            yyerror("use of union with different types (%s and %s)",
-                    lhstr, rhstr);
-        res = rel_union(l, r);
-    } else if (t == DIFF) {
-        int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
-        if (head_common(l->head, r->head, lpos, rpos) == 0)
-            yyerror("use of semidiff with no commmon attributes (%s and %s)",
-                    lhstr, rhstr);
-        res = rel_diff(l, r);
-    } else if (t == SUMMARY) {
-        Sum *sums[MAX_ATTRS];
-        for (int i = 0; i < attrs.len; ++i) {
-            L_Sum s = attrs.sums[i];
-
-            int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
-            if (r != NULL) {
-                if (head_common(l->head, r->head, lpos, rpos) == 0)
-                    yyerror("use of summary with no commmon attributes "
-                            "(%s and %s)", lhstr, rhstr);
-
-                if (head_find(r->head, attrs.names[i]))
-                    yyerror("attribute '%s' already exists in per %s",
-                            attrs.names[i], rhstr);
-            }
-
-            if (s.sum_type == CNT)
-                sums[i] = sum_cnt();
-            else {
-                if (!is_constant(s.def))
-                    yyerror("only constant expressions are allowed for "
-                            "default values");
-                int pos;
-                Type stype;
-                if (!head_attr(l->head, s.attr, &pos, &stype))
-                    yyerror("unknown attribute '%s' in %s", s.attr, lhstr);
-
-                Type exp_type = stype;
-                if (s.sum_type == AVG)
-                    exp_type = Real;
-
-                Expr *def = p_convert(l->head, s.def, POS);
-                if (def->type != exp_type)
-                    yyerror("invalid type of default value, expected '%s', "
-                            "found %s",
-                            type_to_str(exp_type),
-                            type_to_str(def->type));
-                
-                if (def->type == String || stype == String)
-                    yyerror("invalid type of default value: string");
-                 
-                Value v = expr_new_val(def, NULL);
-                if (s.sum_type == AVG)
-                    sums[i] = sum_avg(pos, stype, v);
-                else if (s.sum_type == MIN)
-                    sums[i] = sum_min(pos, stype, v);
-                else if (s.sum_type == MAX)
-                    sums[i] = sum_max(pos, stype, v);
-                else if (s.sum_type == ADD)
-                    sums[i] = sum_add(pos, stype, v);
-            }
-        }
-
-        if (r == NULL)
-            res = rel_sum_unary(l, attrs.names, attrs.types, sums, attrs.len);
-        else {
-            if (r->head->len + attrs.len > MAX_ATTRS)
-                yyerror("summary result type exceeds the maximum number "
-                        "of attributes (%d)", MAX_ATTRS);
-
-            res = rel_sum(l, r, attrs.names, attrs.types, sums, attrs.len);
-        }
+        fn->t.names[fn->t.len] = str_dup(name);
+        fn->t.rels[fn->t.len++] = r;
     }
-    return res;
-}
-
-static Rel *r_convert(L_Rel *rel,
-                      L_Stmts stmts,
-                      int pos,
-                      Rel *clones[MAX_STMTS][MAX_VARS])
-{
-    if (rel == NULL)
-        return NULL;
-
-    Rel *l = r_convert(rel->left, stmts, pos, clones);
-    Rel *r = r_convert(rel->right, stmts, pos, clones);
-
-    return r_convert_node(rel, l, r, stmts, pos, clones);
-}
-
-static void append_rvars(L_Rel *rel, char *rvars[MAX_VARS], int *pos)
-{
-    if (rel->node_type == LOAD && array_scan(rvars, *pos, rel->var) == -1)
-        rvars[(*pos)++] = str_dup(rel->var);
-    if (rel->left != NULL)
-        append_rvars(rel->left, rvars, pos);
-    if (rel->right != NULL)
-        append_rvars(rel->right, rvars, pos);
-}
-
-static void count_reads(const char *name, L_Rel *rel, int *cnt)
-{
-    if (rel->node_type == LOAD && str_cmp(name, rel->var) == 0) {
-        (*cnt)++;
-        if (*cnt > MAX_VARS)
-            yyerror("number of reads of '%s' exceeds the maximum (%d)",
-                    name, MAX_VARS);
-    } else {
-        if (rel->left != NULL)
-            count_reads(name, rel->left, cnt);
-        if (rel->right != NULL)
-            count_reads(name, rel->right, cnt);
-    }
-}
-
-static L_Stmts stmt_create(L_Stmt_Type type, 
-                           Head *rel_type,
-                           const char *name,
-                           L_Rel *e)
-{
-    L_Stmts res = { .len = 1,
-                    .types[0] = type,
-                    .heads[0] = rel_type,
-                    .names[0] = str_dup(name),
-                    .bodies[0] = e };
-    return res;
-}
-
-static L_Stmts stmt_short(const char *name, L_Rel *e, L_Rel_Type node_type)
-{
-    L_Rel *b = r_binary(r_load(name), e, node_type);
-    return stmt_create(ASSIGN, NULL, name, b);
-}
-
-static L_Stmts stmt_merge(L_Stmts l, L_Stmts r)
-{
-    if (l.len + r.len > MAX_STMTS)
-        yyerror("number of statements exceeds the maximum (%d)", MAX_STMTS); 
-
-    for (int i = 0; i < r.len; ++i, ++l.len) {
-        l.types[l.len] = r.types[i];
-        l.heads[l.len] = r.heads[i];
-        l.names[l.len] = r.names[i];
-        l.bodies[l.len] = r.bodies[i];
-    }
-
-    return l;
-}
-
-static L_Stmts stmt_empty()
-{
-    L_Stmts res = { .len = 0 };
-    return res;
 }
 
 static Head *inline_rel(char *name, Head *head)
@@ -930,186 +748,258 @@ static Head *inline_rel(char *name, Head *head)
     return res;
 }
 
-static void add_func(const char *name,
-                     L_Stmts params,
-                     Head *res_type,
-                     L_Stmts stmts)
+static void fn_res_create(Head *h)
 {
+    gfunc->head = h;
+}
+
+static void fn_param_create(const char *name, Head *h)
+{
+    if (array_scan(genv->vars.names, genv->vars.len, name) > -1)
+        yyerror("variable '%s' already defined", name);
+
+    gfunc->p.rels[gfunc->p.len] = rel_param(h);
+    gfunc->p.names[gfunc->p.len++] = str_dup(name);
+}
+
+static void fn_start(char dest[MAX_NAME], const char *name)
+{
+    str_cpy(dest, name);
+
     if (array_scan(genv->fns.names, genv->fns.len, name) > -1)
         yyerror("function '%s' already defined", name);
 
-    Func *fn = mem_alloc(sizeof(Func));
-    fn->ret = NULL;
-    fn->r.len = 0;
-    fn->w.len = 0;
-    fn->t.len = 0;
-    fn->p.len = 0;
+    gfunc = mem_alloc(sizeof(Func));
+    gfunc->head = NULL;
+    gfunc->ret = NULL;
+    gfunc->r.len = 0;
+    gfunc->w.len = 0;
+    gfunc->t.len = 0;
+    gfunc->p.len = 0;
+}
 
-    stmts = stmt_merge(params, stmts);
+static void fn_add(const char *name)
+{
+    Func *fn = gfunc;
 
-    int t_cnts[MAX_STMTS];
-    Rel *t_clones[MAX_STMTS][MAX_VARS];
-    for (int i = 0; i < stmts.len; ++i)
-        if (stmts.types[i] == TEMP || stmts.types[i] == PARAM) {
-            char *wvar = stmts.names[i];
-            if (array_scan(stmts.names, i, wvar) > -1 ||
-                array_scan(genv->vars.names, genv->vars.len, wvar) > -1)
-                yyerror("variable '%s' already defined", wvar);
-
-            t_cnts[i] = 0;
-            for (int j = i + 1; j < stmts.len; ++j)
-                count_reads(wvar, stmts.bodies[j], &t_cnts[i]);
-
-            for (int j = 0; j < MAX_VARS; ++j)
-                t_clones[i][j] = NULL;
-        }
-
-    for (int i = 0; i < stmts.len; ++i) { 
-        Rel *body = NULL;
-        char *wvar = stmts.names[i];
-
-        if (stmts.types[i] == PARAM) {
-            body = rel_param(stmts.heads[i]);
-            fn->p.names[fn->p.len] = str_dup(wvar);
-            fn->p.rels[fn->p.len++] = rel_tmp(body, t_clones[i], t_cnts[i]);
-        } else {
-            body = r_convert(stmts.bodies[i], stmts, i, t_clones);
-            append_rvars(stmts.bodies[i], fn->r.names, &fn->r.len);
-        }
-
-        if (stmts.types[i] == ASSIGN) {
-            int idx = array_scan(stmts.names, stmts.len, wvar);
-            if (idx != i)
-                yyerror("cannot reassign variable '%s'", wvar);
-
-            idx = array_scan(genv->vars.names, genv->vars.len, wvar);
-            if (idx == -1)
-                yyerror("unknown variable '%s'", wvar);
-
-            Head *wh = genv->vars.heads[idx];
-            char wstr[MAX_HEAD_STR_LEN], bstr[MAX_HEAD_STR_LEN];
-            print_head(wstr, wh);
-            print_head(bstr, body->head);
-
-            if (!head_eq(body->head, wh))
-                yyerror("invalid type in assignment, expects %s, found %s",
-                        wstr, bstr);
-
-            fn->w.names[fn->w.len] = str_dup(wvar);
-            fn->w.rels[fn->w.len++] = body; 
-        } else if (stmts.types[i] == RETURN) {
-            if (res_type == NULL)
-                yyerror("unexpected return in function with void result type");
-
-            Head *h = body->head;
-
-            char hstr[MAX_HEAD_STR_LEN], res_str[MAX_HEAD_STR_LEN];
-            print_head(hstr, h);
-            print_head(res_str, res_type);
-
-            int pos;
-            Type t;
-            for (int i = 0; i < res_type->len; ++i)
-                if (!head_attr(h, res_type->names[i], &pos, &t) ||
-                    t != res_type->types[i])
-                    yyerror("invalid type in return, expects %s, found %s",
-                            res_str, hstr);
-
-            fn->ret = rel_project(body, res_type->names, res_type->len);
-        } else if (stmts.types[i] == TEMP) {
-            fn->t.names[fn->t.len] = str_dup(wvar);
-            fn->t.rels[fn->t.len++] = rel_tmp(body, t_clones[i], t_cnts[i]);
-        }
-    }
-
-    if (res_type != NULL) {
-        if (stmts.types[stmts.len - 1] != RETURN)
-            yyerror("missing return statement in a function with "
-                    "defined return type");
-        mem_free(res_type);
-    }
+    if (fn->head != NULL && fn->ret == NULL)
+        yyerror("missing return statement in a function with "
+                "defined return type");
 
     int len = genv->fns.len++;
     genv->fns.names[len] = str_dup(name);
     genv->fns.funcs[len] = fn;
 
-    for (int i = 0; i < stmts.len; ++i) {
-        if (stmts.heads[i] != NULL)
-            mem_free(stmts.heads[i]);
-        if (stmts.names[i] != NULL)
-            mem_free(stmts.names[i]);
-        if (stmts.bodies[i] != NULL)
-            r_free(stmts.bodies[i]);
+    gfunc = NULL;
+}
+
+static Rel *r_load(const char *name)
+{
+    Func *fn = gfunc;
+
+    int i = -1;
+    Rel *res = NULL;
+    if ((i = array_scan(fn->p.names, fn->p.len, name)) > -1)
+        res = rel_clone(fn->p.rels[i]);
+    else if ((i = array_scan(fn->t.names, fn->t.len, name)) > -1)
+        res = rel_clone(fn->t.rels[i]);
+    else if ((i = array_scan(genv->vars.names, genv->vars.len, name)) > -1) {
+        if (array_scan(fn->w.names, fn->w.len, name) > -1)
+            yyerror("variable '%s' cannot be read (it was modified by "
+                    "one of the previous statements)", name);
+        if (array_scan(fn->r.names, fn->r.len, name) == -1)
+            fn->r.names[fn->r.len++] = str_dup(name);
+
+        res = rel_load(genv->vars.heads[i], name);
+    } else
+        yyerror("unknown variable '%s'", name);
+
+    return res;
+}
+
+static Rel *r_project(Rel *r, L_Attrs attrs)
+{
+    char hstr[MAX_HEAD_STR_LEN];
+    print_head(hstr, r->head);
+
+    for (int i = 0; i < attrs.len; ++i)
+        if (!head_find(r->head, attrs.names[i]))
+            yyerror("unknown attribute '%s' in %s", attrs.names[i], hstr);
+
+    return rel_project(r, attrs.names, attrs.len);
+}
+
+static Rel *r_rename(Rel *r, L_Attrs attrs)
+{
+    char hstr[MAX_HEAD_STR_LEN];
+    print_head(hstr, r->head);
+
+    char **renames = attrs.renames;
+
+    for (int i = 0; i < attrs.len; ++i) {
+        int j = array_scan(renames, attrs.len, renames[i]);
+
+        /* TODO: below checks are too strict, we should be able to do
+                  x { a, b, c } - rename(x: a => b, b => c, c => d); */
+        if (!head_find(r->head, attrs.names[i]))
+            yyerror("unknown attribute '%s' in %s", attrs.names[i], hstr);
+        if (head_find(r->head, renames[i]) || (j > -1 && j != i))
+            yyerror("attribute '%s' already exists in %s",
+                    renames[i], hstr);
     }
+
+    return rel_rename(r, attrs.names, renames, attrs.len);
 }
 
-static void r_free(L_Rel *r)
+static Rel *r_select(Rel *r, L_Expr *expr)
 {
-    if (r->left != NULL)
-        r_free(r->left);
-    if (r->right != NULL)
-        r_free(r->right);
-
-    if (r->node_type == SELECT)
-        p_free(r->expr);
-
-    attr_free(r->attrs);
-    mem_free(r);
+    return rel_select(r, p_convert(r->head, expr, POS));
 }
 
-static L_Rel *r_alloc(L_Rel_Type node_type)
+static Rel *r_extend(Rel *r, L_Attrs attrs)
 {
-    L_Rel *res = mem_alloc(sizeof(L_Rel));
-    res->node_type = node_type;
-    res->attrs.len = 0;
-    res->left = NULL;
-    res->right = NULL;
-    res->expr = NULL;
+    char hstr[MAX_HEAD_STR_LEN];
+    print_head(hstr, r->head);
+
+    Expr *extends[MAX_ATTRS];
+    for (int i = 0; i < attrs.len; ++i) {
+        if (head_find(r->head, attrs.names[i]))
+            yyerror("attribute '%s' already exists in %s",
+                    attrs.names[i], hstr);
+
+        extends[i] = p_convert(r->head, attrs.exprs[i], POS);
+    }
+
+    if (r->head->len + attrs.len > MAX_ATTRS)
+        yyerror("extend result type exceeds the maximum number "
+                "of attributes (%d)", MAX_ATTRS);
+
+    return rel_extend(r, attrs.names, extends, attrs.len);
+}
+
+static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs)
+{
+    char lhstr[MAX_HEAD_STR_LEN], rhstr[MAX_HEAD_STR_LEN];
+    print_head(lhstr, l->head);
+    if (r != NULL)
+        print_head(rhstr, r->head);
+
+    Rel *res = NULL;
+    Sum *sums[MAX_ATTRS];
+    for (int i = 0; i < attrs.len; ++i) {
+        L_Sum s = attrs.sums[i];
+
+        int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
+        if (r != NULL) {
+            if (head_common(l->head, r->head, lpos, rpos) == 0)
+                yyerror("use of summary with no commmon attributes "
+                        "(%s and %s)", lhstr, rhstr);
+
+            if (head_find(r->head, attrs.names[i]))
+                yyerror("attribute '%s' already exists in per %s",
+                        attrs.names[i], rhstr);
+        }
+
+        if (s.sum_type == CNT)
+            sums[i] = sum_cnt();
+        else {
+            if (!is_constant(s.def))
+                yyerror("only constant expressions are allowed for "
+                        "default values");
+            int pos;
+            Type stype;
+            if (!head_attr(l->head, s.attr, &pos, &stype))
+                yyerror("unknown attribute '%s' in %s", s.attr, lhstr);
+
+            Type exp_type = stype;
+            if (s.sum_type == AVG)
+                exp_type = Real;
+
+            Expr *def = p_convert(l->head, s.def, POS);
+            if (def->type != exp_type)
+                yyerror("invalid type of default value, expected '%s', "
+                        "found %s",
+                        type_to_str(exp_type),
+                        type_to_str(def->type));
+
+            if (def->type == String || stype == String)
+                yyerror("invalid type of default value: string");
+
+            Value v = expr_new_val(def, NULL);
+            if (s.sum_type == AVG)
+                sums[i] = sum_avg(pos, stype, v);
+            else if (s.sum_type == MIN)
+                sums[i] = sum_min(pos, stype, v);
+            else if (s.sum_type == MAX)
+                sums[i] = sum_max(pos, stype, v);
+            else if (s.sum_type == ADD)
+                sums[i] = sum_add(pos, stype, v);
+        }
+    }
+
+    if (r == NULL)
+        res = rel_sum_unary(l, attrs.names, attrs.types, sums, attrs.len);
+    else {
+        if (r->head->len + attrs.len > MAX_ATTRS)
+            yyerror("summary result type exceeds the maximum number "
+                    "of attributes (%d)", MAX_ATTRS);
+
+        res = rel_sum(l, r, attrs.names, attrs.types, sums, attrs.len);
+    }
 
     return res;
 }
 
-static L_Rel *r_load(const char *var)
+static Rel *r_join(Rel *l, Rel *r)
 {
-    L_Rel *res = r_alloc(LOAD);
-    str_cpy(res->var, var);
+    char lhstr[MAX_HEAD_STR_LEN];
+    print_head(lhstr, l->head);
+    int num_attrs = l->head->len + r->head->len;
 
-    return res;
+    for (int i = 0; i < l->head->len; ++i) {
+        char *n = l->head->names[i];
+        Type t; int pos;
+        if (head_attr(r->head, n, &pos, &t)) {
+            num_attrs--;
+
+            if (t != l->head->types[i])
+                yyerror("attribute '%s' is of different type in right %s",
+                        n, lhstr);
+        }
+    }
+
+    if (num_attrs > MAX_ATTRS)
+        yyerror("join result type exceeds the maximum number "
+                "of attributes (%d)", MAX_ATTRS);
+
+    return rel_join(l, r);
 }
 
-static L_Rel *r_binary(L_Rel *l, L_Rel *r, L_Rel_Type node_type)
+static Rel *r_union(Rel *l, Rel *r)
 {
-    L_Rel *res = r_alloc(node_type);
-    res->left = l;
-    res->right = r;
+    char lhstr[MAX_HEAD_STR_LEN], rhstr[MAX_HEAD_STR_LEN];
+    print_head(lhstr, l->head);
+    print_head(rhstr, r->head);
 
-    return res;
+    if (!head_eq(l->head, r->head))
+        yyerror("use of union with different types (%s and %s)",
+                lhstr, rhstr);
+
+    return rel_union(l, r);
 }
 
-static L_Rel *r_unary(L_Rel *l, L_Attrs attrs, L_Rel_Type node_type)
+static Rel *r_diff(Rel *l, Rel *r)
 {
-    L_Rel *res = r_alloc(node_type);
-    res->left = l;
-    res->attrs = attrs;
+    char lhstr[MAX_HEAD_STR_LEN], rhstr[MAX_HEAD_STR_LEN];
+    print_head(lhstr, l->head);
+    print_head(rhstr, r->head);
 
-    return res;
-}
+    int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
+    if (head_common(l->head, r->head, lpos, rpos) == 0)
+        yyerror("use of semidiff with no commmon attributes (%s and %s)",
+                lhstr, rhstr);
 
-static L_Rel *r_select(L_Rel *l, L_Expr *expr)
-{
-    L_Rel *res = r_alloc(SELECT);
-    res->left = l;
-    res->expr = expr;
-
-    return res;
-}
-
-static L_Rel *r_sum(L_Rel *r, L_Rel *per, L_Attrs attrs)
-{
-    L_Rel *res = r_binary(r, per, SUMMARY);
-    res->attrs = attrs;
-
-    return res;
+    return rel_diff(l, r);
 }
 
 static void p_free(L_Expr *e)

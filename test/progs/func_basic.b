@@ -7,12 +7,11 @@ temperature: point;
 unemployment: point;
 currency: point;
 
-fn get_pointless_results(): point
+fn get_pointless_results(p: point): point
 {
-    return (temperature + currency * unemployment) - currency * temperature;
+    return (temperature + currency * unemployment) - currency * temperature + p;
 }
 
-fn func_with_param(p: point): point
+fn empty()
 {
-    return p * temperature + currency;
 }

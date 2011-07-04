@@ -657,39 +657,26 @@ extern int rel_eq(Rel *l, Rel *r)
     return all_ok;
 }
 
-static void init_tmp(Rel *r, Vars *rvars, TBuf *arg)
-{
-    Ctxt *c = r->ctxt;
-    rel_init(c->left, rvars, arg);
+static void free_clone(Rel *r) { }
 
-    for (int i = 0; i < c->ccnt; ++i)
-        c->clones[i]->body = tbuf_new();
+static void init_clone(Rel *r, Vars *rvars, TBuf *arg) {
+    Ctxt *c = r->ctxt;
+    r->body = tbuf_new();
 
     Tuple *t;
-    while ((t = rel_next(c->left)) != NULL) {
-        for (int i = 0; i < c->ccnt; ++i)
-            tbuf_add(c->clones[i]->body, tuple_cpy(t));
+    while ((t = rel_next(c->left)) != NULL)
+        tbuf_add(r->body, tuple_cpy(t));
 
-        tuple_free(t);
-    }
+    tbuf_reset(c->left->body);
 }
 
-static void init_clone(Rel *r, Vars *rvars, TBuf *arg) {}
-
-extern Rel *rel_tmp(Rel *r, Rel *clones[], int cnt)
-{
-    Rel *res = alloc(init_tmp);
+extern Rel *rel_clone(Rel *r) {
+    Rel *res = alloc(init_clone);
     res->head = head_cpy(r->head);
+    res->free = free_clone;
 
     Ctxt *c = res->ctxt;
     c->left = r;
-    c->ccnt = cnt;
-
-    for (int i = 0; i < cnt; ++i) {
-        Rel *tmp = alloc(init_clone);
-        tmp->head = head_cpy(r->head);
-        c->clones[i] = clones[i] = tmp;
-    }
 
     return res;
 }

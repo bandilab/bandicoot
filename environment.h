@@ -16,6 +16,7 @@ limitations under the License.
 */
 
 typedef struct {
+    Head *head;
     Rel  *ret;
 
     struct {
@@ -27,19 +28,7 @@ typedef struct {
         int len;
         char *names[MAX_STMTS];
         Rel *rels[MAX_STMTS];
-    } w;
-
-    struct {
-        int len;
-        char *names[MAX_STMTS];
-        Rel *rels[MAX_STMTS];
-    } t;
-
-    struct {
-        int len;
-        char *names[MAX_STMTS];
-        Rel *rels[MAX_STMTS];
-    } p;
+    } w, t, p;
 } Func;
 
 typedef struct {

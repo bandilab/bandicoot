@@ -8,8 +8,6 @@ store: point;
 fn hello(): point
 {
     tmp := p1 - p2;
-    store = tmp;
-
     tmp := store + p1 + p2;
     return tmp;
 }
