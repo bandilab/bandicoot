@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+extern int array_freq(char *keys[], int len, const char *key);
 extern int array_scan(char *keys[], int len, const char *key);
 extern int array_find(char *keys[], int len, const char *key);
 extern void array_sort(char *keys[], int len, int map[]);

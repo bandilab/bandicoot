@@ -51,7 +51,7 @@ int main()
     long time = sys_millis();
     for (j = 0; j < SIZE; ++j)
         for (i = 0; i < SIZE; ++i)
-            expr_bool_val(e, t[i]);
+            expr_bool_val(e, t[i], NULL);
 
     sys_print("%dK expressions evaluated in %dms\n", j, sys_millis() - time);
 

@@ -206,6 +206,9 @@ static Vars *sync_tx()
 
     long sid = tx_enter(addr, r, w);
 
+    vars_free(r);
+    vars_free(w);
+
     Vars *disk = vars_new(0);
 
     /* init the disk state variable */

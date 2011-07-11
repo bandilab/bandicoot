@@ -18,7 +18,7 @@ limitations under the License.
 #include "common.h"
 
 static Vars *rvars;
-static TBuf *arg;
+static Arg arg;
 static Env *env = NULL;
 
 static Rel *pack(char *str)
@@ -28,7 +28,7 @@ static Rel *pack(char *str)
     Rel *res = NULL;
 
     if (buf != NULL) {
-        arg = buf;
+        arg.body = buf;
         res = rel_param(h);
         mem_free(h);
     }
@@ -49,8 +49,8 @@ static int equal(Rel *left, const char *name)
 
     long sid = tx_enter("", rvars, wvars);
 
-    rel_init(left, rvars, arg);
-    rel_init(right, rvars, arg);
+    rel_init(left, rvars, &arg);
+    rel_init(right, rvars, &arg);
 
     int res = rel_eq(left, right);
 
@@ -71,7 +71,7 @@ static int count(const char *name)
 
     long sid = tx_enter("", rvars, wvars);
 
-    rel_init(r, rvars, arg);
+    rel_init(r, rvars, &arg);
 
     Tuple *t;
     int i;
@@ -104,6 +104,44 @@ static void test_param()
         fail();
 }
 
+static int equal_clone(const char *name)
+{
+    Rel *rel = load(name);
+    Rel *cp1 = rel_clone(rel), *cp2 = rel_clone(rel);
+    Vars *wvars = vars_new(0);
+
+    long sid = tx_enter("", rvars, wvars);
+
+    rel_init(rel, rvars, &arg);
+    rel_init(cp1, rvars, &arg);
+    rel_init(cp2, rvars, &arg);
+
+    int res = rel_eq(cp1, cp2);
+
+    if (rel->body != NULL)
+        tbuf_clean(rel->body);
+
+    rel_free(rel);
+    rel_free(cp1);
+    rel_free(cp2);
+
+    tx_commit(sid);
+
+    vars_free(wvars);
+
+    return res;
+}
+
+static void test_clone()
+{
+    if (!equal_clone("empty_r1"))
+        fail();
+
+    if (!equal_clone("storage_r1"))
+        fail();
+}
+
+
 static void test_eq()
 {
     if (equal(load("empty_r1"), "empty_r2"))
@@ -130,7 +168,7 @@ static void test_store()
     vars_put(wvars, "one_r1_cpy", 0L);
 
     long sid = tx_enter("", rvars, wvars);
-    rel_init(r, rvars, arg);
+    rel_init(r, rvars, &arg);
 
     rel_store(wvars->vols[0], "one_r1_cpy", wvars->vers[0], r);
     rel_free(r);
@@ -439,6 +477,7 @@ int main()
 
     test_load();
     test_param();
+    test_clone();
     test_eq();
     test_store();
     test_select();

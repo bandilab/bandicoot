@@ -530,10 +530,10 @@ static void tx_init(const char *source, const char *state)
     for (int i = 0; i < env->vars.len; ++i) {
         /* FIXME: we also need to remove vars from gvars if they do
                   not exist in the env */
-        char *name = str_dup(env->vars.names[i]);
+        char *name = env->vars.names[i];
         int idx = array_scan(gvars.names, gvars.len, env->vars.names[i]);
         if (idx < 0) {
-            gvars.names[gvars.len++] = name;
+            gvars.names[gvars.len++] = str_dup(name);
             Entry *e = add_entry(1, name, WRITE, 1, COMMITTED);
             mon_free(e->mon);
         }

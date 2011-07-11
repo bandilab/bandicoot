@@ -35,18 +35,18 @@ typedef struct {
     void (*op)(Expr *dest, Expr *l, Expr *r);
 } C_Binary;
 
-static Expr *do_eval(Expr *e, Tuple *t)
+static Expr *do_eval(Expr *e, Tuple *t, Arg *arg)
 {
-    e->eval(e, t);
+    e->eval(e, t, arg);
     return e;
 }
 
-static void eval_noop(Expr *e, Tuple *t) { }
+static void eval_noop(Expr *e, Tuple *t, Arg *arg) { }
 static void free_noop(Expr *e) { }
 
 static Expr *alloc(Type type,
                    int ctxt_size,
-                   void (*eval)(Expr*, Tuple*),
+                   void (*eval)(Expr*, Tuple*, Arg*),
                    void (*free)(Expr*))
 {
     Expr *res = mem_alloc(sizeof(Expr) + ctxt_size);
@@ -86,7 +86,7 @@ extern Expr *expr_str(const char *val)
     return res;
 }
 
-static void eval_attr(Expr *e, Tuple *t)
+static void eval_attr(Expr *e, Tuple *t, Arg *arg)
 {
     Value v = tuple_attr(t, *((int*) e->ctxt));
     if (e->type == Int)
@@ -106,9 +106,29 @@ extern Expr *expr_attr(int pos, Type type)
     return res;
 }
 
-static void eval_not(Expr *e, Tuple *t)
+static void eval_param(Expr *e, Tuple *t, Arg *arg)
 {
-    e_int(e) = !e_int(do_eval(e->ctxt, t));
+    int i = *((int*) e->ctxt);
+    if (e->type == Int)
+        e_int(e) = arg->vals[i].v_int;
+    else if (e->type == Real)
+        e_real(e) = arg->vals[i].v_real;
+    else if (e->type == Long)
+        e_long(e) = arg->vals[i].v_long;
+    else if (e->type == String)
+        str_cpy(e_str(e), arg->vals[i].v_str);
+}
+
+extern Expr *expr_param(int pos, Type type)
+{
+    Expr *res = alloc(type, sizeof(int), eval_param, free_noop);
+    *((int*) res->ctxt) = pos;
+    return res;
+}
+
+static void eval_not(Expr *e, Tuple *t, Arg *arg)
+{
+    e_int(e) = !e_int(do_eval(e->ctxt, t, arg));
 }
 
 static void free_unary(Expr *e)
@@ -123,10 +143,10 @@ extern Expr *expr_not(Expr *e)
     return res;
 }
 
-static void eval_binary(Expr *e, Tuple *t)
+static void eval_binary(Expr *e, Tuple *t, Arg *arg)
 {
     C_Binary *c = e->ctxt;
-    c->op(e, do_eval(c->left, t), do_eval(c->right, t));
+    c->op(e, do_eval(c->left, t, arg), do_eval(c->right, t, arg));
 }
 
 static void free_binary(Expr *e)
@@ -310,9 +330,9 @@ extern Expr *expr_mul(Expr *l, Expr *r)
     return expr_binary(l->type, l, r, op_mul);
 }
 
-static void eval_to_int(Expr *dest, Tuple *t)
+static void eval_to_int(Expr *dest, Tuple *t, Arg *arg)
 {
-    Expr *src = do_eval(dest->ctxt, t);
+    Expr *src = do_eval(dest->ctxt, t, arg);
     if (src->type == Int)
         e_int(dest) = e_int(src);
     else if (src->type == Real)
@@ -321,9 +341,9 @@ static void eval_to_int(Expr *dest, Tuple *t)
         e_int(dest) = (int) e_long(src);
 }
 
-static void eval_to_real(Expr *dest, Tuple *t)
+static void eval_to_real(Expr *dest, Tuple *t, Arg *arg)
 {
-    Expr *src = do_eval(dest->ctxt, t);
+    Expr *src = do_eval(dest->ctxt, t, arg);
     if (src->type == Int)
         e_real(dest) = (double) e_int(src);
     else if (src->type == Real)
@@ -332,9 +352,9 @@ static void eval_to_real(Expr *dest, Tuple *t)
         e_real(dest) = (double) e_long(src);
 }
 
-static void eval_to_long(Expr *dest, Tuple *t)
+static void eval_to_long(Expr *dest, Tuple *t, Arg *arg)
 {
-    Expr *src = do_eval(dest->ctxt, t);
+    Expr *src = do_eval(dest->ctxt, t, arg);
     if (src->type == Int)
         e_long(dest) = e_int(src);
     else if (src->type == Real)
@@ -346,7 +366,7 @@ static void eval_to_long(Expr *dest, Tuple *t)
 /* TODO: implement to/from string conversions and string concatenation */
 extern Expr *expr_conv(Expr *e, Type t)
 {
-    void (*eval)(Expr *self, Tuple *t) = NULL;
+    void (*eval)(Expr *self, Tuple *t, Arg *arg) = NULL;
     if (t == Int)
         eval = eval_to_int;
     else if (t == Real)
@@ -360,14 +380,14 @@ extern Expr *expr_conv(Expr *e, Type t)
     return res;
 }
 
-extern int expr_bool_val(Expr *e, Tuple *t)
+extern int expr_bool_val(Expr *e, Tuple *t, Arg *arg)
 {
-    return e_int(do_eval(e, t));
+    return e_int(do_eval(e, t, arg));
 }
 
-extern Value expr_new_val(Expr *e, Tuple *t)
+extern Value expr_new_val(Expr *e, Tuple *t, Arg *arg)
 {
-    do_eval(e, t);
+    do_eval(e, t, arg);
 
     Value v = {.size = 0, .data = NULL };
     if (e->type == Int)

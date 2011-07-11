@@ -36,13 +36,13 @@ struct Rel {
     TBuf *body;
     void *ctxt;
 
-    void (*init)(struct Rel *self, Vars *rvars, TBuf *arg);
+    void (*init)(struct Rel *self, Vars *rvars, Arg *arg);
     void (*free)(struct Rel *self);
 };
 
 typedef struct Rel Rel;
 
-static void rel_init(Rel *r, Vars *rvars, TBuf *arg)
+static void rel_init(Rel *r, Vars *rvars, Arg *arg)
 {
     if (r->init != NULL)
         r->init(r, rvars, arg);
@@ -68,6 +68,7 @@ static Tuple *rel_next(Rel *r)
 extern Rel *rel_param(Head *head);
 extern Rel *rel_clone(Rel *r);
 extern Rel *rel_load(Head *head, const char *name);
+extern Rel *rel_err(int code, char *msg);
 
 /* relations passed to both rel_store & rel_eq must be rel_init()'ed */
 extern void rel_store(const char *vid, const char *name, long vers, Rel *r);

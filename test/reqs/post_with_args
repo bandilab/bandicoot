@@ -1,0 +1,5 @@
+POST /some_form?a=1 HTTP/1.1
+Content-Length: 2
+All the lines are ignored until the empty one (\r\n\r\n)
+
+12

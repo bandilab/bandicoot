@@ -22,13 +22,24 @@ typedef struct {
     struct {
         int len;
         char *names[MAX_VARS];
-    } r;
+    } r; /* global variables read by the function */
 
     struct {
         int len;
         char *names[MAX_STMTS];
         Rel *rels[MAX_STMTS];
-    } w, t, p;
+    } w, t; /* variables modified by the function (global and temporary) */
+
+    struct {
+        char *name;
+        Rel *rel;
+    } rp; /* relational input parameter */
+
+    struct {
+        int len;
+        char *names[MAX_ATTRS];
+        Type types[MAX_ATTRS];
+    } pp; /* primitive input parameters */
 } Func;
 
 typedef struct {

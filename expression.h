@@ -15,6 +15,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+typedef struct {
+    TBuf *body;
+    union {
+        int v_int;
+        double v_real;
+        long long v_long;
+        char v_str[MAX_STRING];
+    } vals[MAX_ATTRS];
+} Arg;
+
 struct Expr {
     Type type;
     void *ctxt;
@@ -25,7 +35,7 @@ struct Expr {
         char v_str[MAX_STRING];
     } val;
 
-    void (*eval)(struct Expr *self, Tuple *t);
+    void (*eval)(struct Expr *self, Tuple *t, Arg *arg);
     void (*free)(struct Expr *self);
 };
 
@@ -36,6 +46,7 @@ extern Expr *expr_long(long long val);
 extern Expr *expr_real(double val);
 extern Expr *expr_str(const char *val);
 extern Expr *expr_attr(int pos, Type type);
+extern Expr *expr_param(int pos, Type type);
 extern Expr *expr_not(Expr *e);
 extern Expr *expr_or(Expr *l, Expr *r);
 extern Expr *expr_and(Expr *l, Expr *r);
@@ -50,6 +61,6 @@ extern Expr *expr_div(Expr *l, Expr *r);
 extern Expr *expr_mul(Expr *l, Expr *r);
 extern Expr *expr_conv(Expr *e, Type t);
 
-extern int expr_bool_val(Expr *e, Tuple *t);
-extern Value expr_new_val(Expr *e, Tuple *t);
+extern int expr_bool_val(Expr *e, Tuple *t, Arg *arg);
+extern Value expr_new_val(Expr *e, Tuple *t, Arg *arg);
 extern void expr_free(Expr *e);

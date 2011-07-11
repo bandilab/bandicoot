@@ -22,6 +22,7 @@ limitations under the License.
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <limits.h>
 
 static char SID_TO_STR[] = {
     '0', '1', '2', '3', '4', '5', '6', '7',
@@ -271,3 +272,33 @@ extern int str_from_sid(char *dest, long sid)
     return i;
 }
 
+extern char *str_urldecode(char *src)
+{
+    char hex[4];
+    str_cpy(hex, "0x00");
+    int off = 0, read = 0, idx = -1, len = str_len(src);
+    char *res = mem_alloc(len + 1);
+
+    for (int i = 0; i < len; ++i) {
+        char c = src[i];
+        if (c == '%') {
+            if (i + 2 >= len)
+                goto failure;
+            hex[2] = src[++i];
+            hex[3] = src[++i];
+            c = strtol(hex, NULL, 16);
+            if (c == '\0')
+                goto failure;
+        }
+        res[off++] = c;
+    }
+
+    res[off] = '\0';
+    goto success;
+
+failure:
+    mem_free(res);
+    res = NULL;
+success:
+    return res;
+}

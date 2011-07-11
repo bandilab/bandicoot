@@ -19,6 +19,7 @@ limitations under the License.
 #include "system.h"
 #include "string.h"
 #include "memory.h"
+#include "array.h"
 #include "http.h"
 
 static const char *HTTP_400 =
@@ -29,10 +30,12 @@ static const char *HTTP_400 =
 static const char *HTTP_404 =
     "HTTP/1.1 404 Not Found\r\n"
     "Content-Type: text/plain\r\n"
-    "Content-Length: 0\r\n\r\n";
+    "Content-Length: %d\r\n\r\n"
+    "%s\r\n";
 
 static const char *HTTP_405 =
     "HTTP/1.1 405 Method Not Allowed\r\n"
+    "Allow: %s\r\n"
     "Content-Type: text/plain\r\n"
     "Content-Length: 0\r\n\r\n";
 
@@ -75,19 +78,87 @@ static char *next(char *buf, const char *sep, int *off)
     return str_trim(res);
 }
 
+static Http_Args *args_parse(char *buf)
+{
+    Http_Args *res = mem_alloc(sizeof(Http_Args));
+    res->len = 0;
+
+    if (buf == NULL)
+        return res;
+
+    int off = 0, len = str_len(buf);
+    char *b = mem_alloc(len + 2), *p, *key, *val;
+    str_cpy(b, buf);
+    b[len++] = '&';
+    b[len] = '\0';
+
+    while ((p = next(b, "&", &off)) != NULL) {
+        int val_off = 0;
+        if ((key = next(p, "=", &val_off)) == NULL)
+            goto failure;
+
+        /* TODO: this returns HTTP 400 rather than 404 with error message */
+        if (res->len >= MAX_ATTRS)
+            goto failure;
+
+        val = str_urldecode(p + val_off);
+        if (val == NULL)
+            goto failure;
+
+        res->names[res->len] = str_dup(key);
+        res->vals[res->len++] = val;
+    }
+
+    goto success;
+
+failure:
+    for (int i = 0; i < res->len; ++i) {
+        mem_free(res->names[i]);
+        mem_free(res->vals[i]);
+    }
+    mem_free(res);
+    res = NULL;
+
+success:
+    mem_free(b);
+
+    return res;
+}
+
+static char *read_header(IO *io, int *size)
+{
+    int read = 0, alloc = 8192;
+    char *res = mem_alloc(alloc), *buf = res;
+
+    *size = 0;
+    while ((read = sys_read(io, buf, alloc - 1)) > 0) {
+        buf[read] = '\0';
+        *size += read;
+
+        if (str_idx(buf, "\r\n\r\n") > -1)
+            goto success;
+
+        res = mem_realloc(res, *size + alloc);
+        buf = res + *size;
+    }
+
+    mem_free(res);
+    res = NULL;
+
+success:
+    return res;
+}
+
 extern Http_Req *http_parse(IO *io)
 {
     Http_Req *req = NULL;
-    char *buf, *head, *line, *p, path[MAX_NAME], method[MAX_NAME];
+    Http_Args *args = NULL;
+    char *buf, *head, *line, *p, *q, path[MAX_NAME], method[MAX_NAME];
     int read = 0, body_start = 0, head_off = 0, off = 0;
 
-    /* FIXME: we should read until '\n' or until the buffer is exhausted */
-    buf = mem_alloc(8192);
-    read = sys_read(io, buf, 8191);
-    if (read < 0)
+    buf = read_header(io, &read);
+    if (buf == NULL)
         goto exit;
-
-    buf[read] = '\0';
 
     if ((head = next(buf, "\r\n\r\n", &body_start)) == NULL)
         goto exit;
@@ -100,10 +171,23 @@ extern Http_Req *http_parse(IO *io)
 
     str_cpy(method, p);
 
-    if ((p = next(line, " ", &off)) == NULL)
-        goto exit;
+    p = next(line, "?", &off);
+    q = next(line, " ", &off);
+    if (p != NULL) {
+        str_cpy(path, p);
 
-    str_cpy(path, p);
+        if (q == NULL)
+            goto exit;
+    } else {
+        if (q == NULL)
+            goto exit;
+        str_cpy(path, q);
+        q = NULL;
+    }
+
+    args = args_parse(q);
+    if (args == NULL)
+        goto exit;
 
     if (str_cmp(line + off, "HTTP/1.1") != 0)
         goto exit;
@@ -140,6 +224,7 @@ extern Http_Req *http_parse(IO *io)
     req = mem_alloc(sizeof(Http_Req) + size + 1);
     req->body = (char*) (req + 1);
     req->method = m;
+    req->args = args;
     str_cpy(req->path, path);
     if (size > 0)
         mem_cpy(req->body, buf + body_start, size);
@@ -147,62 +232,83 @@ extern Http_Req *http_parse(IO *io)
 
 exit:
     mem_free(buf);
+    if (req == NULL && args != NULL) {
+
+        for (int i = 0; i < args->len; ++i) {
+            mem_free(args->names[i]);
+            mem_free(args->vals[i]);
+        }
+
+        mem_free(args);
+    }
 
     return req;
 }
 
+extern void http_free(Http_Req *req)
+{
+    for (int i = 0; i < req->args->len; ++i) {
+        mem_free(req->args->names[i]);
+        mem_free(req->args->vals[i]);
+    }
+
+    mem_free(req->args);
+    mem_free(req);
+}
+
 extern int http_200(IO *io)
 {
-    static int size;
-    if (size == 0)
-        size = str_len(HTTP_200);
-
-    return sys_write(io, HTTP_200, size) < 0 ? -200 : 200;
+    return sys_write(io, HTTP_200, str_len(HTTP_200)) < 0 ? -200 : 200;
 }
 
 extern int http_400(IO *io)
 {
-    static int size;
-    if (size == 0)
-        size = str_len(HTTP_400);
-
-    return sys_write(io, HTTP_400, size) < 0 ? -400 : 400;
+    return sys_write(io, HTTP_400, str_len(HTTP_400)) < 0 ? -400 : 400;
 }
 
-extern int http_404(IO *io)
+extern int http_404(IO *io, const char *response)
 {
-    static int size;
-    if (size == 0)
-        size = str_len(HTTP_404);
+    const char *res = (response == NULL) ? "": response;
+    /* +2 to include trailing \r\n */
+    int rsize = str_len(res) + 2;
+    int hsize = str_len(HTTP_404);
 
-    return sys_write(io, HTTP_404, size) < 0 ? -404 : 404;
+    char *buf = mem_alloc(hsize + rsize + 10); /* + MAX_INT digits */
+    int off = str_print(buf, HTTP_404, rsize, res);
+
+    int ok = sys_write(io, buf, off) == off;
+
+    mem_free(buf);
+
+    return ok ? 404 : -404;
 }
 
-extern int http_405(IO *io)
+extern int http_405(IO *io, const char method)
 {
-    static int size;
-    if (size == 0)
-        size = str_len(HTTP_405);
+    char *m = "";
+    if (method == GET)
+        m = "GET";
+    if (method == POST)
+        m = "POST";
 
-    return sys_write(io, HTTP_405, size) < 0 ? -405 : 405;
+    char *buf = mem_alloc(str_len(HTTP_405) + 4); /* + "POST" length */
+    int off = str_print(buf, HTTP_405, m);
+
+    int ok = sys_write(io, buf, off) == off;
+
+    mem_free(buf);
+
+    return ok ? 405 : -405;
 }
 
 extern int http_500(IO *io)
 {
-    static int size;
-    if (size == 0)
-        size = str_len(HTTP_500);
-
-    return sys_write(io, HTTP_500, size) < 0 ? -500 : 500;
+    return sys_write(io, HTTP_500, str_len(HTTP_500)) < 0 ? -500 : 500;
 }
 
 extern int http_opts(IO *io)
 {
-    static int size;
-    if (size == 0)
-        size = str_len(HTTP_OPTS);
-
-    return sys_write(io, HTTP_OPTS, size) < 0 ? -200 : 200;
+    return sys_write(io, HTTP_OPTS, str_len(HTTP_OPTS)) < 0 ? -200 : 200;
 }
 
 extern int http_chunk(IO *io, const void *buf, int size)

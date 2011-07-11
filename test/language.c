@@ -96,6 +96,12 @@ static void test_semidiff()
     FAIL("semidiff_types_err.b");
 }
 
+static void test_select()
+{
+    OK("select_basic.b");
+    FAIL("select_unknown_attr_err.b");
+}
+
 static void test_project()
 {
     OK("project_basic.b");
@@ -157,6 +163,7 @@ static void test_params()
     FAIL("params_rel_unknown_type_err.b");
     FAIL("params_rel_unknown_param_err.b");
     FAIL("params_rel_redecl_param_err.b");
+    FAIL("params_prim_redecl_err.b");
 }
 
 static void test_compat()
@@ -233,6 +240,7 @@ int main(int argc, char *argv[])
         test_join();
         test_union();
         test_semidiff();
+        test_select();
         test_project();
         test_rename();
         test_primitive_exprs();

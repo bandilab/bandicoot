@@ -43,9 +43,9 @@ static void vars_init(Vars *v)
 {
     for (int i = 0; i < v->size; ++i) {
         v->names[i] = vars_p(v) + i * MAX_NAME;
-        v->names[i][0] = '\0';
+        mem_set(v->names[i], 0, MAX_NAME);
         v->vols[i] = vols_p(v) + i * MAX_ADDR;
-        v->vols[i][0] = '\0';
+        mem_set(v->vols[i], 0, MAX_ADDR);
         v->vers[i] = 0L;
     }
 }
@@ -192,6 +192,10 @@ typedef struct {
     /* temp */
     int ccnt;
     Rel *clones[MAX_VARS];
+
+    /* error response */
+    int code;
+    char *msg;
 } Ctxt;
 
 static void free(Rel *r)
@@ -208,7 +212,7 @@ static void free(Rel *r)
         mem_free(c->sums[i]);
 }
 
-static Rel *alloc(void (*init)(Rel *r, Vars *s, TBuf *a))
+static Rel *alloc(void (*init)(Rel *r, Vars *s, Arg *a))
 {
     Rel *r = mem_alloc(sizeof(Rel) + sizeof(Ctxt));
     r->head = NULL;
@@ -231,7 +235,11 @@ static Rel *alloc(void (*init)(Rel *r, Vars *s, TBuf *a))
     return r;
 }
 
-static void init_load(Rel *r, Vars *rvars, TBuf *arg)
+static void init_noop(Rel *r, Vars *rvars, Arg *arg)
+{
+}
+
+static void init_load(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
 
@@ -250,9 +258,29 @@ extern Rel *rel_load(Head *head, const char *name)
     return res;
 }
 
-static void init_param(Rel *r, Vars *rvars, TBuf *arg)
+extern Rel *rel_err(int code, char *msg)
 {
-    r->body = arg;
+    Rel *res = alloc(init_noop);
+
+    char *names[] = {"code", "msg"};
+    Type types[] = {Int, String};
+    res->head = head_new(names, types, 2);
+
+    Ctxt *c = res->ctxt;
+    c->code = code;
+    c->msg = msg;
+
+    Value vals[2] = { val_new_int(&c->code), val_new_str(c->msg) };
+    Tuple *t = tuple_new(vals, 2);
+    res->body = tbuf_new();
+    tbuf_add(res->body, t);
+
+    return res;
+}
+
+static void init_param(Rel *r, Vars *rvars, Arg *arg)
+{
+    r->body = arg->body;
 }
 
 extern Rel *rel_param(Head *head)
@@ -263,7 +291,7 @@ extern Rel *rel_param(Head *head)
     return rel_project(res, head->names, head->len);
 }
 
-static void init_join(Rel *r, Vars *rvars, TBuf *arg)
+static void init_join(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -306,7 +334,7 @@ extern Rel *rel_join(Rel *l, Rel *r)
     return res;
 }
 
-static void init_union(Rel *r, Vars *rvars, TBuf *arg)
+static void init_union(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -342,7 +370,7 @@ extern Rel *rel_union(Rel *l, Rel *r)
     return res;
 }
 
-static void init_diff(Rel *r, Vars *rvars, TBuf *arg)
+static void init_diff(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -376,7 +404,7 @@ extern Rel *rel_diff(Rel *l, Rel *r)
     return res;
 }
 
-static void init_project(Rel *r, Vars *rvars, TBuf *arg)
+static void init_project(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -405,7 +433,7 @@ extern Rel *rel_project(Rel *r, char *names[], int len)
     return res;
 }
 
-static void init_rename(Rel *r, Vars *rvars, TBuf *arg)
+static void init_rename(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -430,7 +458,7 @@ extern Rel *rel_rename(Rel *r, char *from[], char *to[], int len)
     return res;
 }
 
-static void init_select(Rel *r, Vars *rvars, TBuf *arg)
+static void init_select(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -439,7 +467,7 @@ static void init_select(Rel *r, Vars *rvars, TBuf *arg)
 
     Tuple *t;
     while ((t = rel_next(c->left)) != NULL)
-        if (expr_bool_val(c->exprs[0], t))
+        if (expr_bool_val(c->exprs[0], t, arg))
             tbuf_add(r->body, t);
         else
             tuple_free(t);
@@ -458,7 +486,7 @@ extern Rel *rel_select(Rel *r, Expr *bool_expr)
     return res;
 }
 
-static void init_extend(Rel *r, Vars *rvars, TBuf *arg)
+static void init_extend(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -469,7 +497,7 @@ static void init_extend(Rel *r, Vars *rvars, TBuf *arg)
     while ((t = rel_next(c->left)) != NULL) {
         Value vals[c->ecnt];
         for (int i = 0; i < c->ecnt; ++i)
-            vals[i] = expr_new_val(c->exprs[i], t);
+            vals[i] = expr_new_val(c->exprs[i], t, arg);
 
         Tuple *e = tuple_new(vals, c->ecnt);
         Tuple *res = tuple_join(t, e, c->j.lpos, c->j.rpos, c->j.len);
@@ -501,7 +529,7 @@ extern Rel *rel_extend(Rel *r, char *names[], Expr *e[], int len)
     return res;
 }
 
-static void init_sum(Rel *r, Vars *rvars, TBuf *arg)
+static void init_sum(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -574,7 +602,7 @@ extern Rel *rel_sum(Rel *r,
     return res;
 }
 
-static void init_sum_unary(Rel *r, Vars *rvars, TBuf *arg)
+static void init_sum_unary(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
@@ -659,7 +687,7 @@ extern int rel_eq(Rel *l, Rel *r)
 
 static void free_clone(Rel *r) { }
 
-static void init_clone(Rel *r, Vars *rvars, TBuf *arg) {
+static void init_clone(Rel *r, Vars *rvars, Arg *arg) {
     Ctxt *c = r->ctxt;
     r->body = tbuf_new();
 

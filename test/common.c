@@ -36,7 +36,7 @@ extern Tuple *gen_tuple(int i)
     return tuple_new(vals, 2);
 }
 
-static void init_gen(Rel *r, Vars *rvars, TBuf *arg) {}
+static void init_gen(Rel *r, Vars *rvars, Arg *arg) {}
 static void free_gen(Rel *r) {}
 
 extern TBuf *gen_tuples(int start, int end)

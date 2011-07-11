@@ -19,6 +19,7 @@ test/progs/literal_int_overflow_pos_err.b:7: int constant value overflow 2147483
 test/progs/literal_long_overflow_neg_err.b:7: long constant value overflow 9223372036854775809
 test/progs/literal_long_overflow_pos_err.b:7: long constant value overflow 9223372036854775808
 test/progs/load_unknown_var_err.b:8: unknown variable 'a'
+test/progs/params_prim_redecl_err.b:1: attribute 'a' is already used
 test/progs/params_rel_redecl_param_err.b:8: variable 'p' already defined
 test/progs/params_rel_unknown_param_err.b:8: unknown variable 'p'
 test/progs/params_rel_unknown_type_err.b:1: unknown type 'unknown_t'
@@ -56,6 +57,7 @@ test/progs/rename_attr_exists_err.b:11: attribute 'time' already exists in rel {
 test/progs/rename_same_from_err.b:10: attribute 'x' is already used
 test/progs/rename_same_to_err.b:10: attribute 'x_coord' already exists in rel {x: real, y: real, }
 test/progs/rename_unknown_attr_err.b:10: unknown attribute 'z' in rel {x: real, y: real, }
+test/progs/select_unknown_attr_err.b:8: unknown attribute 'z' in rel {x: int, y: int, }
 test/progs/semidiff_types_err.b:16: use of semidiff with no commmon attributes (rel {x: real, y: real, } and rel {building: int, street: string, })
 test/progs/summary_attr_err.b:7: unknown attribute 's' in rel {salary: int, }
 test/progs/summary_attr_exists_err.b:15: attribute 'salary' already exists in per rel {name: string, salary: int, }

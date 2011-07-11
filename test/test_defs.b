@@ -294,14 +294,14 @@ fn load_one_r1(): basic_01
     return one_r1;
 }
 
-fn load_one_r1_cpy(): basic_01
-{
-    return one_r1_cpy;
-}
-
 fn load_one_r2(): basic_01
 {
     return one_r2;
+}
+
+fn load_one_r1_cpy(): basic_01
+{
+    return one_r1_cpy;
 }
 
 fn load_param_1(): basic_01

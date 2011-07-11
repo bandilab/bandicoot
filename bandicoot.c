@@ -19,6 +19,7 @@ limitations under the License.
 #include "system.h"
 #include "memory.h"
 #include "string.h"
+#include "array.h"
 #include "head.h"
 #include "http.h"
 #include "value.h"
@@ -36,6 +37,21 @@ extern const char *VERSION;
 #define QUEUE_LEN 128
 #define THREADS 8
 #define PROC_WAIT_SEC 5
+
+/* error messages for the clients */
+static const int ERR_UNKNOWN_FN = 0;
+static const int ERR_PARAMS_COUNT = 1;
+static const int ERR_PARAM_VALUE = 2;
+static const int ERR_PARAM_DUPLICATE = 3;
+
+static const struct {
+    int code;
+    char *msg;
+} ERR_MSGS[4] = {{.code = 1, .msg = "unknown function"},
+                 {.code = 2, .msg = "provided pararmeters do not "
+                                    "match the function declaration"},
+                 {.code = 3, .msg = "parameter value does not match the type"},
+                 {.code = 4, .msg = "duplicate parameters are not supported"}};
 
 typedef struct {
     char exe[MAX_FILE_PATH];
@@ -128,13 +144,24 @@ exit:
     return NULL;
 }
 
+static char *err(int err)
+{
+    Rel *res = rel_err(ERR_MSGS[err].code, ERR_MSGS[err].msg);
+    int size = 0;
+    char *body = rel_unpack(res->head, res->body, &size);
+    rel_free(res);
+
+    return body;
+}
+
 static void processor(const char *tx_addr, int port)
 {
     int status = -1;
     long sid = 0, time = sys_millis();
 
-    TBuf *arg = NULL;
+    Arg *arg = NULL;
     Vars *r = NULL, *w = NULL;
+    char *emsg = NULL;
 
     /* connect to the control thread */
     char addr[MAX_ADDR];
@@ -161,26 +188,76 @@ static void processor(const char *tx_addr, int port)
     /* compare the request with the function defintion */
     Func *fn = env_func(env, req->path + 1);
     if (fn == NULL) {
-        status = http_404(io);
+        status = http_404(io, (emsg = err(ERR_UNKNOWN_FN)));
         goto exit;
     }
 
-    if ((fn->p.len == 1 && req->method != POST) ||
-        (fn->p.len == 0 && req->method == POST))
-    {
-        status = http_405(io);
+    if (fn->rp.name != NULL && req->method != POST) {
+        status = http_405(io, POST);
         goto exit;
-    } if (fn->p.len == 1) {
+    }
+    if (fn->rp.name == NULL && req->method == POST) {
+        status = http_405(io, GET);
+        goto exit;
+    }
+
+    /* TODO: think what to do with duplicate parameter values */
+    for (int i = 0; i < req->args->len; ++i) {
+        char *name = req->args->names[i];
+        if (array_freq(req->args->names, req->args->len, name) > 1) {
+            status = http_404(io, (emsg = err(ERR_PARAM_DUPLICATE)));
+            goto exit;
+        }
+    }
+
+    if (fn->pp.len != req->args->len)
+    {
+        status = http_404(io, (emsg = err(ERR_PARAMS_COUNT)));
+        goto exit;
+    }
+
+    arg = mem_alloc(sizeof(Arg));
+    for (int i = 0; i < fn->pp.len; ++i) {
+        char *name = fn->pp.names[i];
+        Type t = fn->pp.types[i];
+
+        int idx = array_scan(req->args->names, req->args->len, name);
+        if (idx < 0) {
+            status = http_404(io, (emsg = err(ERR_PARAMS_COUNT)));
+            goto exit;
+        }
+
+        char *val = req->args->vals[idx];
+        int error = 0;
+        if (t == Int) {
+            arg->vals[i].v_int = str_int(val, &error);
+        } else if (t == Real)
+            arg->vals[i].v_real = str_real(val, &error);
+        else if (t == Long)
+            arg->vals[i].v_long = str_long(val, &error);
+        else if (t == String) {
+            error = str_len(val) > MAX_STRING;
+            if (!error)
+                str_cpy(arg->vals[i].v_str, val);
+        }
+
+        if (error) {
+            status = http_404(io, (emsg = err(ERR_PARAM_VALUE)));
+            goto exit;
+        }
+    }
+
+    if (fn->rp.name != NULL) {
         Head *head = NULL;
-        arg = rel_pack_sep(req->body, &head);
+        arg->body = rel_pack_sep(req->body, &head);
 
         int eq = 0;
         if (head != NULL) {
-            eq = head_eq(head, fn->p.rels[0]->head);
+            eq = head_eq(head, fn->rp.rel->head);
             mem_free(head);
         }
 
-        if (arg == NULL || !eq) {
+        if (arg->body == NULL || !eq) {
             status = http_400(io);
             goto exit;
         }
@@ -197,8 +274,8 @@ static void processor(const char *tx_addr, int port)
     sid = tx_enter(addr, r, w);
 
     /* execute the function body */
-    for (int i = 0; i < fn->p.len; ++i)
-        rel_init(fn->p.rels[i], r, arg);
+    if (fn->rp.rel != NULL)
+        rel_init(fn->rp.rel, r, arg);
 
     for (int i = 0; i < fn->t.len; ++i)
         rel_init(fn->t.rels[i], r, arg);
@@ -210,9 +287,6 @@ static void processor(const char *tx_addr, int port)
 
     if (fn->ret != NULL)
         rel_init(fn->ret, r, arg);
-
-    /* need to set to NULL do avoid double-free in exit */
-    arg = NULL;
 
     /* TODO: commit should not happen if the client has closed the connection */
     tx_commit(sid);
@@ -244,12 +318,12 @@ exit:
         vars_free(w);
     if (env != NULL)
         env_free(env);
-    if (arg != NULL) {
-        tbuf_clean(arg);
-        tbuf_free(arg);
-    }
     if (req != NULL)
-        mem_free(req);
+        http_free(req);
+    if (arg != NULL)
+        mem_free(arg);
+    if (emsg != NULL)
+        mem_free(emsg);
     sys_close(io);
 }
 

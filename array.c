@@ -17,6 +17,16 @@ limitations under the License.
 
 #include "string.h"
 
+extern int array_freq(char *keys[], int len, const char *key)
+{
+    int i, cnt = 0;
+    for (i = 0; i < len; ++i)
+        if (str_cmp(keys[i], key) == 0)
+            cnt++;
+
+    return cnt;
+}
+
 extern int array_scan(char *keys[], int len, const char *key)
 {
     int i;

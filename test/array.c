@@ -105,11 +105,28 @@ static void test_sort()
         fail();
 }
 
+static void test_freq()
+{
+    char *empty_words[] = {};
+    char *unique_words[] = {"abc", "def", "jhk", "lmn"};
+    char *dupl_words[] = {"abc", "def", "abc", "lmn"};
+
+    if (array_freq(empty_words, 0, "abc") != 0)
+        fail();
+    if (array_freq(unique_words, 4, "zzz") != 0)
+        fail();
+    if (array_freq(unique_words, 4, "jhk") != 1)
+        fail();
+    if (array_freq(dupl_words, 4, "abc") != 2)
+        fail();
+}
+
 int main()
 {
     test_scan();
     test_find();
     test_sort();
+    test_freq();
 
     return 0;
 }

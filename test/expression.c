@@ -22,9 +22,9 @@ static void test_bool_vals()
     Expr *e_true = expr_true();
     Expr *e_false = expr_false();
 
-    if (expr_bool_val(e_true, 0) == 0)
+    if (expr_bool_val(e_true, NULL, NULL) == 0)
         fail();
-    if (expr_bool_val(e_false, 0) != 0)
+    if (expr_bool_val(e_false, NULL, NULL) != 0)
         fail();
 
     expr_free(e_true);
@@ -40,17 +40,17 @@ static void test_bool_ops()
     Expr *e_or_tf = expr_or(expr_true(), expr_false());
     Expr *e_or_ff = expr_or(expr_false(), expr_false());
 
-    if (expr_bool_val(e_not_t, 0) != 0)
+    if (expr_bool_val(e_not_t, NULL, NULL) != 0)
         fail();
-    if (expr_bool_val(e_not_f, 0) == 0)
+    if (expr_bool_val(e_not_f, NULL, NULL) == 0)
         fail();
-    if (expr_bool_val(e_and_tt, 0) == 0)
+    if (expr_bool_val(e_and_tt, NULL, NULL) == 0)
         fail();
-    if (expr_bool_val(e_and_tf, 0) != 0)
+    if (expr_bool_val(e_and_tf, NULL, NULL) != 0)
         fail();
-    if (expr_bool_val(e_or_tf, 0) == 0)
+    if (expr_bool_val(e_or_tf, NULL, NULL) == 0)
         fail();
-    if (expr_bool_val(e_or_ff, 0) != 0)
+    if (expr_bool_val(e_or_ff, NULL, NULL) != 0)
         fail();
 
     expr_free(e_not_t);
@@ -82,23 +82,23 @@ static void test_cmp_ops()
     Expr *e_nlte = expr_lte(expr_str("hello world!"),
                             expr_str("hello a"));
 
-    if (!expr_bool_val(e_eq, NULL))
+    if (!expr_bool_val(e_eq, NULL, NULL))
         fail();
-    if (expr_bool_val(e_neq, NULL))
+    if (expr_bool_val(e_neq, NULL, NULL))
         fail();
-    if (!expr_bool_val(e_gt, NULL))
+    if (!expr_bool_val(e_gt, NULL, NULL))
         fail();
-    if (!expr_bool_val(e_lt, NULL))
+    if (!expr_bool_val(e_lt, NULL, NULL))
         fail();
-    if (expr_bool_val(e_ngt, NULL))
+    if (expr_bool_val(e_ngt, NULL, NULL))
         fail();
-    if (!expr_bool_val(e_gte, NULL))
+    if (!expr_bool_val(e_gte, NULL, NULL))
         fail();
-    if (!expr_bool_val(e_lte, NULL))
+    if (!expr_bool_val(e_lte, NULL, NULL))
         fail();
-    if (expr_bool_val(e_ngte, NULL))
+    if (expr_bool_val(e_ngte, NULL, NULL))
         fail();
-    if (expr_bool_val(e_nlte, NULL))
+    if (expr_bool_val(e_nlte, NULL, NULL))
         fail();
 
     expr_free(e_eq);
@@ -116,9 +116,9 @@ static void test_cmp_ops()
     e_lte = expr_lte(expr_int(-1),
                      expr_int(1));
 
-    if (!expr_bool_val(e_gte, NULL))
+    if (!expr_bool_val(e_gte, NULL, NULL))
         fail();
-    if (!expr_bool_val(e_lte, NULL))
+    if (!expr_bool_val(e_lte, NULL, NULL))
         fail();
 
     expr_free(e_gte);
@@ -146,42 +146,42 @@ static void test_arithmetic()
     Expr *e_lmul = expr_mul(expr_long(5), expr_long(5));
     Expr *e_rmul = expr_mul(expr_real(5.0), expr_real(0.5));
 
-    if (4 != val_int(expr_new_val(e_isum, NULL)))
+    if (4 != val_int(expr_new_val(e_isum, NULL, NULL)))
         fail();
-    if (4LL != val_long(expr_new_val(e_lsum, NULL)))
+    if (4LL != val_long(expr_new_val(e_lsum, NULL, NULL)))
         fail();
 
-    d0 = val_real(expr_new_val(e_rsum, NULL));
+    d0 = val_real(expr_new_val(e_rsum, NULL, NULL));
     d1 = 4.4;
     if (d1 != d0)
         fail();
 
-    if (-4 != val_int(expr_new_val(e_isub, NULL)))
+    if (-4 != val_int(expr_new_val(e_isub, NULL, NULL)))
         fail();
-    if (-4LL != val_long(expr_new_val(e_lsub, NULL)))
+    if (-4LL != val_long(expr_new_val(e_lsub, NULL, NULL)))
         fail();
 
-    d0 = val_real(expr_new_val(e_rsub, NULL));
+    d0 = val_real(expr_new_val(e_rsub, NULL, NULL));
     d1 = 1.0;
     if (d1 != d0)
         fail();
 
-    if (2 != val_int(expr_new_val(e_idiv, NULL)))
+    if (2 != val_int(expr_new_val(e_idiv, NULL, NULL)))
         fail();
-    if (2LL != val_long(expr_new_val(e_ldiv, NULL)))
+    if (2LL != val_long(expr_new_val(e_ldiv, NULL, NULL)))
         fail();
 
-    d0 = val_real(expr_new_val(e_rdiv, NULL));
+    d0 = val_real(expr_new_val(e_rdiv, NULL, NULL));
     d1 = 30;
     if (d1 != d0)
         fail();
 
-    if (25 != val_int(expr_new_val(e_imul, NULL)))
+    if (25 != val_int(expr_new_val(e_imul, NULL, NULL)))
         fail();
-    if (25 != val_long(expr_new_val(e_lmul, NULL)))
+    if (25 != val_long(expr_new_val(e_lmul, NULL, NULL)))
         fail();
 
-    d0 = val_real(expr_new_val(e_rmul, NULL));
+    d0 = val_real(expr_new_val(e_rmul, NULL, NULL));
     d1 = 2.5;
     if (d1 != d0)
         fail();
@@ -218,12 +218,45 @@ static void test_attr()
     head_attr(h, "c", &pos, &type);
     Expr *e = expr_eq(expr_str("string_1"), expr_attr(pos, type));
 
-    if (expr_bool_val(e, t) == 0)
+    if (expr_bool_val(e, t, NULL) == 0)
         fail();
 
     expr_free(e);
     tuple_free(t);
     mem_free(h);
+}
+
+static void test_param()
+{
+    Expr *e = NULL;
+
+    int i = 12345; double d = 12.345; long l = 9223372036854775807L;
+    char *s = "string_1";
+    Arg arg = { .body = NULL };
+    arg.vals[0].v_int = i;
+    arg.vals[1].v_real = d;
+    arg.vals[2].v_long = l;
+    str_cpy(arg.vals[3].v_str, s);
+
+    e = expr_eq(expr_int(i), expr_param(0, Int));
+    if (expr_bool_val(e, NULL, &arg) == 0)
+        fail();
+    expr_free(e);
+
+    e = expr_eq(expr_real(d), expr_param(1, Real));
+    if (expr_bool_val(e, NULL, &arg) == 0)
+        fail();
+    expr_free(e);
+
+    e = expr_eq(expr_long(l), expr_param(2, Long));
+    if (expr_bool_val(e, NULL, &arg) == 0)
+        fail();
+    expr_free(e);
+
+    e = expr_eq(expr_str(s), expr_param(3, String));
+    if (expr_bool_val(e, NULL, &arg) == 0)
+        fail();
+    expr_free(e);
 }
 
 static void test_compound()
@@ -256,7 +289,7 @@ static void test_compound()
                    expr_lt(expr_attr(c, String),
                            expr_str("aab")));
 
-    if (expr_bool_val(expr, t))
+    if (expr_bool_val(expr, t, NULL))
         fail();
 
     expr_free(expr);
@@ -267,7 +300,7 @@ static void test_compound()
 static void test_conv_eval(Expr *l, Expr *r)
 {
     Expr *e = expr_eq(l, r);
-    if (!expr_bool_val(e, NULL))
+    if (!expr_bool_val(e, NULL, NULL))
         fail();
 
     expr_free(e);
@@ -313,6 +346,7 @@ int main()
     test_cmp_ops();
     test_arithmetic();
     test_attr();
+    test_param();
     test_compound();
     test_conv();
 

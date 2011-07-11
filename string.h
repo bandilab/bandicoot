@@ -39,3 +39,4 @@ extern long long str_long(const char *s, int *error);
 extern unsigned long long str_ulong(const char *s, int *error);
 extern int str_from_sid(char *dest, long sid);
 extern long str_to_sid(char *str);
+extern char *str_urldecode(char *src);
