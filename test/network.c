@@ -34,7 +34,7 @@ static void test_basic(IO *sio, char *exec, char *addr)
 
 static void test_exchange(IO *sio, char *exec, char *addr, char *mode)
 {
-    char *a1[] = {exec, "exchange1", addr, NULL};
+    char *a1[] = {exec, "exchange1", addr, mode, NULL};
     int pid1 = sys_exec(a1), cnt1 = 0;
     IO *pio1 = sys_accept(sio);
 
