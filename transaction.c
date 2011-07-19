@@ -644,7 +644,12 @@ extern long long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
 
 extern void tx_attach(const char *address)
 {
-    gio = sys_connect(address);
+    gio = sys_connect(address, STREAMED);
+}
+
+extern void tx_detach()
+{
+    sys_close(gio);
 }
 
 static void *tx_thread(void *io)
@@ -758,7 +763,7 @@ exit:
 static void *serve(void *sio)
 {
     for (;;) {
-        IO *cio = sys_accept(sio);
+        IO *cio = sys_accept(sio, STREAMED);
         sys_thread(tx_thread, cio);
     }
 
@@ -797,11 +802,11 @@ extern char *tx_program()
         msg != R_SOURCE ||
         sys_readn(gio, &size, sizeof(size)) != sizeof(size) ||
         size < 0 /* FIXME: || size > MAX_CODE_SIZE */)
-        sys_die("R_ENTER failed\n");
+        sys_die("R_SOURCE failed\n");
 
     char *code = mem_alloc(size);
     if (sys_readn(gio, code, size) != size)
-        sys_die("R_ENTER failed to retrieve the program\n");
+        sys_die("R_SOURCE failed to retrieve the program\n");
 
     return code;
 }

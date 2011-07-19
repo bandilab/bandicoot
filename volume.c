@@ -135,7 +135,7 @@ static TBuf *read_net(const char *vid, const char *name, long long ver)
     char v[MAX_NAME] = "";
     str_cpy(v, name);
 
-    IO *io = sys_try_connect(vid);
+    IO *io = sys_try_connect(vid, STREAMED);
     if (io == NULL)
         goto exit;
 
@@ -249,7 +249,7 @@ static void *serve(void *arg)
     long long ver;
 
     for (;;) {
-        cio = sys_accept(sio);
+        cio = sys_accept(sio, STREAMED);
 
         int msg = 0;
         if (sys_readn(cio, &msg, sizeof(msg)) == sizeof(msg)) {
@@ -387,7 +387,7 @@ extern void vol_write(const char *vid,
     str_from_sid(sid, ver);
     str_cpy(v, var);
 
-    IO *io = sys_connect(vid);
+    IO *io = sys_connect(vid, STREAMED);
 
     if (sys_write(io, &T_WRITE, sizeof(T_WRITE)) < 0 ||
         sys_write(io, v, sizeof(v)) < 0 ||

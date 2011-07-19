@@ -127,7 +127,7 @@ success:
 
 static char *read_header(IO *io, int *size)
 {
-    int read = 0, alloc = 8192;
+    int read = 0, alloc = MAX_BLOCK + 1;
     char *res = mem_alloc(alloc), *buf = res;
 
     *size = 0;
@@ -315,10 +315,15 @@ extern int http_chunk(IO *io, const void *buf, int size)
 {
     char hex[16];
     int s = str_print(hex, "%X\r\n", size);
+    int sz = s + size + 2;
 
-    int ok = sys_write(io, hex, s) > 0 &&
-             sys_write(io, buf, size) >= 0 &&
-             sys_write(io, "\r\n", 2) > 0;
+    void *m = mem_alloc(sz);
+    mem_cpy(m, hex, s);
+    mem_cpy(m + s, buf, size);
+    mem_cpy(m + s + size, "\r\n", 2);
 
+    int ok = sys_write(io, m, sz) == sz;
+
+    mem_free(m);
     return ok ? 200 : -200;
 }

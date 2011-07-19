@@ -85,6 +85,11 @@ extern int sys_exec(char *const argv[])
     return pid;
 }
 
+extern int sys_kill(int pid)
+{
+    return kill(pid, SIGKILL);
+}
+
 extern char sys_wait(int pid)
 {
     int res, status;
@@ -113,7 +118,7 @@ extern void sys_thread(void *(*fn)(void *arg), void *arg)
         sys_die("sys: cannot detach from a thread\n");
 }
 
-extern IO *sys_accept(IO *sock)
+extern IO *sys_accept(IO *sock, int chunked)
 {
     int fd = -1;
     do {
@@ -123,7 +128,7 @@ extern IO *sys_accept(IO *sock)
     if (fd < 0)
         sys_die("sys: cannot accept incoming connection\n");
 
-    return new_io(fd, net_read, net_write, net_close);
+    return new_net_io(fd, chunked);
 }
 
 extern void net_close(IO *io)

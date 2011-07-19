@@ -170,6 +170,7 @@ case $cmd in
         do
             curl -s http://127.0.0.1:$PORT/load_$v > /dev/null
             curl -s --data-binary @test/data/$v http://127.0.0.1:$PORT/store_$v
+            curl -s http://127.0.0.1:$PORT/load_$v > /dev/null
         done
         kill $pid
         ;;

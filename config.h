@@ -37,7 +37,8 @@ limitations under the License.
 #define MAX_STRING 1024
 
 /* size of block for IO operations */
-#define MAX_BLOCK 65536
+/* TODO: should be defined as  MAX_ATTRS * MAX_STRING + MAX_ATTRS + 1 */
+#define MAX_BLOCK 66560
 
 /* maximum length of a host:port string */
 #define MAX_ADDR 64

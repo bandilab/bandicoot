@@ -230,7 +230,7 @@ static void test_param()
 {
     Expr *e = NULL;
 
-    int i = 12345; double d = 12.345; long l = 9223372036854775807L;
+    int i = 12345; double d = 12.345; long long l = 9223372036854775807LL;
     char *s = "string_1";
     Arg arg = { .body = NULL };
     arg.vals[0].v_int = i;

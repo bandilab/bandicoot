@@ -17,6 +17,8 @@ limitations under the License.
 
 extern void tx_server(const char *source, const char *state, int *port);
 extern void tx_attach(const char *address);
+extern void tx_detach();
+
 extern Vars *tx_volume_sync(const char *vid, Vars *in);
 extern char *tx_program();
 extern long long tx_enter(const char *eid, Vars *rvars, Vars *wvars);

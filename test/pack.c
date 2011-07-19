@@ -147,20 +147,20 @@ static void test_pack()
 
 static void test_unpack()
 {
-    int size;
+    int i = 0;
     char str[11 + MAX_STRING];
 
     char *data = "a:int,c:string\n123,hehehe\n";
     str_cpy(str, data);
 
     Rel *rel = pack_init(str);
-    char *unpacked = rel_unpack(rel->head, rel->body, &size);
+    char *unpacked = mem_alloc(MAX_BLOCK);
+    rel_unpack(rel, unpacked, MAX_BLOCK, i++);
 
     if (str_cmp(data, unpacked) != 0)
         fail();
 
     rel_free(rel);
-    mem_free(unpacked);
 
     char *p = mem_alloc(MAX_STRING + 2);
     for (int i = 0; i < MAX_STRING; ++i)
@@ -174,14 +174,40 @@ static void test_unpack()
     str_cpy(data2 + str_len(data), p);
     str_cpy(str, data2);
 
+    i = 0;
     rel = pack_init(str);
-    unpacked = rel_unpack(rel->head, rel->body, &size);
+    rel_unpack(rel, unpacked, MAX_BLOCK, i++);
     if (str_cmp(data2, unpacked) != 0)
         fail();
 
     rel_free(rel);
+
+    /* test of a file longer than MAX_BLOCK */
+    int start = 1, end = 100000;
+    rel = gen_rel(start, end);
+
+    i = 0;
+    unpacked = mem_realloc(unpacked, 1024*1024*3);
+    int len = 0;
+    char *ptr = unpacked;
+    while ((len = rel_unpack(rel, ptr, MAX_BLOCK, i++)) > 0)
+        ptr += len;
+
+    Rel *rel1 = gen_rel(start, end);
+    Rel *rel2 = pack_init(unpacked);
+    if (!rel_eq(rel1, rel2))
+        fail();
+
+    rel_free(rel);
+    rel_free(rel1);
+    rel_free(rel2);
+
     mem_free(p);
     mem_free(unpacked);
+
+    int max_tsize = MAX_ATTRS * MAX_STRING + MAX_ATTRS;
+    if (max_tsize >= MAX_BLOCK)
+        fail();
 }
 
 int main()

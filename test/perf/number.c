@@ -28,7 +28,7 @@ int main(void)
         long long t = sys_millis();
         for (i = 0; i < count; i++)
             int_enc(buf + i * sizeof(int), i);
-        sys_print("encoded %dM ints in %dllms\n", mln, sys_millis() - t);
+        sys_print("encoded %dM ints in %lldms\n", mln, sys_millis() - t);
 
         t = sys_millis();
         for (i = 0; i < count; i++)

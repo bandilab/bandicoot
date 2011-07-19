@@ -103,227 +103,249 @@ static IO *queue_get()
 static void *exec_thread(void *arg)
 {
     Exec *x = arg;
-    int p = 0;
-    IO *sio = sys_socket(&p);
-    char port[8];
-    str_print(port, "%d", p);
-    char *argv[] = {x->exe, "processor", "-p", port, "-t", x->tx, NULL};
 
     for (;;) {
-        IO *cio = queue_get();
-        IO *pio = NULL;
-        int status = 0, pid = -1, cio_cnt = 0, pio_cnt = 0;
+        int p = 0, pid = -1;
 
         /* creating processor */
+        IO *sio = sys_socket(&p);
+        char port[8];
+        str_print(port, "%d", p);
+        char *argv[] = {x->exe, "processor", "-p", port, "-t", x->tx, NULL};
+
         pid = sys_exec(argv);
         if (!sys_iready(sio, PROC_WAIT_SEC)) {
-            status = http_500(cio);
-            goto exit;
-        }
+            sys_log('E', "failed to fork a processor\n");
+        } else {
+            IO *pio = sys_accept(sio, CHUNKED);
+            int err = 0, cnt = 0;
+            while (!err) {
+                IO *cio = queue_get();
+                err = sys_proxy(cio, pio, &cnt);
 
-        pio = sys_accept(sio);
-
-        /* sends HTTP 500 if the processor dies without sending data
-           to the client */
-        sys_exchange(cio, &cio_cnt, pio, &pio_cnt);
-        if (pio_cnt == 0)
-            status = http_500(cio);
-exit:
-        if (status != 0)
-            sys_log('E', "failed with status %d\n", status);
-        if (pid != -1)
-            sys_wait(pid);
-        if (pio != NULL)
+                if (err) {
+                    int status = -500;
+                    if (cnt == 0) /* only if nothing was sent to the client */
+                        status = http_500(cio);
+                    sys_log('E', "failed with status %d\n", status);
+                }
+                sys_close(cio);
+            }
             sys_close(pio);
-        sys_close(cio);
+        }
+        sys_close(sio);
+
+        if (pid != -1) {
+            sys_kill(pid);
+            sys_wait(pid);
+        }
     }
 
-    sys_close(sio);
     mem_free(x);
 
     return NULL;
 }
 
-static char *err(int err)
+static char *err(int err, char *buf)
 {
+    /* TODO: unpacking of the res must be less than MAX_BLOCK */
     Rel *res = rel_err(ERR_MSGS[err].code, ERR_MSGS[err].msg);
-    int size = 0;
-    char *body = rel_unpack(res->head, res->body, &size);
+    rel_unpack(res, buf, MAX_BLOCK, 0);
     rel_free(res);
 
-    return body;
+    return buf;
 }
 
 static void processor(const char *tx_addr, int port)
 {
-    int status = -1;
-    long long sid = 0, time = sys_millis();
-
-    Arg *arg = NULL;
-    Vars *r = NULL, *w = NULL;
-    char *emsg = NULL;
+    sys_init(1);
 
     /* connect to the control thread */
     char addr[MAX_ADDR];
     sys_address(addr, port);
-    IO *io = sys_connect(addr);
+    IO *io = sys_connect(addr, CHUNKED);
 
-    Http_Req *req = http_parse(io);
-    if (req == NULL) {
-        status = http_400(io);
-        goto exit;
-    }
-
-    if (req->method == OPTIONS) {
-        status = http_opts(io);
-        goto exit;
-    }
-
-    /* get env from the tx */
     tx_attach(tx_addr);
+
+    /* get env code from the tx */
     char *code = tx_program();
-    Env *env = env_new("net", code);
-    mem_free(code);
+    char *res = mem_alloc(MAX_BLOCK);
 
-    /* compare the request with the function defintion */
-    Func *fn = env_func(env, req->path + 1);
-    if (fn == NULL) {
-        status = http_404(io, (emsg = err(ERR_UNKNOWN_FN)));
-        goto exit;
-    }
+    while (!io->err) {
+        sys_iready(io, -1);
 
-    if (fn->rp.name != NULL && req->method != POST) {
-        status = http_405(io, POST);
-        goto exit;
-    }
-    if (fn->rp.name == NULL && req->method == POST) {
-        status = http_405(io, GET);
-        goto exit;
-    }
+        int status = -1;
+        long long sid = 0LL, time = sys_millis();
 
-    /* TODO: think what to do with duplicate parameter values */
-    for (int i = 0; i < req->args->len; ++i) {
-        char *name = req->args->names[i];
-        if (array_freq(req->args->names, req->args->len, name) > 1) {
-            status = http_404(io, (emsg = err(ERR_PARAM_DUPLICATE)));
+        Env *env = NULL;
+        Arg *arg = NULL;
+        Vars *r = NULL, *w = NULL;
+
+        Http_Req *req = http_parse(io);
+        if (io->err)
             goto exit;
-        }
-    }
 
-    if (fn->pp.len != req->args->len)
-    {
-        status = http_404(io, (emsg = err(ERR_PARAMS_COUNT)));
-        goto exit;
-    }
-
-    arg = mem_alloc(sizeof(Arg));
-    for (int i = 0; i < fn->pp.len; ++i) {
-        char *name = fn->pp.names[i];
-        Type t = fn->pp.types[i];
-
-        int idx = array_scan(req->args->names, req->args->len, name);
-        if (idx < 0) {
-            status = http_404(io, (emsg = err(ERR_PARAMS_COUNT)));
-            goto exit;
-        }
-
-        char *val = req->args->vals[idx];
-        int error = 0;
-        if (t == Int) {
-            arg->vals[i].v_int = str_int(val, &error);
-        } else if (t == Real)
-            arg->vals[i].v_real = str_real(val, &error);
-        else if (t == Long)
-            arg->vals[i].v_long = str_long(val, &error);
-        else if (t == String) {
-            error = str_len(val) > MAX_STRING;
-            if (!error)
-                str_cpy(arg->vals[i].v_str, val);
-        }
-
-        if (error) {
-            status = http_404(io, (emsg = err(ERR_PARAM_VALUE)));
-            goto exit;
-        }
-    }
-
-    if (fn->rp.name != NULL) {
-        Head *head = NULL;
-        arg->body = rel_pack_sep(req->body, &head);
-
-        int eq = 0;
-        if (head != NULL) {
-            eq = head_eq(head, fn->rp.rel->head);
-            mem_free(head);
-        }
-
-        if (arg->body == NULL || !eq) {
+        if (req == NULL) {
             status = http_400(io);
             goto exit;
         }
-    }
 
-    /* start a transaction */
-    r = vars_new(fn->r.len);
-    w = vars_new(fn->w.len);
-    for (int i = 0; i < fn->r.len; ++i)
-        vars_put(r, fn->r.names[i], 0L);
-    for (int i = 0; i < fn->w.len; ++i)
-        vars_put(w, fn->w.names[i], 0L);
+        if (req->method == OPTIONS) {
+            status = http_opts(io);
+            goto exit;
+        }
 
-    sid = tx_enter(addr, r, w);
+        env = env_new("net", code);
 
-    /* execute the function body */
-    if (fn->rp.rel != NULL)
-        rel_init(fn->rp.rel, r, arg);
+        /* compare the request with the function defintion */
+        Func *fn = env_func(env, req->path + 1);
+        if (fn == NULL) {
+            status = http_404(io, err(ERR_UNKNOWN_FN, res));
+            goto exit;
+        }
 
-    for (int i = 0; i < fn->t.len; ++i)
-        rel_init(fn->t.rels[i], r, arg);
+        if (fn->rp.name != NULL && req->method != POST) {
+            status = http_405(io, POST);
+            goto exit;
+        }
 
-    for (int i = 0; i < fn->w.len; ++i) {
-        rel_init(fn->w.rels[i], r, arg);
-        rel_store(w->vols[i], w->names[i], w->vers[i], fn->w.rels[i]);
-    }
+        if (fn->rp.name == NULL && req->method == POST) {
+            status = http_405(io, GET);
+            goto exit;
+        }
 
-    if (fn->ret != NULL)
-        rel_init(fn->ret, r, arg);
+        /* TODO: think what to do with duplicate parameter values */
+        for (int i = 0; i < req->args->len; ++i) {
+            char *name = req->args->names[i];
+            if (array_freq(req->args->names, req->args->len, name) > 1) {
+                status = http_404(io, err(ERR_PARAM_DUPLICATE, res));
+                goto exit;
+            }
+        }
 
-    /* TODO: commit should not happen if the client has closed the connection */
-    tx_commit(sid);
+        if (fn->pp.len != req->args->len) {
+            status = http_404(io, err(ERR_PARAMS_COUNT, res));
+            goto exit;
+        }
 
-    /* confirm a success and send the result back */
-    status = http_200(io);
-    if (fn->ret != NULL) {
-        int size;
-        char *res = rel_unpack(fn->ret->head, fn->ret->body, &size);
-        status = http_chunk(io, res, size);
+        arg = mem_alloc(sizeof(Arg));
+        for (int i = 0; i < fn->pp.len; ++i) {
+            char *name = fn->pp.names[i];
+            Type t = fn->pp.types[i];
 
-        mem_free(res);
-        tbuf_free(fn->ret->body);
-        fn->ret->body = NULL;
-    }
-    status = http_chunk(io, NULL, 0);
+            int idx = array_scan(req->args->names, req->args->len, name);
+            if (idx < 0) {
+                status = http_404(io, err(ERR_PARAMS_COUNT, res));
+                goto exit;
+            }
 
+            char *val = req->args->vals[idx];
+            int error = 0;
+            if (t == Int) {
+                arg->vals[i].v_int = str_int(val, &error);
+            } else if (t == Real)
+                arg->vals[i].v_real = str_real(val, &error);
+            else if (t == Long)
+                arg->vals[i].v_long = str_long(val, &error);
+            else if (t == String) {
+                error = str_len(val) > MAX_STRING;
+                if (!error)
+                    str_cpy(arg->vals[i].v_str, val);
+            }
+
+            if (error) {
+                status = http_404(io, err(ERR_PARAM_VALUE, res));
+                goto exit;
+            }
+        }
+
+        if (fn->rp.name != NULL) {
+            Head *head = NULL;
+            arg->body = rel_pack_sep(req->body, &head);
+
+            int eq = 0;
+            if (head != NULL) {
+                eq = head_eq(head, fn->rp.rel->head);
+                mem_free(head);
+            }
+
+            if (arg->body == NULL || !eq) {
+                status = http_400(io);
+                goto exit;
+            }
+        }
+
+        /* start a transaction */
+        r = vars_new(fn->r.len);
+        w = vars_new(fn->w.len);
+        for (int i = 0; i < fn->r.len; ++i)
+            vars_put(r, fn->r.names[i], 0L);
+        for (int i = 0; i < fn->w.len; ++i)
+            vars_put(w, fn->w.names[i], 0L);
+
+        sid = tx_enter(addr, r, w);
+
+        /* execute the function body */
+        if (fn->rp.rel != NULL)
+            rel_init(fn->rp.rel, r, arg);
+
+        for (int i = 0; i < fn->t.len; ++i)
+            rel_init(fn->t.rels[i], r, arg);
+
+        for (int i = 0; i < fn->w.len; ++i) {
+            rel_init(fn->w.rels[i], r, arg);
+            rel_store(w->vols[i], w->names[i], w->vers[i], fn->w.rels[i]);
+        }
+
+        if (fn->ret != NULL)
+            rel_init(fn->ret, r, arg);
+
+        /* need to set to NULL do avoid double-free in exit */
+        arg->body = NULL;
+
+        /* confirm a success and send the result back */
+        status = http_200(io);
+        if (status != 200)
+            goto exit;
+
+        tx_commit(sid);
+
+        int len = 0, i = 0;
+        while (status == 200 && (len = rel_unpack(fn->ret, res, MAX_BLOCK, i++)))
+            status = http_chunk(io, res, len);
+
+        status = http_chunk(io, NULL, 0);
 exit:
-    sys_log('E', "%016llX method %c, path %s, time %lldms - %3d\n",
-                 sid,
-                 (req == NULL) ? '?' : req->method,
-                 (req == NULL) ? "malformed" : req->path,
-                 sys_millis() - time,
-                 status);
+        if (status != -1)
+            sys_log('E', "%016llX method %c, path %s, time %lldms - %3d\n",
+                         sid,
+                         (req == NULL) ? '?' : req->method,
+                         (req == NULL) ? "malformed" : req->path,
+                         sys_millis() - time,
+                         status);
 
-    if (r != NULL)
-        vars_free(r);
-    if (w != NULL)
-        vars_free(w);
-    if (env != NULL)
-        env_free(env);
-    if (req != NULL)
-        http_free(req);
-    if (arg != NULL)
-        mem_free(arg);
-    if (emsg != NULL)
-        mem_free(emsg);
+        if (r != NULL)
+            vars_free(r);
+        if (w != NULL)
+            vars_free(w);
+        if (arg != NULL) {
+            if (arg->body != NULL) {
+                tbuf_clean(arg->body);
+                tbuf_free(arg->body);
+            }
+            mem_free(arg);
+        }
+        if (req != NULL)
+            http_free(req);
+        if (env != NULL)
+            env_free(env);
+
+        sys_term(io);
+    }
+
+    mem_free(code);
+    mem_free(res);
+    tx_detach();
     sys_close(io);
 }
 
@@ -368,7 +390,7 @@ static void multiplex(const char *exe, const char *tx_addr, int port)
     sys_log('E', "started port=%d, tx=%s\n", port, tx_addr);
 
     for (;;) {
-        IO *cio = sys_accept(sio);
+        IO *cio = sys_accept(sio, STREAMED);
         queue_put(cio);
     }
 

@@ -209,32 +209,34 @@ static int tuple_unpack(char *dest, Tuple *t, int len, Type type[])
     return off;
 }
 
-/* TODO: returning a single buf is too much, consider returning chunks,
-         or may be directly writing to the output stream in chunks */
-extern char *rel_unpack(Head *head, TBuf *body, int *size)
+extern int rel_unpack(Rel *r, char *buf, int size, int iteration)
 {
-    int len = head->len;
-    Type *types = head->types;
+    int off = 0;
+
+    if (r == NULL || r->body == NULL)
+        return off;
+
+    if (iteration == 0)
+        off = head_unpack(buf, r->head);
+
+    int len = r->head->len;
+    Type *types = r->head->types;
 
     int tsize = len * MAX_STRING + len;
-    int unpack_step = tsize * 16;
-    int buf_size = unpack_step;
-    char *buf = mem_alloc(buf_size);
-    int off = head_unpack(buf, head);
-
-    Tuple *t;
-    while ((t = tbuf_next(body)) != NULL) {
+    Tuple *t = NULL;
+    while ((size - off) > tsize && (t = tbuf_next(r->body)) != NULL) {
         off += tuple_unpack(buf + off, t, len, types);
-        buf[off++] = '\n';
-
-        if ((buf_size - off) < tsize)
-            buf = mem_realloc(buf, buf_size += unpack_step);
-
         tuple_free(t);
+
+        buf[off++] = '\n';
     }
 
     buf[off] = '\0';
-    *size = off;
 
-    return buf;
+    if (t == NULL && r->body != NULL) {
+        tbuf_free(r->body);
+        r->body = NULL;
+    }
+
+    return off;
 }

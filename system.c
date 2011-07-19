@@ -21,20 +21,6 @@ static int glog;
 static void net_close(IO *io);
 static int net_port(int fd);
 
-static IO *new_io(int fd,
-                  int (*read)(struct IO *io, void *buf, int size),
-                  int (*write)(struct IO *io, const void *buf, int size),
-                  void (*close)(struct IO *io))
-{
-    IO *io = mem_alloc(sizeof(IO));
-    io->fd = fd;
-    io->read = read;
-    io->write = write;
-    io->close = close;
-
-    return io;
-}
-
 static int fs_read(IO *io, void *buf, int size)
 {
     int res = read(io->fd, buf, size);
@@ -59,6 +45,20 @@ static void fs_close(IO *io)
         sys_die("sys: cannot close file descriptor\n");
 }
 
+static int recvn(IO *io, void *buf, int size)
+{
+    int r, idx = 0;
+    do {
+        r = recv(io->fd, buf + idx, size - idx, 0);
+        r = (r < 0 ? -1 : r);
+        io->err = io->err || (r <= 0);
+
+        idx += r;
+    } while (r > 0 && idx < size);
+
+    return idx;
+}
+
 static int net_open()
 {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -80,13 +80,94 @@ static int net_open()
 static int net_read(IO *io, void *buf, int size)
 {
     int r = recv(io->fd, buf, size, 0);
+    io->err = io->err || (r <= 0);
+
     return r < 0 ? -1 : r;
+}
+
+static int net_read_chunk(IO *io, void *buf, int size)
+{
+    int sz = 0;
+    if (recvn(io, &sz, sizeof(sz)) != sizeof(sz))
+        io->err = 1;
+    else {
+        io->term = 0;
+        if (sz == -1)
+            io->term = 1;
+        else if (sz > size)
+            io->err = 1;
+        else if (sz > 0)
+            io->err = io->err || (recvn(io, buf, sz) != sz);
+    }
+
+    return sz < 0 ? -1 : sz;
 }
 
 static int net_write(IO *io, const void *buf, int size)
 {
-    int w = send(io->fd, buf, size, 0);
-    return w != size ? -1 : w;
+    int w = send(io->fd, buf, size, 0) != size ? -1 : size;
+    io->err = io->err || (w == -1);
+
+    return w;
+}
+
+static int net_write_chunk(IO *io, const void *buf, int size)
+{
+    int off = 0, szof = sizeof(size);
+
+    if (size == -1  && send(io->fd, (void*)&size, szof, 0) != szof)
+        io->err = 1;
+
+    while (size > 0 && !io->err) {
+        int len = (size > MAX_BLOCK) ? MAX_BLOCK : size;
+
+        if (send(io->fd, (void*)&len, sizeof(len), 0) != sizeof(len))
+            io->err = 1;
+        else {
+            int w = send(io->fd, buf + off, len, 0);
+            if (w != len) {
+                io->err = io->err;
+                off = -1;
+            } else
+                off += w;
+        }
+
+        size -= len;
+    }
+
+    return off;
+}
+
+static IO *alloc_io(int fd)
+{
+    IO *io = mem_alloc(sizeof(IO));
+    io->fd = fd;
+    io->err = 0;
+    io->term = 0;
+
+    return io;
+}
+
+static IO *new_net_io(int fd, int chunked)
+{
+    IO *io = alloc_io(fd);
+
+    io->read = (chunked) ? net_read_chunk : net_read;
+    io->write = (chunked) ? net_write_chunk : net_write;
+    io->close = net_close;
+
+    return io;
+}
+
+static IO *new_fs_io(int fd)
+{
+    IO *io = alloc_io(fd);
+
+    io->read = fs_read;
+    io->write = fs_write;
+    io->close = fs_close;
+
+    return io;
 }
 
 static IO *_sys_open(const char *path, int mode, int binary)
@@ -111,7 +192,7 @@ static IO *_sys_open(const char *path, int mode, int binary)
     if (fd < 0)
         sys_die("sys: cannot open %s\n", path);
 
-    return new_io(fd, fs_read, fs_write, fs_close);
+    return new_fs_io(fd);
 }
 
 extern int sys_read(IO *io, void *buf, int size)
@@ -144,6 +225,11 @@ extern int sys_write(IO *io, const void *buf, int size)
     return io->write(io, buf, size);
 }
 
+extern int sys_term(IO *io)
+{
+    return io->write(io, NULL, -1);
+}
+
 extern void sys_close(IO *io)
 {
     io->close(io);
@@ -158,49 +244,68 @@ extern int sys_iready(IO *io, int sec)
     FD_ZERO(&rfds);
     FD_SET(io->fd, &rfds);
 
-    int ready = select(io->fd + 1, &rfds, NULL, NULL, &tv);
+    int ready = select(io->fd + 1, &rfds, NULL, NULL, (sec < 0) ? NULL : &tv);
     if (ready < 0 && errno != EINTR)
         sys_die("sys: select failed\n");
 
     return ready == 1 && FD_ISSET(io->fd, &rfds);
 }
 
-extern void sys_exchange(IO *io1, int *cnt1, IO *io2, int *cnt2)
+/* data exchange between cio & pio (which must be a chunked IO with the
+   term attribute set on the last chunk)
+   the result indicates an error:
+       * cio is closed and there was no last chunk sent by pio
+       * pio is closed
+ */
+extern int sys_proxy(IO *cio, IO *pio, int *cnt)
 {
-    int sz = 8192;
-    char *buf = mem_alloc(sz);
-    *cnt1 = 0;
-    *cnt2 = 0;
+    void *tmp = mem_alloc(MAX_BLOCK); /* a buffer to be sent to client */
+    void *buf = mem_alloc(MAX_BLOCK); /* an exchange buffer */
+    void *p = NULL; /* just a pointer for swapping the buffers */
+    int tsz = 0, bsz = 0, term = 0;
 
-    /* loop until one of the IOs is not closed or there is an error */
+    *cnt = 0;
+
     fd_set read;
-    for (;;) {
+    while (!cio->err && !pio->err && !term) {
         FD_ZERO(&read);
-        FD_SET(io1->fd, &read);
-        FD_SET(io2->fd, &read);
-        int len = 1 + (io1->fd > io2->fd ? io1->fd : io2->fd);
+        FD_SET(cio->fd, &read);
+        FD_SET(pio->fd, &read);
+        int len = 1 + (cio->fd > pio->fd ? cio->fd : pio->fd);
 
         int ready = select(len, &read, NULL, NULL, NULL);
 
         if (ready < 0 && errno != EINTR)
             sys_die("sys: exchange failed\n");
 
-        if (FD_ISSET(io1->fd, &read)) {
-            int read = sys_read(io1, buf, sz);
-            if (read <= 0 || read != sys_write(io2, buf, read))
-                break;
-            (*cnt1)++;
+        if (FD_ISSET(cio->fd, &read)) {
+            bsz = sys_read(cio, buf, MAX_BLOCK);
+            if (bsz > 0)
+                sys_write(pio, buf, bsz);
         }
 
-        if (FD_ISSET(io2->fd, &read)) {
-            int read = sys_read(io2, buf, sz);
-            if (read <= 0 || read != sys_write(io1, buf, read))
-                break;
-            (*cnt2)++;
+        if (FD_ISSET(pio->fd, &read)) {
+            bsz = sys_read(pio, buf, MAX_BLOCK);
+            term = pio->term;
+
+            if (tsz > 0) {
+                sys_write(cio, tmp, tsz);
+                tsz = 0;
+                (*cnt)++;
+            }
+
+            if (bsz > 0) { /* swap the buffers */
+                p = tmp;
+                tmp = buf;
+                buf = p;
+                tsz = bsz;
+            }
         }
     }
 
     mem_free(buf);
+    mem_free(tmp);
+    return pio->err || (cio->err && !term);
 }
 
 extern void sys_address(char *result, int port)
@@ -261,24 +366,24 @@ extern IO *sys_socket(int *port)
 
     *port = net_port(sfd);
 
-    return new_io(sfd, net_read, net_write, net_close);
+    return new_net_io(sfd, STREAMED);
 }
 
-static IO *_sys_connect(struct sockaddr_in addr)
+static IO *_sys_connect(struct sockaddr_in addr, int chunked)
 {
     IO *res = NULL;
     int fd = net_open();
     int sz = sizeof(addr);
     if (fd >= 0 && connect(fd, (struct sockaddr*) &addr, sz) != -1)
-        res = new_io(fd, net_read, net_write, net_close);
+        res = new_net_io(fd, chunked);
 
     return res;
 }
 
-extern IO *sys_connect(const char *address)
+extern IO *sys_connect(const char *address, int chunked)
 {
     struct sockaddr_in addr = sys_address_dec(address);
-    IO *res = _sys_connect(addr);
+    IO *res = _sys_connect(addr, chunked);
     if (res == NULL)
         sys_die("sys: cannot connect to %s:%d\n",
                 inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
@@ -287,10 +392,10 @@ extern IO *sys_connect(const char *address)
 }
 
 /* FIXME: this method dies in case of a name lookup failure */
-extern IO *sys_try_connect(const char *address)
+extern IO *sys_try_connect(const char *address, int chunked)
 {
     struct sockaddr_in addr = sys_address_dec(address);
-    return _sys_connect(addr);
+    return _sys_connect(addr, chunked);
 }
 
 extern int sys_exists(const char *path)

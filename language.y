@@ -651,7 +651,7 @@ static Expr *p_convert(Head *h, Func *fn, L_Expr *e, L_Expr_Type parent_type)
             yyerror("NEG operator does not support '%s' type",
                     type_to_str(l->type));
     } else if (t == FUNC) {
-        Type to;
+        Type to = 0;
         if (str_cmp("int", e->name) == 0)
             to = Int;
         else if (str_cmp("real", e->name) == 0)
@@ -834,6 +834,7 @@ static void fn_start(const char *name)
     gfunc->r.len = 0;
     gfunc->w.len = 0;
     gfunc->t.len = 0;
+    gfunc->pp.len = 0;
     gfunc->rp.name = NULL;
     gfunc->rp.rel = NULL;
 }

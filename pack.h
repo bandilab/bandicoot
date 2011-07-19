@@ -16,4 +16,4 @@ limitations under the License.
 */
 
 extern TBuf *rel_pack_sep(char *buf, Head **head);
-extern char *rel_unpack(Head *head, TBuf *body, int *size);
+extern int rel_unpack(Rel *r, char *buf, int size, int iteration);
