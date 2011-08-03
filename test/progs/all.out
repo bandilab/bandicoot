@@ -6,9 +6,9 @@ test/progs/assign_union_bad_types_err.b:16: use of union with different types (r
 test/progs/extend_attr_exists_err.b:10: attribute 'x' already exists in rel {x: real, y: real, }
 test/progs/extend_max_attrs_err.b:19: extend result type exceeds the maximum number of attributes (64)
 test/progs/func_bad_res_type_err.b:15: invalid type in return, expects rel {r: real, }, found rel {x: real, y: real, }
-test/progs/func_missing_ret_stmt_2_err.b:3: missing return statement in a function with defined return type
-test/progs/func_missing_ret_stmt_err.b:12: missing return statement in a function with defined return type
-test/progs/func_redecl_err.b:14: function 'svc_name' already defined
+test/progs/func_missing_ret_stmt_2_err.b:3: function 'test' is missing a return statement
+test/progs/func_missing_ret_stmt_err.b:12: function 'test' is missing a return statement
+test/progs/func_redecl_err.b:14: function 'svc_name' is already defined
 test/progs/func_stmt_exceeded_err.b:261: number of statements exceeds the maximum (128)
 test/progs/func_unexp_ret_stmt_err.b:11: unexpected return in function with void result type
 test/progs/func_unknown_res_type_err.b:9: unknown type 'unknown_t'
@@ -19,8 +19,10 @@ test/progs/literal_int_overflow_pos_err.b:7: int constant value overflow 2147483
 test/progs/literal_long_overflow_neg_err.b:7: long constant value overflow 9223372036854775809
 test/progs/literal_long_overflow_pos_err.b:7: long constant value overflow 9223372036854775808
 test/progs/load_unknown_var_err.b:8: unknown variable 'a'
-test/progs/params_prim_redecl_err.b:1: attribute 'a' is already used
-test/progs/params_rel_redecl_param_err.b:8: variable 'p' already defined
+test/progs/params_max_attrs_err.b:11: number of primitive parameters exceeds the maximum (64)
+test/progs/params_prim_redecl_err.b:1: primitive parameter 'a' is already defined
+test/progs/params_rel_more_than_one_err.b:8: only one relational parameter is supported
+test/progs/params_rel_redecl_param_err.b:8: identifier 'p' is already used for a global variable
 test/progs/params_rel_unknown_param_err.b:8: unknown variable 'p'
 test/progs/params_rel_unknown_type_err.b:1: unknown type 'unknown_t'
 test/progs/primitive_expr_and_err.b:10: expressions must be of the same type, found 'string' and 'int'
@@ -42,16 +44,18 @@ test/progs/primitive_expr_unknown_func_err.b:8: syntax error, unexpected '(', ex
 test/progs/project_bad_attr_err.b:15: unknown attribute 'z' in rel {x: real, y: real, }
 test/progs/project_max_attrs_err.b:18: number of attributes exceeds the maximum (64)
 test/progs/project_same_attr_err.b:14: attribute 'x' is already used
-test/progs/rel_type_max_attrs_err.b:66: number of attributes exceeds the maximum (64)
+test/progs/rel_type_max_attrs_1_err.b:66: number of attributes exceeds the maximum (64)
+test/progs/rel_type_max_attrs_2_err.b:7: number of attributes exceeds the maximum (64)
+test/progs/rel_type_max_attrs_3_err.b:7: number of attributes exceeds the maximum (64)
 test/progs/rel_type_max_decl_err.b:141: number of type declarations exceeds the maximum (128)
 test/progs/rel_type_same_attr_err.b:4: attribute 'x' is already used
-test/progs/rel_type_same_type_err.b:9: type 'point' already defined
+test/progs/rel_type_same_type_err.b:9: type 'point' is already defined
 test/progs/rel_var_max_vars_err.b:143: number of global variables exceeds the maximum (128)
 test/progs/rel_var_name_err.b:6: type 'point' cannot be used as a variable name
 test/progs/rel_var_read_after_assign_err.b:8: variable 'gp' cannot be read (it was modified by one of the previous statements)
 test/progs/rel_var_reassign_err.b:8: cannot reassign variable 'p'
-test/progs/rel_var_redecl_err.b:12: variable 'a' already defined
-test/progs/rel_var_redecl_2_err.b:9: variable 'gp' already defined
+test/progs/rel_var_redecl_2_err.b:9: variable 'gp' is already defined
+test/progs/rel_var_redecl_err.b:12: variable 'a' is already defined
 test/progs/rel_var_unknown_type_err.b:7: unknown type 'doesnt_exist'
 test/progs/rename_attr_exists_err.b:11: attribute 'time' already exists in rel {time: int, x: real, y: real, }
 test/progs/rename_same_from_err.b:10: attribute 'x' is already used
@@ -67,6 +71,6 @@ test/progs/summary_expr_err.b:7: only constant expressions are allowed for defau
 test/progs/summary_max_attrs_binary_err.b:26: summary result type exceeds the maximum number of attributes (64)
 test/progs/summary_max_attrs_unary_err.b:26: number of attributes exceeds the maximum (64)
 test/progs/summary_str_err.b:7: invalid type of default value: string
-test/progs/tmp_var_redecl_err.b:11: variable 'tmp' already defined
+test/progs/tmp_var_redecl_err.b:11: variable 'tmp' is already defined
 test/progs/tmp_var_unknown_err.b:8: unknown variable 'unknown_tmp_var'
 test/progs/union_types_err.b:16: use of union with different types (rel {x: real, y: real, } and rel {building: int, street: string, })

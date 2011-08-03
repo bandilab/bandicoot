@@ -10,3 +10,13 @@ fn some_svc(): some_type
 {
     return some_var;
 }
+
+inline_test: rel {
+    time, money: long,
+    bid, ask: real
+};
+
+fn test(p: rel {x, y: real}): rel { x, y, z: real }
+{
+    return p extend(z = 0.0);
+}

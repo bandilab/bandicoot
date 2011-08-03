@@ -45,7 +45,7 @@ static Env *genv = NULL;
 static const int MAX_HEAD_STR_LEN = 5 + MAX_ATTRS * (MAX_NAME + 4 + 6) + 1 + 1;
 
 static L_Attrs attr_name(const char *name);
-static L_Attrs attr_rel(const char *name, Type type);
+static L_Attrs attr_decl(L_Attrs attrs, Type type);
 static L_Attrs attr_rename(const char *from, const char *to);
 static L_Attrs attr_extend(const char *name, L_Expr *e);
 static L_Attrs attr_sum(const char *name, L_Sum sum);
@@ -53,7 +53,7 @@ static L_Attrs attr_merge(L_Attrs l, L_Attrs r);
 static void attr_free(L_Attrs attrs);
 
 static Head *rel_head(L_Attrs attrs);
-static Head *inline_rel(char *name, Head *head);
+static Head *inline_rel(const char *name, Head *head);
 
 static Rel *r_load(const char *name);
 static Rel *r_project(Rel *r, L_Attrs attrs);
@@ -79,12 +79,13 @@ static L_Sum sum_create(const char *func, const char *attr, L_Expr *def);
 
 static void add_head(const char *name, Head *head);
 static void add_relvar(const char *rel, const char *var);
+static void add_relvar_inline(Head *head, const char *var);
 
-static void fn_start(char dest[MAX_NAME], const char *name);
-static void fn_rel_param(const char *name, Head *h);
+static void fn_start(const char *name);
+static void fn_rel_params(L_Attrs names, Head *h);
 static void fn_prim_params(L_Attrs attrs);
-static void fn_res_create(Head *h);
-static void fn_add(const char *name);
+static void fn_result(Head *h);
+static void fn_add();
 %}
 
 %union {
@@ -106,7 +107,7 @@ static void fn_add(const char *name);
 %token <name> TK_NAME
 %token <val> TK_INT_VAL TK_LONG_VAL TK_REAL_VAL TK_STRING_VAL
 
-%type <attrs> rel_attr rel_attrs
+%type <attrs> rel_attr rel_attrs rel_attrs_names
 %type <attrs> project_attr project_attrs
 %type <attrs> rename_attr rename_attrs
 %type <attrs> extend_attr extend_attrs
@@ -116,7 +117,6 @@ static void fn_add(const char *name);
 %type <expr> prim_mul_expr prim_add_expr prim_bool_cmp_expr prim_expr
 %type <sum> sum_func
 %type <head> rel_head
-%type <name> func_name
 
 %%
 
@@ -141,47 +141,51 @@ rel_attrs:
     | rel_attrs ',' rel_attr    { $$ = attr_merge($1, $3);}
     ;
 
+rel_attrs_names:
+      TK_NAME                       { $$ = attr_name($1); }
+    | rel_attrs_names ',' TK_NAME   { $$ = attr_merge($1, attr_name($3)); }
+    ;
+
 rel_attr:
-      TK_NAME ':' TK_INT        { $$ = attr_rel($1, Int); }
-    | TK_NAME ':' TK_LONG       { $$ = attr_rel($1, Long); }
-    | TK_NAME ':' TK_REAL       { $$ = attr_rel($1, Real); }
-    | TK_NAME ':' TK_STRING     { $$ = attr_rel($1, String); }
+      rel_attrs_names ':' TK_INT    { $$ = attr_decl($1, Int); }
+    | rel_attrs_names ':' TK_LONG   { $$ = attr_decl($1, Long); }
+    | rel_attrs_names ':' TK_REAL   { $$ = attr_decl($1, Real); }
+    | rel_attrs_names ':' TK_STRING { $$ = attr_decl($1, String); }
     ;
 
 relvar_decl:
-      TK_NAME ':' TK_NAME ';'   { add_relvar($3, $1); }
+      TK_NAME ':' TK_NAME ';'           { add_relvar($3, $1); }
+    | TK_NAME ':' TK_REL rel_head ';'   { add_relvar_inline($4, $1); }
     ;
 
 func_decl:
       TK_FN func_name '(' func_params ')' func_res '{' func_body '}'
-        { fn_add($2); }
+        { fn_add(); }
     ;
 
 func_name:
-      TK_NAME   { fn_start($$, $1); }
+      TK_NAME   { fn_start($1); }
     ;
 
 func_res:
-      ':' TK_NAME           { fn_res_create(inline_rel($2, NULL)); }
-    | ':' TK_REL rel_head   { fn_res_create(inline_rel(NULL, $3)); }
-    |                       { fn_res_create(inline_rel(NULL, NULL)); }
+      ':' TK_NAME           { fn_result(inline_rel($2, NULL)); }
+    | ':' TK_REL rel_head   { fn_result(inline_rel(NULL, $3)); }
+    |                       { fn_result(inline_rel(NULL, NULL)); }
     ;
 
 func_params:
-      func_rel_param                                { }
-    | func_rel_param ',' rel_attrs                  { fn_prim_params($3); }
-    | rel_attrs                                     { fn_prim_params($1); }
-    | rel_attrs ',' func_rel_param                  { fn_prim_params($1); }
-    | rel_attrs ',' func_rel_param ',' rel_attrs
-        { fn_prim_params(attr_merge($1, $5)); }
-    |                                               { }
+      func_param
+    | func_params ',' func_param
+    |
     ;
 
-func_rel_param:
-      TK_NAME ':' TK_NAME
-        { fn_rel_param($1, inline_rel($3, NULL)); }
-    | TK_NAME ':' TK_REL rel_head
-        { fn_rel_param($1, inline_rel(NULL, $4)); }
+func_param:
+      rel_attr
+        { fn_prim_params($1); }
+    | rel_attrs_names ':' TK_NAME
+        { fn_rel_params($1, inline_rel($3, NULL)); }
+    | rel_attrs_names ':' TK_REL rel_head
+        { fn_rel_params($1, inline_rel(NULL, $4)); }
     ;
 
 func_body:
@@ -367,8 +371,10 @@ static void print_head(char *dest, Head *h)
  */
 extern void env_free(Env *env)
 {
-    for (int i = 0; i < env->vars.len; ++i)
+    for (int i = 0; i < env->vars.len; ++i) {
         mem_free(env->vars.names[i]);
+        mem_free(env->vars.heads[i]);
+    }
 
     for (int k = 0; k < env->types.len; ++k) {
         mem_free(env->types.names[k]);
@@ -402,7 +408,6 @@ extern void env_free(Env *env)
 
         mem_free(fn->head);
         mem_free(fn);
-        mem_free(env->fns.names[x]);
     }
 
     mem_free(env);
@@ -444,11 +449,12 @@ static L_Attrs attr_name(const char *name)
     return res;
 }
 
-static L_Attrs attr_rel(const char *name, Type type)
+static L_Attrs attr_decl(L_Attrs attrs, Type type)
 {
-    L_Attrs res = attr_name(name);
-    res.types[0] = type;
-    return res;
+    for (int i = 0; i < attrs.len; ++i)
+        attrs.types[i] = type;
+
+    return attrs;
 }
 
 static L_Attrs attr_rename(const char *from, const char *to)
@@ -541,7 +547,7 @@ static Head *rel_head(L_Attrs attrs)
 static void add_head(const char *name, Head *head)
 {
     if (array_scan(genv->types.names, genv->types.len, name) > -1)
-        yyerror("type '%s' already defined", name);
+        yyerror("type '%s' is already defined", name);
     else if (genv->types.len == MAX_TYPES)
         yyerror("number of type declarations "
                 "exceeds the maximum (%d)", MAX_TYPES);
@@ -552,6 +558,17 @@ static void add_head(const char *name, Head *head)
     }
 }
 
+static void add_relvar_inline(Head *head, const char *var)
+{
+    if (genv->vars.len == MAX_VARS)
+        yyerror("number of global variables exceeds the maximum (%d)",
+                MAX_VARS);
+
+    int i = genv->vars.len++;
+    genv->vars.names[i] = str_dup(var);
+    genv->vars.heads[i] = head;
+}
+
 static void add_relvar(const char *rel, const char *var)
 {
     int i = array_scan(genv->types.names, genv->types.len, rel);
@@ -559,17 +576,11 @@ static void add_relvar(const char *rel, const char *var)
     if (i == -1)
         yyerror("unknown type '%s'", rel);
     else if (array_scan(genv->vars.names, genv->vars.len, var) > -1)
-        yyerror("variable '%s' already defined", var);
+        yyerror("variable '%s' is already defined", var);
     else if (array_scan(genv->types.names, genv->types.len, var) > -1)
         yyerror("type '%s' cannot be used as a variable name", var);
-    else if (genv->vars.len == MAX_VARS)
-        yyerror("number of global variables exceeds the maximum (%d)",
-                MAX_VARS);
-    else {
-        int j = genv->vars.len++;
-        genv->vars.names[j] = str_dup(var);
-        genv->vars.heads[j] = genv->types.heads[i];
-    }
+    else
+        add_relvar_inline(head_cpy(genv->types.heads[i]), var);
 }
 
 static int func_param(Func *fn, char *name, int *pos, Type *type) {
@@ -752,14 +763,14 @@ static void stmt_create(L_Stmt_Type type, const char *name, Rel *r)
     } else if (type == TEMP) {
         if ((array_scan(fn->t.names, fn->t.len, name) != -1) ||
             (array_scan(genv->vars.names, genv->vars.len, name) != -1))
-            yyerror("variable '%s' already defined", name);
+            yyerror("variable '%s' is already defined", name);
 
         fn->t.names[fn->t.len] = str_dup(name);
         fn->t.rels[fn->t.len++] = r;
     }
 }
 
-static Head *inline_rel(char *name, Head *head)
+static Head *inline_rel(const char *name, Head *head)
 {
     Head *res = NULL;
     if (name == NULL && head != NULL) {
@@ -775,39 +786,49 @@ static Head *inline_rel(char *name, Head *head)
     return res;
 }
 
-static void fn_res_create(Head *h)
+static void fn_result(Head *h)
 {
     gfunc->head = h;
 }
 
-static void fn_rel_param(const char *name, Head *h)
+static void fn_rel_params(L_Attrs names, Head *h)
 {
-    if (array_scan(genv->vars.names, genv->vars.len, name) > -1)
-        yyerror("variable '%s' already defined", name);
+    if (names.len > 1 || gfunc->rp.name != NULL)
+        yyerror("only one relational parameter is supported");
 
-    gfunc->rp.name = str_dup(name);
+    if (array_scan(genv->vars.names, genv->vars.len, names.names[0]) > -1)
+        yyerror("identifier '%s' is already used for a global variable",
+                names.names[0]);
+
+    gfunc->rp.name = names.names[0];
     gfunc->rp.rel = rel_param(h);
-    mem_free(h); /* it is duplicated in rel_param */
+    mem_free(h); /* FIXME: it is duplicated in rel_param */
 }
 
 static void fn_prim_params(L_Attrs attrs)
 {
-    for (int i = 0; i < attrs.len; ++i) {
-        gfunc->pp.types[i] = attrs.types[i];
-        gfunc->pp.names[i] = attrs.names[i];
-    }
+    if (gfunc->pp.len + attrs.len > MAX_ATTRS)
+        yyerror("number of primitive parameters exceeds the maximum (%d)",
+                MAX_ATTRS);
 
-    gfunc->pp.len = attrs.len;
+    for (int i = 0; i < attrs.len; ++i) {
+        if (array_scan(gfunc->pp.names, gfunc->pp.len, attrs.names[i]) > -1)
+            yyerror("primitive parameter '%s' is already defined",
+                    attrs.names[i]);
+
+        int pos = gfunc->pp.len++;
+        gfunc->pp.types[pos] = attrs.types[i];
+        gfunc->pp.names[pos] = attrs.names[i];
+    }
 }
 
-static void fn_start(char dest[MAX_NAME], const char *name)
+static void fn_start(const char *name)
 {
-    str_cpy(dest, name);
-
     if (array_scan(genv->fns.names, genv->fns.len, name) > -1)
-        yyerror("function '%s' already defined", name);
+        yyerror("function '%s' is already defined", name);
 
     gfunc = mem_alloc(sizeof(Func));
+    str_cpy(gfunc->name, name);
     gfunc->head = NULL;
     gfunc->ret = NULL;
     gfunc->r.len = 0;
@@ -817,17 +838,14 @@ static void fn_start(char dest[MAX_NAME], const char *name)
     gfunc->rp.rel = NULL;
 }
 
-static void fn_add(const char *name)
+static void fn_add()
 {
-    Func *fn = gfunc;
-
-    if (fn->head != NULL && fn->ret == NULL)
-        yyerror("missing return statement in a function with "
-                "defined return type");
+    if (gfunc->head != NULL && gfunc->ret == NULL)
+        yyerror("function '%s' is missing a return statement", gfunc->name);
 
     int len = genv->fns.len++;
-    genv->fns.names[len] = str_dup(name);
-    genv->fns.funcs[len] = fn;
+    genv->fns.names[len] = gfunc->name;
+    genv->fns.funcs[len] = gfunc;
 
     gfunc = NULL;
 }

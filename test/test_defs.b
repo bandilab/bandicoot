@@ -200,6 +200,8 @@ union_2_l: Bookings;
 union_2_r: Bookings;
 union_2_res: Bookings;
 
+inline_var: rel { x, y: real };
+
 #
 # load relvars
 #

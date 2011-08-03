@@ -41,7 +41,9 @@ static void test_rel_types()
 {
     FAIL("rel_type_same_attr_err.b");
     FAIL("rel_type_same_type_err.b");
-    FAIL("rel_type_max_attrs_err.b");
+    FAIL("rel_type_max_attrs_1_err.b");
+    FAIL("rel_type_max_attrs_2_err.b");
+    FAIL("rel_type_max_attrs_3_err.b");
     FAIL("rel_type_max_decl_err.b");
 }
 
@@ -163,7 +165,9 @@ static void test_params()
     FAIL("params_rel_unknown_type_err.b");
     FAIL("params_rel_unknown_param_err.b");
     FAIL("params_rel_redecl_param_err.b");
+    FAIL("params_rel_more_than_one_err.b");
     FAIL("params_prim_redecl_err.b");
+    FAIL("params_max_attrs_err.b");
 }
 
 static void test_compat()

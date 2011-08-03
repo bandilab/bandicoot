@@ -16,6 +16,7 @@ limitations under the License.
 */
 
 typedef struct {
+    char name[MAX_NAME];
     Head *head;
     Rel  *ret;
 

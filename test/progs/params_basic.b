@@ -31,3 +31,7 @@ fn param_comb_02(i: int, r: real, p: point, l: long, s: string)
 fn param_comb_03(p: point, i: int, r: real, l: long, s: string)
 {
 }
+
+fn param_short_syntax(a, b: int, c, d: real, f: long)
+{
+}
