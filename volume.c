@@ -49,7 +49,7 @@ struct {
     int len;
 } gvars;
 
-static void set_path(char *res, const char *name, long sid, int part)
+static void set_path(char *res, const char *name, long long sid, int part)
 {
     res += str_cpy(res, path);
     res += str_cpy(res, "/");
@@ -75,13 +75,13 @@ static int is_partial(const char *file)
     return str_cmp(suffix, SUFFIX) == 0 ? 1 : 0;
 }
 
-extern long parse(const char *file, char *rel)
+extern long long parse(const char *file, char *rel)
 {
     int i = 0;
     for (; file[i] != '\0' && file[i] != '-'; ++i)
         ;
 
-    long sid = -1;
+    long long sid = -1;
     if (file[i] == '-' && !is_partial(file)) {
         mem_cpy(rel, file, i);
         rel[i++] = '\0';
@@ -92,7 +92,7 @@ extern long parse(const char *file, char *rel)
     return sid;
 }
 
-static TBuf *read_file(const char *name, long ver)
+static TBuf *read_file(const char *name, long long ver)
 {
     char file[MAX_FILE_PATH];
     set_path(file, name, ver, 0);
@@ -104,7 +104,7 @@ static TBuf *read_file(const char *name, long ver)
     return buf;
 }
 
-static void write(const char *name, long ver, TBuf *buf)
+static void write(const char *name, long long ver, TBuf *buf)
 {
     char part[MAX_FILE_PATH], file[MAX_FILE_PATH];
     set_path(part, name, ver, 1);
@@ -116,18 +116,18 @@ static void write(const char *name, long ver, TBuf *buf)
     sys_move(file, part);
 }
 
-static int read_var(IO *io, char *name, long *ver)
+static int read_var(IO *io, char *name, long long *ver)
 {
     if (sys_readn(io, name, MAX_NAME) != MAX_NAME)
         return 0;
 
-    if (sys_readn(io, ver, sizeof(long)) != sizeof(long))
+    if (sys_readn(io, ver, sizeof(*ver)) != sizeof(*ver))
         return 0;
 
     return 1;
 }
 
-static TBuf *read_net(const char *vid, const char *name, long version)
+static TBuf *read_net(const char *vid, const char *name, long long ver)
 {
     int failed = 0;
     TBuf *res = NULL;
@@ -139,9 +139,9 @@ static TBuf *read_net(const char *vid, const char *name, long version)
     if (io == NULL)
         goto exit;
 
-    if (sys_write(io, &T_READ, sizeof(int)) < 0 ||
+    if (sys_write(io, &T_READ, sizeof(T_READ)) < 0 ||
         sys_write(io, v, sizeof(v)) < 0 ||
-        sys_write(io, &version, sizeof(version)) < 0)
+        sys_write(io, &ver, sizeof(ver)) < 0)
         goto exit;    
 
     res = tbuf_read(io);
@@ -150,7 +150,7 @@ static TBuf *read_net(const char *vid, const char *name, long version)
 
     /* confirmation of the full read */
     int msg = 0;
-    if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) || msg != R_READ)
+    if (sys_readn(io, &msg, sizeof(msg)) != sizeof(msg) || msg != R_READ)
         failed = 1;
 
 exit:
@@ -164,7 +164,7 @@ exit:
     return res;
 }
 
-static void copy_file(char *name, long ver, const char *vid)
+static void copy_file(char *name, long long ver, const char *vid)
 {
     char file[MAX_FILE_PATH];
     set_path(file, name, ver, 0);
@@ -173,9 +173,9 @@ static void copy_file(char *name, long ver, const char *vid)
         return;
 
     TBuf *buf = NULL;
-    long time = sys_millis();
+    long long time = sys_millis();
     if (str_cmp(vid, "") == 0 || (buf = read_net(vid, name, ver)) == NULL) {
-        sys_log('V', "file %s-%016X copy failed from %s, time %dms\n",
+        sys_log('V', "file %s-%016llX copy failed from %s, time %dms\n",
                      name, ver, vid, sys_millis() - time);
         return;
     }
@@ -183,7 +183,7 @@ static void copy_file(char *name, long ver, const char *vid)
     write(name, ver, buf);
     tbuf_free(buf);
 
-    sys_log('V', "file %s-%016X copy succeeded from %s, time %dms\n",
+    sys_log('V', "file %s-%016llX copy succeeded from %s, time %dms\n",
                  name, ver, vid, sys_millis() - time);
 }
 
@@ -204,7 +204,7 @@ static Vars *sync_tx()
     for (int i = 0; i < gvars.len; ++i)
         vars_put(w, gvars.names[i], 0L);
 
-    long sid = tx_enter(addr, r, w);
+    long long sid = tx_enter(addr, r, w);
 
     vars_free(r);
     vars_free(w);
@@ -216,7 +216,7 @@ static Vars *sync_tx()
     char **files = sys_list(path, &num_files);
     for (int i = 0; i < num_files; ++i) {
         char name[MAX_NAME] = "";
-        long ver = parse(files[i], name);
+        long long ver = parse(files[i], name);
         if (ver > 0)
             vars_put(disk, name, ver);
     }
@@ -246,29 +246,29 @@ static void *serve(void *arg)
 {
     IO *cio = NULL, *sio = (IO*) arg;
     char name[MAX_NAME];
-    long ver;
+    long long ver;
 
     for (;;) {
         cio = sys_accept(sio);
 
         int msg = 0;
-        if (sys_readn(cio, &msg, sizeof(int)) == sizeof(int)) {
+        if (sys_readn(cio, &msg, sizeof(msg)) == sizeof(msg)) {
             if (msg == T_READ && read_var(cio, name, &ver)) {
                 TBuf *buf = read_file(name, ver);
                 if (buf != NULL) {
                     tbuf_write(buf, cio);
                     tbuf_free(buf);
-                    sys_write(cio, &R_READ, sizeof(int));
+                    sys_write(cio, &R_READ, sizeof(R_READ));
                 }
-                sys_log('V', "file %s-%016X read\n", name, ver);
+                sys_log('V', "file %s-%016llX read\n", name, ver);
             } else if (msg == T_WRITE && read_var(cio, name, &ver)) {
                 TBuf *buf = tbuf_read(cio);
                 if (buf != NULL) {
                     write(name, ver, buf);
                     tbuf_free(buf);
-                    sys_write(cio, &R_WRITE, sizeof(int));
+                    sys_write(cio, &R_WRITE, sizeof(R_WRITE));
                 }
-                sys_log('V', "file %s-%016X written\n", name, ver);
+                sys_log('V', "file %s-%016llX written\n", name, ver);
             }
         }
 
@@ -322,7 +322,8 @@ static void env_check()
 extern char *vol_init(int port, const char *p)
 {
     if (str_len(p) > MAX_FILE_PATH)
-        sys_die("volume: path '%s' is too long\n", p);
+        sys_die("volume: path '%s' exceeds the maximum length %d\n",
+                p, MAX_FILE_PATH);
 
     int plen = str_cpy(path, p) - 1;
     for (; plen > 0 && path[plen] == '/'; --plen)
@@ -367,7 +368,7 @@ extern char *vol_init(int port, const char *p)
     return gaddr;
 }
 
-extern TBuf *vol_read(const char *vid, const char *var, long ver)
+extern TBuf *vol_read(const char *vid, const char *var, long long ver)
 {
     TBuf *res = NULL;
     res = read_net(vid, var, ver);
@@ -377,7 +378,10 @@ extern TBuf *vol_read(const char *vid, const char *var, long ver)
     return res;
 }
 
-extern void vol_write(const char *vid, TBuf *buf, const char *var, long ver)
+extern void vol_write(const char *vid,
+                      TBuf *buf,
+                      const char *var,
+                      long long ver)
 {
     char v[MAX_NAME] = "", sid[MAX_NAME] = "";
     str_from_sid(sid, ver);
@@ -385,7 +389,7 @@ extern void vol_write(const char *vid, TBuf *buf, const char *var, long ver)
 
     IO *io = sys_connect(vid);
 
-    if (sys_write(io, &T_WRITE, sizeof(int)) < 0 ||
+    if (sys_write(io, &T_WRITE, sizeof(T_WRITE)) < 0 ||
         sys_write(io, v, sizeof(v)) < 0 ||
         sys_write(io, &ver, sizeof(ver)) < 0)
         sys_die("volume: write failed to send '%s-%s'\n", v, sid);
@@ -395,7 +399,7 @@ extern void vol_write(const char *vid, TBuf *buf, const char *var, long ver)
 
     /* confirmation of the full write */
     int msg = 0;
-    if (sys_readn(io, &msg, sizeof(int)) != sizeof(int) || msg != R_WRITE)
+    if (sys_readn(io, &msg, sizeof(msg)) != sizeof(msg) || msg != R_WRITE)
         sys_die("volume: write failed to confirm '%s-%s'\n", v, sid);
 
     sys_close(io);

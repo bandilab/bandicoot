@@ -50,22 +50,6 @@ create_out_dirs()
     mkdir -p "$BIN/test/lsdir/one_dir"
 }
 
-check_lp64()
-{
-    lp64=`mktemp $BIN/lp64-XXXX`
-    echo 'int main() { return sizeof(long); }' \
-        | $CC $DIST_CFLAGS -o $lp64 -x c -
-
-    ./$lp64
-    if [ "8" = "$?" ]
-    then
-        echo '[=] LP64'
-        CC="$CC -DLP64"
-    else
-        echo '[=] ILP32'
-    fi
-}
-
 prepare_lang()
 {
     $YACC language.y
@@ -85,8 +69,6 @@ compile()
     create_out_dirs
     prepare_lang
     prepare_version
-    check_lp64
-    echo
 
     for i in `echo $* | sed 's/%//g'`
     do

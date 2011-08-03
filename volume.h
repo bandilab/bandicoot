@@ -16,5 +16,8 @@ limitations under the License.
 */
 
 extern char *vol_init(int port, const char *p);
-extern TBuf *vol_read(const char *vid, const char *name, long ver);
-extern void vol_write(const char *vid, TBuf *buf, const char *name, long ver);
+extern TBuf *vol_read(const char *vid, const char *name, long long ver);
+extern void vol_write(const char *vid,
+                      TBuf *buf,
+                      const char *name,
+                      long long ver);

@@ -69,8 +69,7 @@ extern void sys_exchange(IO *io1, int *cnt1, IO *io2, int *cnt2);
 /* misc */
 extern void sys_print(const char *msg, ...);
 extern void sys_log(char module, const char *msg, ...);
-extern long sys_millis(); /* suitable for quick time measures only (long might
-                             not be enough on 32bit systems) */
+extern long long sys_millis();
 extern void sys_time(char *buf);
 
 /* monitor */

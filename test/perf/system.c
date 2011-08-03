@@ -25,7 +25,6 @@ int main(void)
     int num_blocks = sizeof(block) / sizeof(int);
     int i = 0, j = 0;
 
-
     for (i = 0; i < num_files; i++) {
         for (j = 0; j < num_blocks; j++) {
             int x, b = block[j];
@@ -38,16 +37,16 @@ int main(void)
             IO *wio = sys_open(fname, CREATE | WRITE);
             IO *rio = sys_open(fname, READ);
 
-            long t = sys_millis();
+            long long t = sys_millis();
             for (x = 0; x < blocks; x++)
                 sys_write(wio, buf, b);
-            sys_print("w %dMB - %dms, block: %dB\n",
-                    file_mb[i], sys_millis() - t, b);
+            sys_print("w %dMB - %lldms, block: %dB\n",
+                      file_mb[i], sys_millis() - t, b);
 
             t = sys_millis();
             for (x = 0; x < blocks; x++)
                 sys_readn(rio, buf, b);
-            sys_print("r %dMB - %dms, block: %dB\n",
+            sys_print("r %dMB - %lldms, block: %dB\n",
                       file_mb[i], sys_millis() - t, b);
 
             sys_close(wio);

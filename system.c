@@ -424,12 +424,12 @@ extern void sys_log(char module, const char *msg, ...)
     va_end(ap);
 }
 
-extern long sys_millis()
+extern long long sys_millis()
 {
     struct timeval t;
     gettimeofday(&t, NULL);
 
-    return t.tv_sec * 1000L + t.tv_usec / 1000L;
+    return 1000LL * (long long) t.tv_sec + (long long) t.tv_usec / 1000LL;
 }
 
 /* FIXME: time and gmtime methods are not thread-safe */

@@ -157,7 +157,7 @@ static char *err(int err)
 static void processor(const char *tx_addr, int port)
 {
     int status = -1;
-    long sid = 0, time = sys_millis();
+    long long sid = 0, time = sys_millis();
 
     Arg *arg = NULL;
     Vars *r = NULL, *w = NULL;
@@ -305,7 +305,7 @@ static void processor(const char *tx_addr, int port)
     status = http_chunk(io, NULL, 0);
 
 exit:
-    sys_log('E', "%016X method %c, path %s, time %dms - %3d\n",
+    sys_log('E', "%016llX method %c, path %s, time %lldms - %3d\n",
                  sid,
                  (req == NULL) ? '?' : req->method,
                  (req == NULL) ? "malformed" : req->path,

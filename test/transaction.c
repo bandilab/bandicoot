@@ -106,7 +106,7 @@ static void *exec_thread(void *arg)
         vars_put(wvars, p->wname, 0L);
 
     Rel *rel = NULL;
-    long sid = 0L;
+    long long sid = 0;
 
     int action = TX_ENTER;
     int value = -1;
@@ -197,8 +197,8 @@ static void test_basics()
     Vars *w = vars_new(0), *r = vars_new(1);
     vars_put(r, "tx_empty", 0L);
 
-    long sid = tx_enter("", r, w);
-    long ver = r->vers[0];
+    long long sid = tx_enter("", r, w);
+    long long ver = r->vers[0];
 
     if (str_cmp(r->vols[0], vid) != 0)
         fail();

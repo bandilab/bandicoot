@@ -26,7 +26,7 @@ static void perf_cmp(int M)
     TBuf *buf1 = gen_tuples(0, 1000);
     TBuf *buf2 = gen_tuples(0, 1000);
 
-    long time = sys_millis();
+    long long time = sys_millis();
 
     Tuple *t1, *t2;
 
@@ -39,7 +39,7 @@ static void perf_cmp(int M)
         }
     }
 
-    sys_print("tuple_cmp(%dM) in %dms\n", M, sys_millis() - time);
+    sys_print("tuple_cmp(%dM) in %lldms\n", M, sys_millis() - time);
 
     while ((t1 = tbuf_next(buf1)) != NULL)
         tuple_free(t1);
@@ -59,27 +59,25 @@ static void perf_encdec(int M)
     int len = head_common(h, h, lpos, rpos);
 
     Tuple *t = gen_tuple(1);
-
     char buf[h->len * MAX_STRING + h->len];
-    long i;
 
-    long time = sys_millis();
-    for (i = 0; i < count; ++i)
+    long long time = sys_millis();
+    for (int i = 0; i < count; ++i)
         tuple_enc(t, buf);
-    sys_print("tuple_enc(%dM) in %dms\n", M, sys_millis() - time);
+    sys_print("tuple_enc(%dM) in %lldms\n", M, sys_millis() - time);
 
     tuple_free(t);
 
     Tuple **tbuf = mem_alloc(count * sizeof(Tuple*));
 
     time = sys_millis();
-    for (i = 0; i < count; ++i) {
+    for (int i = 0; i < count; ++i)
         tbuf[i] = tuple_dec(buf, &len);
-    }
-    sys_print("tuple_dec(%dM) in %dms\n", M, sys_millis() - time);
 
-    for (i = 0; i < count; ++i)
+    sys_print("tuple_dec(%dM) in %lldms\n", M, sys_millis() - time);
+    for (int i = 0; i < count; ++i)
         tuple_free(tbuf[i]);
+
     mem_free(tbuf);
 }
 

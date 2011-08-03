@@ -171,14 +171,13 @@ extern void tbuf_free(TBuf *b)
 extern TBuf *tbuf_read(IO *io)
 {
     TBuf *b = tbuf_new();
-    char size_buf[sizeof(int)];
     char data_buf[MAX_BLOCK];
 
     for (;;) {
-        if (sys_readn(io, size_buf, sizeof(int)) != sizeof(int))
+        int size = -1;
+        if (sys_readn(io, &size, sizeof(size)) != sizeof(size))
             goto failure;
 
-        int size = int_dec(size_buf);
         if (size == 0)
             goto success;
 
@@ -207,7 +206,6 @@ success:
 
 extern int tbuf_write(TBuf *b, IO *io)
 {
-    char size_buf[sizeof(int)];
     char data_buf[MAX_BLOCK];
     char *p = data_buf;
     int used = 0, count = 0;
@@ -216,8 +214,7 @@ extern int tbuf_write(TBuf *b, IO *io)
     while ((t = tbuf_next(b)) != NULL) {
         used = p - data_buf;
         if (MAX_BLOCK - used < t->size) {
-            int_enc(size_buf, used);
-            if (sys_write(io, size_buf, sizeof(int)) < 0 ||
+            if (sys_write(io, &used, sizeof(used)) < 0 ||
                 sys_write(io, data_buf, used) < 0)
                 goto failure;
 
@@ -230,16 +227,15 @@ extern int tbuf_write(TBuf *b, IO *io)
     }
 
     used = p - data_buf;
-    int_enc(size_buf, used);
-    if (sys_write(io, size_buf, sizeof(int)) < 0)
+    if (sys_write(io, &used, sizeof(used)) < 0)
         goto failure;
 
     if (used > 0) {
         if (sys_write(io, data_buf, used) < 0)
             goto failure;
 
-        int_enc(size_buf, 0);
-        if (sys_write(io, size_buf, sizeof(int)) < 0)
+        used = 0;
+        if (sys_write(io, &used, sizeof(used)) < 0)
             goto failure;
     }
 

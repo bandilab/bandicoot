@@ -48,12 +48,12 @@ int main()
     n3 = expr_eq(expr_real(0.25), expr_attr(ra, rat));
     Expr *e = expr_and(n1, expr_and(n2, n3));
 
-    long time = sys_millis();
+    long long time = sys_millis();
     for (j = 0; j < SIZE; ++j)
         for (i = 0; i < SIZE; ++i)
             expr_bool_val(e, t[i], NULL);
 
-    sys_print("%dK expressions evaluated in %dms\n", j, sys_millis() - time);
+    sys_print("%dK expressions evaluated in %lldms\n", j, sys_millis() - time);
 
     for (i = 0; i < SIZE; ++i)
         tuple_free(t[i]);

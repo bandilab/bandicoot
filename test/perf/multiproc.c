@@ -22,25 +22,26 @@ static void *thread(void *arg) { return 0; }
 
 static void perf_thread(int count)
 {
-    long time = sys_millis();
+    long long time = sys_millis();
     for (int i = 0; i < count; ++i)
         sys_thread(thread, 0);
 
-    sys_print("created %d threads in %dms\n", count, sys_millis() - time);
+    sys_print("created %d threads in %lldms\n", count, sys_millis() - time);
 }
 
 static void perf_fork(int count)
 {
     char *argv[] = {exe, "test_arg", NULL};
 
-    long time = sys_millis();
+    long long time = sys_millis();
     for (int i = 0; i < count; ++i) {
         int pid = sys_exec(argv);
         if (0 != sys_wait(pid))
             fail();
     }
 
-    sys_print("fork/wait of %d processes - %dms\n", count, sys_millis() - time);
+    sys_print("fork/wait of %d processes - %lldms\n",
+              count, sys_millis() - time);
 }
 
 int main(int argc, char *argv[])

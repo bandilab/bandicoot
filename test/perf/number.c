@@ -23,27 +23,27 @@ int main(void)
     char *buf = mem_alloc(sizeof(double) * 10 * 1000 * 1000);
 
     for (; mln <= 10; mln *= 10) {
-        long i, count = mln * 1000 * 1000;
+        int i, count = mln * 1000 * 1000;
 
-        long t = sys_millis();
+        long long t = sys_millis();
         for (i = 0; i < count; i++)
             int_enc(buf + i * sizeof(int), i);
-        sys_print("encoded %dM ints in %dms\n", mln, sys_millis() - t);
+        sys_print("encoded %dM ints in %dllms\n", mln, sys_millis() - t);
 
         t = sys_millis();
         for (i = 0; i < count; i++)
             x += int_dec(buf + i * sizeof(int));
-        sys_print("decoded %dM ints in %dms\n", mln, sys_millis() - t);
+        sys_print("decoded %dM ints in %lldms\n", mln, sys_millis() - t);
 
         t = sys_millis();
         for (i = 0; i < count; i++)
             real_enc(buf + i * sizeof(double), i);
-        sys_print("encoded %dM reals in %dms\n", mln, sys_millis() - t);
+        sys_print("encoded %dM reals in %lldms\n", mln, sys_millis() - t);
 
         t = sys_millis();
         for (i = 0; i < count; i++)
             x += (int) real_dec(buf + i * sizeof(double));
-        sys_print("decoded %dM reals in %dms\n", mln, sys_millis() - t);
+        sys_print("decoded %dM reals in %lldms\n", mln, sys_millis() - t);
     }
 
     x += buf[0] + buf[1 * 1000 * 1000];  /* so that optimizer doesn't remove

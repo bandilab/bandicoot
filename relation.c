@@ -57,7 +57,7 @@ extern Vars *vars_new(int len)
     res->len = 0;
     res->names = mem_alloc(len * (sizeof(void*) + MAX_NAME));
     res->vols = mem_alloc(len * (sizeof(void*) + MAX_ADDR));
-    res->vers = mem_alloc(len * sizeof(long));
+    res->vers = mem_alloc(len * sizeof(long long));
 
     vars_init(res);
 
@@ -95,7 +95,7 @@ extern Vars *vars_read(IO *io)
     if (sys_readn(io, vars_p(v), size) != size)
         goto failure;
 
-    size = len * sizeof(long);
+    size = len * sizeof(long long);
     if (sys_readn(io, v->vers, size) != size)
         goto failure;
 
@@ -116,25 +116,24 @@ extern int vars_write(Vars *v, IO *io)
 {
     if (sys_write(io, &v->len, sizeof(v->len)) < 0 ||
         sys_write(io, vars_p(v), v->len * MAX_NAME) < 0 ||
-        sys_write(io, v->vers, v->len * sizeof(long)) < 0 ||
+        sys_write(io, v->vers, v->len * sizeof(long long)) < 0 ||
         sys_write(io, vols_p(v), v->len * MAX_ADDR) < 0)
         return -1;
 
-    return sizeof(v->len) +
-        v->len * (MAX_NAME + sizeof(long) + sizeof(long long));
+    return sizeof(v->len) + v->len * (MAX_NAME + sizeof(long long) + MAX_ADDR);
 }
 
-extern void vars_put(Vars *v, const char *var, long ver)
+extern void vars_put(Vars *v, const char *var, long long ver)
 {
     if (v->len == v->size) {
         char **names = v->names;
         char **vols = v->vols;
-        long *vers = v->vers;
+        long long *vers = v->vers;
 
         v->size += MAX_VARS;
         v->names = mem_alloc(v->size * (sizeof(void*) + MAX_NAME));
         v->vols = mem_alloc(v->size * (sizeof(void*) + MAX_ADDR));
-        v->vers = mem_alloc(v->size * sizeof(long));
+        v->vers = mem_alloc(v->size * sizeof(long long));
 
         vars_init(v);
 
@@ -153,7 +152,7 @@ extern void vars_put(Vars *v, const char *var, long ver)
     v->len++;
 }
 
-extern int vars_scan(Vars *v, char const *var, long ver)
+extern int vars_scan(Vars *v, const char *var, long long ver)
 {
     int idx = -1;
     for (int i = 0; i < v->len && idx < 0; ++i)
@@ -651,7 +650,10 @@ extern Rel *rel_sum_unary(Rel *r,
     return res;
 }
 
-extern void rel_store(const char *vid, const char *name, long vers, Rel *r)
+extern void rel_store(const char *vid,
+                      const char *name,
+                      long long vers,
+                      Rel *r)
 {
     vol_write(vid, r->body, name, vers);
 }

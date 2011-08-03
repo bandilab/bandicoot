@@ -35,11 +35,7 @@ static const int WAITING = 2;
 static const int COMMITTED = 3;
 static const int REVERTED = 4;
 
-#ifdef LP64
-static const long MAX_LONG = 0x7FFFFFFFFFFFFFFF;
-#else
-static const long MAX_LONG = 0x7FFFFFFF;
-#endif
+static const long long MAX_LONG = 0x7FFFFFFFFFFFFFFFLL;
 
 static const int T_ENTER = 1;
 static const int R_ENTER = 2;
@@ -57,10 +53,10 @@ typedef struct {
 } Vol;
 
 typedef struct {
-    long sid; /* transaction identifier */
+    long long sid; /* transaction identifier */
     char name[MAX_NAME]; /* variable name */
     int a_type; /* READ or WRITE actions */
-    long version; /* either an SID to read or an SID to create/write */
+    long long version; /* either an SID to read or an SID to create/write */
     int state; /* identifies the current entry state, see defines above */
     char wvid[MAX_ADDR]; /* volume for write action */
     Mon *mon; /* monitor on which the caller/transaction is blocked if needed */
@@ -88,7 +84,7 @@ static IO* gio;
 static List *gents;
 static List *gvols;
 static Mon *gmon;
-static long last_sid;
+static long long last_sid;
 
 static List *next(List *e)
 {
@@ -134,9 +130,9 @@ static void rm(List **list,
 }
 
 /* determines a version to read */
-static long get_rsid(long sid, const char name[])
+static long long get_rsid(long long sid, const char name[])
 {
-    long res = -1;
+    long long res = -1;
 
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
@@ -149,7 +145,7 @@ static long get_rsid(long sid, const char name[])
 }
 
 /* returns true if a given sid of a variable is active (being read) */
-static int is_active(const char name[], long sid)
+static int is_active(const char name[], long long sid)
 {
     int res = 0;
 
@@ -172,10 +168,10 @@ static int rm_entry(void *elem, const void *cmp)
     Entry *e = elem;
     int rm = 0;
     if (e->a_type == WRITE && e->state == COMMITTED) {
-        long sid = e->sid;
+        long long sid = e->sid;
         char *name = e->name;
 
-        long rsid = get_rsid(MAX_LONG, name);
+        long long rsid = get_rsid(MAX_LONG, name);
 
         int act = is_active(name, sid);
 
@@ -193,10 +189,10 @@ static int rm_entry(void *elem, const void *cmp)
     return rm;
 }
 
-static Entry *add_entry(long sid,
+static Entry *add_entry(long long sid,
                         const char name[],
                         int a_type,
-                        long version,
+                        long long version,
                         int state)
 {
 
@@ -214,7 +210,7 @@ static Entry *add_entry(long sid,
     return e;
 }
 
-static List *list_entries(long sid)
+static List *list_entries(long long sid)
 {
     List *dest = NULL;
 
@@ -229,7 +225,7 @@ static List *list_entries(long sid)
 
 static Entry *get_min_waiting(const char name[], int a_type)
 {
-    long min_sid = MAX_LONG;
+    long long min_sid = MAX_LONG;
     Entry *res = 0;
 
     for (List *it = gents; it != NULL; it = it->next) {
@@ -245,7 +241,7 @@ static Entry *get_min_waiting(const char name[], int a_type)
     return res;
 }
 
-static List *list_waiting(long sid, const char name[], int a_type)
+static List *list_waiting(long long sid, const char name[], int a_type)
 {
     List *dest = NULL;
 
@@ -259,9 +255,9 @@ static List *list_waiting(long sid, const char name[], int a_type)
     return dest;
 }
 
-static long get_wsid(const char name[])
+static long long get_wsid(const char name[])
 {
-    long res = -1;
+    long long res = -1;
 
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
@@ -313,7 +309,10 @@ static Vol *get_volume(const char *vid)
     return vol;
 }
 
-static void closest_vol(char *vid, const char *addr, const char *name, long ver)
+static void closest_vol(char *vid,
+                        const char *addr,
+                        const char *name,
+                        long long ver)
 {
     Vol *v = NULL;
     str_cpy(vid, "");
@@ -339,7 +338,7 @@ static void set_vols(Vars *v, const char *addr)
         closest_vol(v->vols[i], addr, v->names[i], v->vers[i]);
 }
 
-static void current_state(long vers[])
+static void current_state(long long vers[])
 {
     for (int i = 0; i < gvars.len; ++i)
         vers[i] = 0;
@@ -356,7 +355,7 @@ static void current_state(long vers[])
 
 extern void wstate()
 {
-    long vers[gvars.len];
+    long long vers[gvars.len];
     current_state(vers);
 
     char sid[MAX_NAME];
@@ -379,7 +378,7 @@ extern void wstate()
     sys_remove(gstate_bak);
 }
 
-static void finish(int sid, int final_state)
+static void finish(long long sid, int final_state)
 {
     mon_lock(gmon);
 
@@ -391,8 +390,7 @@ static void finish(int sid, int final_state)
         e->state = final_state;
 
         if (e->a_type == WRITE && prev_state == RUNNABLE) {
-
-            long rsid = e->version;
+            long long rsid = e->version;
             if (final_state == REVERTED)
                 rsid = get_rsid(e->sid, e->name);
             else {
@@ -403,7 +401,7 @@ static void finish(int sid, int final_state)
 
             Entry *we = get_min_waiting(e->name, WRITE);
 
-            long wsid = MAX_LONG;
+            long long wsid = MAX_LONG;
             if (we != NULL) {
                 wsid = we->sid;
                 sig = add(sig, we);
@@ -434,12 +432,12 @@ static void finish(int sid, int final_state)
     mon_unlock(gmon);
 }
 
-extern void commit(long sid)
+extern void commit(long long sid)
 {
     finish(sid, COMMITTED);
 }
 
-extern void revert(long sid)
+extern void revert(long long sid)
 {
     finish(sid, REVERTED);
 }
@@ -488,7 +486,7 @@ static void tx_init(const char *source, const char *state)
 
     mon_lock(gmon);
 
-    long vers[MAX_VARS];
+    long long vers[MAX_VARS];
     char *names[MAX_VARS];
     int len;
 
@@ -516,7 +514,7 @@ static void tx_init(const char *source, const char *state)
 
     for (int i = 0; i < gvars.len; ++i) {
         gvars.names[i] = names[i];
-        long sid = vers[i];
+        long long sid = vers[i];
 
         if (sid > last_sid)
             last_sid = sid;
@@ -580,10 +578,10 @@ static void wait(Vars *s, Entry *entries[])
 }
 
 /* the m input parameter is for testing purposes (test/transaction.c) */
-extern long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
+extern long long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
 {
     int rw = 0;
-    long sid = 0;
+    long long sid = 0;
     Entry *re[rvars->len];
     Entry *we[wvars->len];
 
@@ -607,13 +605,13 @@ extern long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
 
     for (int i = 0; i < rvars->len; ++i) {
         const char *name = rvars->names[i];
-        long rsid = get_rsid(sid, name);
+        long long rsid = get_rsid(sid, name);
 
         int state = RUNNABLE;
         if (rw) {
-            long wsid = get_wsid(name);
-            if (wsid > -1L && sid > wsid) {
-                rsid = -1L;
+            long long wsid = get_wsid(name);
+            if (wsid > -1 && sid > wsid) {
+                rsid = -1;
                 state = WAITING;
             }
         }
@@ -651,12 +649,12 @@ extern void tx_attach(const char *address)
 
 static void *tx_thread(void *io)
 {
-    long sid = 0;
+    long long sid = 0;
     char vid[MAX_ADDR] = "";
 
     for (;;) {
         int msg = 0;
-        if (sys_readn(io, &msg, sizeof(int)) != sizeof(int))
+        if (sys_readn(io, &msg, sizeof(msg)) != sizeof(msg))
             goto exit;
 
         if (msg == T_ENTER) {
@@ -680,8 +678,8 @@ static void *tx_thread(void *io)
             sid = enter(eid, rvars, wvars, NULL);
 
             msg = R_ENTER;
-            if (sys_write(io, &msg, sizeof(int)) < 0 ||
-                sys_write(io, &sid, sizeof(long)) < 0 ||
+            if (sys_write(io, &msg, sizeof(msg)) < 0 ||
+                sys_write(io, &sid, sizeof(sid)) < 0 ||
                 vars_write(rvars, io) < 0 ||
                 vars_write(wvars, io) < 0)
             {
@@ -692,26 +690,26 @@ static void *tx_thread(void *io)
             vars_free(rvars);
             vars_free(wvars);
         } else if (msg == T_FINISH) {
-            int final_state = 0;
-            long read_sid = 0;
-            if (sys_readn(io, &read_sid, sizeof(long)) != sizeof(long) ||
-                read_sid != sid ||
-                sys_readn(io, &final_state, sizeof(int)) != sizeof(int) ||
-                (final_state != COMMITTED && final_state != REVERTED))
+            int mstate = 0;
+            long long msid = 0;
+            if (sys_readn(io, &msid, sizeof(msid)) != sizeof(msid) ||
+                msid != sid ||
+                sys_readn(io, &mstate, sizeof(mstate)) != sizeof(mstate) ||
+                (mstate != COMMITTED && mstate != REVERTED))
                 goto exit;
 
             /* TODO: what if sid does not exist? */
-            finish(sid, final_state);
-            long s = sid;
+            finish(sid, mstate);
+            long long s = sid;
             sid = 0; /* at this point we cannot revert anymore */
 
             /* FIXME: we can commit and then fail to notify the client */
             msg = R_FINISH;
-            if (sys_write(io, &msg, sizeof(int)) < 0 ||
-                sys_write(io, &final_state, sizeof(int)) < 0)
+            if (sys_write(io, &msg, sizeof(msg)) < 0 ||
+                sys_write(io, &mstate, sizeof(mstate)) < 0)
                 goto exit;
 
-            sys_log('T', "%016X finished\n", s);
+            sys_log('T', "%016llX finished\n", s);
         } else if (msg == T_SYNC) {
             if (sys_readn(io, vid, MAX_ADDR) != MAX_ADDR)
                 goto exit;
@@ -723,7 +721,7 @@ static void *tx_thread(void *io)
             Vars *out = volume_sync(vid, in);
             msg = R_SYNC;
 
-            if (sys_write(io, &msg, sizeof(int)) < 0)
+            if (sys_write(io, &msg, sizeof(msg)) < 0)
                 goto exit;
             
             int res = vars_write(out, io);
@@ -732,8 +730,8 @@ static void *tx_thread(void *io)
                 goto exit;
         } else if (msg == T_SOURCE) {
             msg = R_SOURCE;
-            if (sys_write(io, &msg, sizeof(int)) < 0 ||
-                sys_write(io, &gcode.len, sizeof(int)) < 0 ||
+            if (sys_write(io, &msg, sizeof(msg)) < 0 ||
+                sys_write(io, &gcode.len, sizeof(gcode.len)) < 0 ||
                 sys_write(io, gcode.buf, gcode.len) < 0)
                 goto exit;
         }
@@ -741,7 +739,7 @@ static void *tx_thread(void *io)
 
 exit:
     if (sid != 0) {
-        sys_log('T', "transaction %016X failed\n", sid);
+        sys_log('T', "transaction %016llX failed\n", sid);
         finish(sid, REVERTED);
     }
 
@@ -791,13 +789,13 @@ extern void tx_server(const char *source, const char *state, int *port)
 extern char *tx_program()
 {
     int msg = T_SOURCE;
-    if (sys_write(gio, &msg, sizeof(int)) < 0)
+    if (sys_write(gio, &msg, sizeof(msg)) < 0)
         sys_die("T_SOURCE failed\n");
 
     int size = 0;
-    if (sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
+    if (sys_readn(gio, &msg, sizeof(msg)) != sizeof(msg) ||
         msg != R_SOURCE ||
-        sys_readn(gio, &size, sizeof(int)) != sizeof(int) ||
+        sys_readn(gio, &size, sizeof(size)) != sizeof(size) ||
         size < 0 /* FIXME: || size > MAX_CODE_SIZE */)
         sys_die("R_ENTER failed\n");
 
@@ -808,20 +806,20 @@ extern char *tx_program()
     return code;
 }
 
-extern long tx_enter(const char *eid, Vars *rvars, Vars *wvars)
+extern long long tx_enter(const char *eid, Vars *rvars, Vars *wvars)
 {
     int msg = T_ENTER;
-    if (sys_write(gio, &msg, sizeof(int)) < 0 ||
+    if (sys_write(gio, &msg, sizeof(msg)) < 0 ||
         sys_write(gio, eid, MAX_ADDR) < 0 ||
         vars_write(rvars, gio) < 0 ||
         vars_write(wvars, gio) < 0)
         sys_die("T_ENTER failed\n");
 
-    long sid = 0;
+    long long sid = 0;
     Vars *r = NULL, *w = NULL;
-    if (sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
+    if (sys_readn(gio, &msg, sizeof(msg)) != sizeof(msg) ||
         msg != R_ENTER ||
-        sys_readn(gio, &sid, sizeof(long)) != sizeof(long) ||
+        sys_readn(gio, &sid, sizeof(sid)) != sizeof(sid) ||
         (r = vars_read(gio)) == NULL ||
         (w = vars_read(gio)) == NULL)
         sys_die("R_ENTER failed\n");
@@ -835,31 +833,31 @@ extern long tx_enter(const char *eid, Vars *rvars, Vars *wvars)
     return sid;
 }
 
-static void net_finish(long sid, int final_state)
+static void net_finish(long long sid, int final_state)
 {
     int msg = T_FINISH;
-    if (sys_write(gio, &msg, sizeof(int)) < 0 ||
-        sys_write(gio, &sid, sizeof(long)) < 0 ||
-        sys_write(gio, &final_state, sizeof(int)) < 0)
+    if (sys_write(gio, &msg, sizeof(msg)) < 0 ||
+        sys_write(gio, &sid, sizeof(sid)) < 0 ||
+        sys_write(gio, &final_state, sizeof(final_state)) < 0)
         sys_die("T_FINISH %s failed, sid=%016X\n",
                 final_state == COMMITTED ? "commit" : "revert",
                 sid);
 
-    if (sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
+    if (sys_readn(gio, &msg, sizeof(msg)) != sizeof(msg) ||
         msg != R_FINISH ||
-        sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
+        sys_readn(gio, &msg, sizeof(msg)) != sizeof(msg) ||
         msg != final_state)
         sys_die("R_FINISH %s failed, sid=%016X\n",
                 final_state == COMMITTED ? "commit" : "revert",
                 sid);
 }
 
-extern void tx_commit(long sid)
+extern void tx_commit(long long sid)
 {
     net_finish(sid, COMMITTED);
 }
 
-extern void tx_revert(long sid)
+extern void tx_revert(long long sid)
 {
     net_finish(sid, REVERTED);
 }
@@ -867,13 +865,13 @@ extern void tx_revert(long sid)
 extern Vars *tx_volume_sync(const char *vid, Vars *in)
 {
     int msg = T_SYNC;
-    if (sys_write(gio, &msg, sizeof(int)) < 0 ||
+    if (sys_write(gio, &msg, sizeof(msg)) < 0 ||
         sys_write(gio, vid, MAX_ADDR) < 0)
         sys_die("T_SYNC failed\n");
 
     Vars *out = NULL;
     if (vars_write(in, gio) < 0 ||
-        sys_readn(gio, &msg, sizeof(int)) != sizeof(int) ||
+        sys_readn(gio, &msg, sizeof(msg)) != sizeof(msg) ||
         msg != R_SYNC ||
         (out = vars_read(gio)) == NULL)
         sys_die("R_SYNC failed\n");

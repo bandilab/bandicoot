@@ -20,14 +20,14 @@ typedef struct {
     int len;
     char **names;
     char **vols;
-    long *vers;
+    long long *vers;
 } Vars;
 
 extern Vars *vars_new(int len);
 extern Vars *vars_read(IO *io);
 extern int vars_write(Vars *v, IO *io);
-extern int vars_scan(Vars *v, const char *var, long ver);
-extern void vars_put(Vars *v, const char *var, long ver);
+extern int vars_scan(Vars *v, const char *var, long long ver);
+extern void vars_put(Vars *v, const char *var, long long ver);
 extern void vars_free(Vars *v);
 extern void vars_cpy(Vars *dest, Vars *src);
 
@@ -71,7 +71,10 @@ extern Rel *rel_load(Head *head, const char *name);
 extern Rel *rel_err(int code, char *msg);
 
 /* relations passed to both rel_store & rel_eq must be rel_init()'ed */
-extern void rel_store(const char *vid, const char *name, long vers, Rel *r);
+extern void rel_store(const char *vid,
+                      const char *name,
+                      long long vers,
+                      Rel *r);
 extern int rel_eq(Rel *l, Rel *r);
 
 extern Rel *rel_join(Rel *l, Rel *r);

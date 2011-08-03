@@ -234,15 +234,10 @@ extern char **str_split(char *buf, char delim, int *parts)
     return res;
 }
 
-extern long str_to_sid(char *str)
+extern long long str_to_sid(char *str)
 {
-#ifdef LP64
     int i = 0, shift = 60;
-#else
-    int i = 8, shift = 28;
-#endif
-
-    long sid = 0;
+    long long sid = 0;
     while (shift >= 0) {
         sid = sid | (STR_TO_SID[(int) str[i++]] & 0x0F) << shift;
         shift -= 4;
@@ -251,17 +246,9 @@ extern long str_to_sid(char *str)
     return sid;
 }
 
-extern int str_from_sid(char *dest, long sid)
+extern int str_from_sid(char *dest, long long sid)
 {
-#ifdef LP64
     int i = 0, shift = 60;
-#else
-    int i = 0, shift = 28;
-
-    while (i < 8)
-        dest[i++] = SID_TO_STR[0];
-#endif
-
     while (shift >= 0) {
         dest[i++] = SID_TO_STR[(sid >> shift) & 0x0F];
         shift -= 4;

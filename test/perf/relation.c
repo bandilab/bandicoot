@@ -25,12 +25,12 @@ static void perf_load_store(Env *env, int count)
 
     Rel *r = gen_rel(0, count);
 
-    long sid = tx_enter("", evars, wvars);
+    long long sid = tx_enter("", evars, wvars);
     rel_init(r, NULL, NULL);
 
-    long time = sys_millis();
+    long long time = sys_millis();
     rel_store(wvars->vols[0], "perf_rel", wvars->vers[0], r);
-    sys_print("%8s %d tuples in %dms\n", "write", count, sys_millis() - time);
+    sys_print("%8s %d tuples in %lldms\n", "write", count, sys_millis() - time);
 
     rel_free(r);
     tx_commit(sid);
@@ -47,7 +47,7 @@ static void perf_load_store(Env *env, int count)
         i++;
         tuple_free(t);
     }
-    sys_print("%8s %d tuples in %dms\n", "read", i, sys_millis() - time);
+    sys_print("%8s %d tuples in %lldms\n", "read", i, sys_millis() - time);
 
     rel_free(r);
     tx_commit(sid);
@@ -61,7 +61,7 @@ static void perf_join(int count)
 {
     Rel *join = rel_join(gen_rel(0, count), gen_rel(-count / 2, count / 2));
 
-    long time = sys_millis();
+    long long time = sys_millis();
     rel_init(join, NULL, NULL);
 
     Tuple *t;
@@ -71,7 +71,7 @@ static void perf_join(int count)
         res++;
     }
 
-    sys_print("%8s %dx%d tuples in %dms\n",
+    sys_print("%8s %dx%d tuples in %lldms\n",
               "join",
               count,
               count,
@@ -88,7 +88,7 @@ static void perf_project(int count)
     char *names[] = {"a"};
     Rel *rel = rel_project(gen_rel(0, count), names, 1);
 
-    long time = sys_millis();
+    long long time = sys_millis();
     rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
@@ -97,7 +97,7 @@ static void perf_project(int count)
         i++;
     }
 
-    sys_print("%8s %i tuples from %d in %dms\n",
+    sys_print("%8s %i tuples from %d in %lldms\n",
               "project",
               i,
               count,
@@ -122,7 +122,7 @@ static void perf_select(int count)
 
     rel = rel_select(rel, e);
 
-    long time = sys_millis();
+    long long time = sys_millis();
     rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
@@ -131,7 +131,7 @@ static void perf_select(int count)
         i++;
     }
 
-    sys_print("%8s %d tuples from %d in %dms\n",
+    sys_print("%8s %d tuples from %d in %lldms\n",
               "select",
               i,
               count,
@@ -145,7 +145,7 @@ static void perf_diff(int count)
     Rel *rel = rel_diff(gen_rel(0, count),
                         gen_rel(-count / 2, count / 2));
 
-    long time = sys_millis();
+    long long time = sys_millis();
     rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
@@ -154,7 +154,7 @@ static void perf_diff(int count)
         i++;
     }
 
-    sys_print("%8s %dx%d tuples (res=%d tuples) in %dms\n",
+    sys_print("%8s %dx%d tuples (res=%d tuples) in %lldms\n",
               "semidiff",
               count,
               count,
@@ -169,7 +169,7 @@ static void perf_union(int count)
     Rel *rel = rel_union(gen_rel(0, count),
                          gen_rel(-count / 2, count));
 
-    long time = sys_millis();
+    long long time = sys_millis();
     rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
@@ -178,7 +178,7 @@ static void perf_union(int count)
         i++;
     }
 
-    sys_print("%8s %dx%d tuples (res=%d tuples) in %dms\n",
+    sys_print("%8s %dx%d tuples (res=%d tuples) in %lldms\n",
               "union",
               count,
               count,
@@ -205,7 +205,7 @@ static void perf_extend(int count)
 
     rel = rel_extend(rel, names, e, 2);
 
-    long time = sys_millis();
+    long long time = sys_millis();
     rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
@@ -214,7 +214,7 @@ static void perf_extend(int count)
         i++;
     }
 
-    sys_print("%8s %d tuples in %dms\n",
+    sys_print("%8s %d tuples in %lldms\n",
               "extend",
               count,
               sys_millis() - time);
@@ -238,7 +238,7 @@ static void perf_sum(int count)
 
     rel = rel_sum(rel, gen_rel(0, count), names, types, sums, 3);
 
-    long time = sys_millis();
+    long long time = sys_millis();
     rel_init(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
@@ -247,7 +247,7 @@ static void perf_sum(int count)
         i++;
     }
 
-    sys_print("%8s %dx%d tuples in %dms\n",
+    sys_print("%8s %dx%d tuples in %lldms\n",
               "sum",
               count,
               count,
@@ -264,11 +264,11 @@ static void perf_eq(int count)
     rel_init(l, NULL, NULL);
     rel_init(r, NULL, NULL);
 
-    long time = sys_millis();
+    long long time = sys_millis();
 
     rel_eq(l, r);
 
-    sys_print("%8s %dx%d tuples in %dms\n",
+    sys_print("%8s %dx%d tuples in %lldms\n",
               "eq",
               count,
               count,

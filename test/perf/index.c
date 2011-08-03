@@ -6,9 +6,9 @@ static void perf_sort(int count, int pos[], int len)
 {
     TBuf *b = gen_tuples(-count / 2, count / 2);
 
-    long time = sys_millis();
+    long long time = sys_millis();
     index_sort(b, pos, len);
-    sys_print("sorted %d tuples in %dms\n", count, sys_millis() - time);
+    sys_print("sorted %d tuples in %lldms\n", count, sys_millis() - time);
 
     tbuf_clean(b);
     tbuf_free(b);
@@ -22,11 +22,11 @@ static void perf_find(int count, int pos[], int len)
 
     index_sort(b, pos, len);
 
-    long time = sys_millis();
+    long long time = sys_millis();
     for (int i = 0; i < FIND_CALLS; ++i)
         if (!index_has(b, t, pos, pos, len))
             fail();
-    sys_print("found %d tuples within %d-tuple index in %dms\n",
+    sys_print("found %d tuples within %d-tuple index in %lldms\n",
               FIND_CALLS, count, sys_millis() - time);
 
     tuple_free(t);
