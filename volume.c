@@ -27,6 +27,7 @@ limitations under the License.
 #include "expression.h"
 #include "summary.h"
 #include "relation.h"
+#include "list.h"
 #include "transaction.h"
 #include "environment.h"
 
@@ -48,6 +49,14 @@ struct {
     char names[MAX_VARS][MAX_NAME];
     int len;
 } gvars;
+
+typedef struct {
+    char id[MAX_ADDR];
+    IO *io;
+} Entry;
+
+/* TODO: remove items for closed but unused connections as well */
+static List *gvols; /* used to keep connections to the volumes alive */
 
 static void set_path(char *res, const char *name, long long sid, int part)
 {
@@ -127,38 +136,100 @@ static int read_var(IO *io, char *name, long long *ver)
     return 1;
 }
 
+static IO *get_io(const char *vid)
+{
+    IO *res = NULL;
+
+    for (List *it = gvols; it != NULL; it = it->next) {
+        Entry *e = it->elem;
+        if (str_cmp(e->id, vid) == 0) {
+            res = e->io;
+            break;
+        }
+    }
+
+    return res;
+}
+
+static IO *connect(const char *vid)
+{
+    IO *io = get_io(vid);
+
+    if (io == NULL) {
+        io = sys_try_connect(vid, STREAMED);
+
+        if (io != NULL) {
+            Entry *e = mem_alloc(sizeof(Entry));
+            str_cpy(e->id, vid);
+            e->io = io;
+
+            gvols = list_add(gvols, e);
+        }
+    }
+
+    return io;
+}
+
+static int rm_io(void *elem, const void *cmp)
+{
+    Entry *e = elem;
+    if (str_cmp(e->id, cmp) == 0) {
+        mem_free(e);
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static void close(const char *vid)
+{
+    IO *io = get_io(vid);
+    if (io != NULL) {
+        list_rm(&gvols, vid, rm_io);
+        sys_close(io);
+    }
+}
+
 static TBuf *read_net(const char *vid, const char *name, long long ver)
 {
-    int failed = 0;
     TBuf *res = NULL;
 
     char v[MAX_NAME] = "";
     str_cpy(v, name);
 
-    IO *io = sys_try_connect(vid, STREAMED);
+    IO *io = connect(vid);
     if (io == NULL)
         goto exit;
 
     if (sys_write(io, &T_READ, sizeof(T_READ)) < 0 ||
         sys_write(io, v, sizeof(v)) < 0 ||
         sys_write(io, &ver, sizeof(ver)) < 0)
-        goto exit;    
+    {
+        io = NULL;
+        goto exit;
+    }
 
     res = tbuf_read(io);
-    if (res == NULL)
+    if (res == NULL) {
+        io = NULL;
         goto exit;
+    }
 
     /* confirmation of the full read */
     int msg = 0;
-    if (sys_readn(io, &msg, sizeof(msg)) != sizeof(msg) || msg != R_READ)
-        failed = 1;
+    if (sys_readn(io, &msg, sizeof(msg)) != sizeof(msg) || msg != R_READ) {
+        io = NULL;
+        goto exit;
+    }
 
 exit:
-    if (io != NULL)
-        sys_close(io);
-    if (failed && res != NULL) {
-        tbuf_free(res);
+    if (io == NULL) {
+        if (res != NULL)
+            tbuf_free(res);
+
         res = NULL;
+        close(vid);
     }
 
     return res;
@@ -242,15 +313,13 @@ static Vars *sync_tx()
     return tx;
 }
 
-static void *serve(void *arg)
+static void *vol_thread(void *io)
 {
-    IO *cio = NULL, *sio = (IO*) arg;
     char name[MAX_NAME];
     long long ver;
 
-    for (;;) {
-        cio = sys_accept(sio, STREAMED);
-
+    IO *cio = io;
+    while (!cio->err) {
         int msg = 0;
         if (sys_readn(cio, &msg, sizeof(msg)) == sizeof(msg)) {
             if (msg == T_READ && read_var(cio, name, &ver)) {
@@ -271,11 +340,20 @@ static void *serve(void *arg)
                 sys_log('V', "file %s-%016llX written\n", name, ver);
             }
         }
-
-        sys_close(cio);
     }
-    sys_close(sio);
+    sys_close(cio);
 
+    return NULL;
+}
+
+static void *serve(void *sio)
+{
+    for (;;) {
+        IO *cio = sys_accept(sio, STREAMED);
+        sys_thread(vol_thread, cio);
+    }
+
+    sys_close(sio);
     return NULL;
 }
 
@@ -387,20 +465,30 @@ extern void vol_write(const char *vid,
     str_from_sid(sid, ver);
     str_cpy(v, var);
 
-    IO *io = sys_connect(vid, STREAMED);
+    IO *io = connect(vid);
+    if (io == NULL)
+        goto exit;
 
     if (sys_write(io, &T_WRITE, sizeof(T_WRITE)) < 0 ||
         sys_write(io, v, sizeof(v)) < 0 ||
-        sys_write(io, &ver, sizeof(ver)) < 0)
-        sys_die("volume: write failed to send '%s-%s'\n", v, sid);
+        sys_write(io, &ver, sizeof(ver)) < 0) {
+        io = NULL;
+        goto exit;
+    }
 
-    if (tbuf_write(buf, io) < 0)
-        sys_die("volume: write failed for '%s-%s'\n", v, sid);
+    if (tbuf_write(buf, io) < 0) {
+        io = NULL;
+        goto exit;
+    }
 
     /* confirmation of the full write */
     int msg = 0;
     if (sys_readn(io, &msg, sizeof(msg)) != sizeof(msg) || msg != R_WRITE)
-        sys_die("volume: write failed to confirm '%s-%s'\n", v, sid);
+        io = NULL;
 
-    sys_close(io);
+exit:
+    if (io == NULL) {
+        sys_die("volume: write failed for '%s-%s'\n", v, sid);
+        close(vid);
+    }
 }

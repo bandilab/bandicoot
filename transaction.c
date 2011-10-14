@@ -28,6 +28,7 @@ limitations under the License.
 #include "summary.h"
 #include "relation.h"
 #include "environment.h"
+#include "list.h"
 #include "transaction.h"
 
 static const int RUNNABLE = 1;
@@ -62,12 +63,6 @@ typedef struct {
     Mon *mon; /* monitor on which the caller/transaction is blocked if needed */
 } Entry;
 
-struct List {
-    void *elem;
-    struct List *next;
-};
-typedef struct List List;
-
 static struct {
     char *buf;
     int len;
@@ -85,49 +80,6 @@ static List *gents;
 static List *gvols;
 static Mon *gmon;
 static long long last_sid;
-
-static List *next(List *e)
-{
-    List *res = e->next;
-    mem_free(e);
-    return res;
-}
-
-static List *add(List *dest, void *elem)
-{
-    List *new = mem_alloc(sizeof(List));
-    new->elem = elem;
-    new->next = dest;
-
-    return new;
-}
-
-/* rm_elem method is used to:
-   - identify elems to be removed
-   - must mem_free the whole elem
-
-   elem is current elem from the list to be removed
-   cmp which can be used to compare the elem to */
-static void rm(List **list,
-               const void *cmp,
-               int (*rm_elem)(void *elem, const void *cmp))
-{
-    List *it = *list, **prev = list;
-    while (it) {
-        int rm = rm_elem(it->elem, cmp);
-        if (rm) {
-            *prev = it->next;
-
-            mem_free(it);
-
-            it = *list;
-            prev = list;
-        } else {
-            prev = &it->next;
-            it = it->next;
-        }
-    }
-}
 
 /* determines a version to read */
 static long long get_rsid(long long sid, const char name[])
@@ -205,7 +157,7 @@ static Entry *add_entry(long long sid,
     e->state = state;
     e->mon = mon_new();
 
-    gents = add(gents, e);
+    gents = list_add(gents, e);
 
     return e;
 }
@@ -217,7 +169,7 @@ static List *list_entries(long long sid)
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->sid == sid)
-            dest = add(dest, e);
+            dest = list_add(dest, e);
     }
 
     return dest;
@@ -249,7 +201,7 @@ static List *list_waiting(long long sid, const char name[], int a_type)
         Entry *e = it->elem;
         if (e->state == WAITING && e->sid <= sid
                 && e->a_type == a_type && str_cmp(e->name, name) == 0)
-            dest = add(dest, e);
+            dest = list_add(dest, e);
     }
 
     return dest;
@@ -291,8 +243,8 @@ static Vol *replace_volume(const char *vid, Vars *vars)
     vol->vars = vars;
     str_cpy(vol->id, vid);
 
-    rm(&gvols, vid, rm_volume);
-    gvols = add(gvols, vol);
+    list_rm(&gvols, vid, rm_volume);
+    gvols = list_add(gvols, vol);
 
     return vol;
 }
@@ -384,7 +336,7 @@ static void finish(long long sid, int final_state)
 
     List *sig = NULL; /* entries to signal (unlock) */
     List *it = list_entries(sid);
-    for (; it != NULL; it = next(it)) {
+    for (; it != NULL; it = list_next(it)) {
         Entry *e = it->elem;
         int prev_state = e->state;
         e->state = final_state;
@@ -404,14 +356,14 @@ static void finish(long long sid, int final_state)
             long long wsid = MAX_LONG;
             if (we != NULL) {
                 wsid = we->sid;
-                sig = add(sig, we);
+                sig = list_add(sig, we);
             }
 
             List *rents = list_waiting(wsid, e->name, READ);
-            for (; rents != NULL; rents = next(rents)) {
+            for (; rents != NULL; rents = list_next(rents)) {
                 Entry *re = rents->elem;
                 re->version = rsid;
-                sig = add(sig, re);
+                sig = list_add(sig, re);
             }
         }
 
@@ -419,9 +371,9 @@ static void finish(long long sid, int final_state)
     }
 
     wstate();
-    rm(&gents, NULL, rm_entry);
+    list_rm(&gents, NULL, rm_entry);
 
-    for (; sig != NULL; sig = next(sig)) {
+    for (; sig != NULL; sig = list_next(sig)) {
         Entry *e = sig->elem;
         mon_lock(e->mon);
         e->state = RUNNABLE;
@@ -446,10 +398,10 @@ extern void tx_free()
 {
     mon_lock(gmon);
 
-    for (; gents != NULL; gents = next(gents))
+    for (; gents != NULL; gents = list_next(gents))
         mem_free(gents->elem);
 
-    for (; gvols != NULL; gvols = next(gvols)) {
+    for (; gvols != NULL; gvols = list_next(gvols)) {
         Vol *vol = gvols->elem;
         vars_free(vol->vars);
         mem_free(gvols->elem);
@@ -750,7 +702,7 @@ exit:
 
     if (str_cmp(vid, "") != 0) {
         mon_lock(gmon);
-        rm(&gvols, vid, rm_volume);
+        list_rm(&gvols, vid, rm_volume);
         mon_unlock(gmon);
 
         sys_log('T', "volume %s disconnected\n", vid);
