@@ -82,11 +82,11 @@ static Mon *gmon;
 static long long last_sid;
 
 /* determines a version to read */
-static long long get_rsid(long long sid, const char name[])
+static long long get_rsid(List *ents, long long sid, const char *name)
 {
     long long res = -1;
 
-    for (List *it = gents; it != NULL; it = it->next) {
+    for (List *it = ents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED
                 && e->sid < sid && e->sid > res && str_cmp(e->name, name) == 0)
@@ -97,11 +97,11 @@ static long long get_rsid(long long sid, const char name[])
 }
 
 /* returns true if a given sid of a variable is active (being read) */
-static int is_active(const char name[], long long sid)
+static int is_active(List *ents, const char *name, long long sid)
 {
     int res = 0;
 
-    for (List *it = gents; !res && it != NULL; it = it->next) {
+    for (List *it = ents; !res && it != NULL; it = it->next) {
         Entry *e = it->elem;
         res = (e->state == RUNNABLE && e->a_type == READ
                 && e->version == sid && str_cmp(e->name, name) == 0);
@@ -115,7 +115,7 @@ static int is_active(const char name[], long long sid)
     * committed read
     * reverted read or write
 */
-static int rm_entry(void *elem, const void *cmp)
+static int rm_entry(List *head, void *elem, const void *cmp)
 {
     Entry *e = elem;
     int rm = 0;
@@ -123,9 +123,9 @@ static int rm_entry(void *elem, const void *cmp)
         long long sid = e->sid;
         char *name = e->name;
 
-        long long rsid = get_rsid(MAX_LONG, name);
+        long long rsid = get_rsid(head, MAX_LONG, name);
 
-        int act = is_active(name, sid);
+        int act = is_active(head, name, sid);
 
         if (sid < rsid && !act)
             rm = 1;
@@ -142,7 +142,7 @@ static int rm_entry(void *elem, const void *cmp)
 }
 
 static Entry *add_entry(long long sid,
-                        const char name[],
+                        const char *name,
                         int a_type,
                         long long version,
                         int state)
@@ -157,30 +157,29 @@ static Entry *add_entry(long long sid,
     e->state = state;
     e->mon = mon_new();
 
-    gents = list_add(gents, e);
+    gents = list_prepend(gents, e);
 
     return e;
 }
 
-static List *list_entries(long long sid)
+static List *list_entries(List *ents, long long sid)
 {
     List *dest = NULL;
-
-    for (List *it = gents; it != NULL; it = it->next) {
+    for (List *it = ents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->sid == sid)
-            dest = list_add(dest, e);
+            dest = list_prepend(dest, e);
     }
 
     return dest;
 }
 
-static Entry *get_min_waiting(const char name[], int a_type)
+static Entry *get_min_waiting(List *ents, const char *name, int a_type)
 {
     long long min_sid = MAX_LONG;
     Entry *res = 0;
 
-    for (List *it = gents; it != NULL; it = it->next) {
+    for (List *it = ents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->state == WAITING && e->sid < min_sid
                 && e->a_type == a_type && str_cmp(e->name, name) == 0)
@@ -193,25 +192,27 @@ static Entry *get_min_waiting(const char name[], int a_type)
     return res;
 }
 
-static List *list_waiting(long long sid, const char name[], int a_type)
+static List *list_waiting(List *ents,
+                          long long sid,
+                          const char *name,
+                          int a_type)
 {
     List *dest = NULL;
-
-    for (List *it = gents; it != NULL; it = it->next) {
+    for (List *it = ents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->state == WAITING && e->sid <= sid
                 && e->a_type == a_type && str_cmp(e->name, name) == 0)
-            dest = list_add(dest, e);
+            dest = list_prepend(dest, e);
     }
 
     return dest;
 }
 
-static long long get_wsid(const char name[])
+static long long get_wsid(List *ents, const char *name)
 {
     long long res = -1;
 
-    for (List *it = gents; it != NULL; it = it->next) {
+    for (List *it = ents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == RUNNABLE
                 && str_cmp(e->name, name) == 0)
@@ -224,7 +225,7 @@ static long long get_wsid(const char name[])
     return res;
 }
 
-static int rm_volume(void *elem, const void *cmp)
+static int rm_volume(List *head, void *elem, const void *cmp)
 {
     Vol *e = elem;
     if (str_cmp(e->id, cmp) == 0) {
@@ -243,8 +244,8 @@ static Vol *replace_volume(const char *vid, Vars *vars)
     vol->vars = vars;
     str_cpy(vol->id, vid);
 
-    list_rm(&gvols, vid, rm_volume);
-    gvols = list_add(gvols, vol);
+    gvols = list_rm(gvols, vid, rm_volume);
+    gvols = list_prepend(gvols, vol);
 
     return vol;
 }
@@ -290,12 +291,12 @@ static void set_vols(Vars *v, const char *addr)
         closest_vol(v->vols[i], addr, v->names[i], v->vers[i]);
 }
 
-static void current_state(long long vers[])
+static void current_state(List *ents, long long vers[])
 {
     for (int i = 0; i < gvars.len; ++i)
         vers[i] = 0;
 
-    for (List *it = gents; it != NULL; it = it->next) {
+    for (List *it = ents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED) {
             int idx = array_scan(gvars.names, gvars.len, e->name);
@@ -308,7 +309,7 @@ static void current_state(long long vers[])
 extern void wstate()
 {
     long long vers[gvars.len];
-    current_state(vers);
+    current_state(gents, vers);
 
     char sid[MAX_NAME];
     char *buf = mem_alloc(gvars.len * (MAX_NAME + MAX_NAME));
@@ -335,7 +336,7 @@ static void finish(long long sid, int final_state)
     mon_lock(gmon);
 
     List *sig = NULL; /* entries to signal (unlock) */
-    List *it = list_entries(sid);
+    List *it = list_entries(gents, sid);
     for (; it != NULL; it = list_next(it)) {
         Entry *e = it->elem;
         int prev_state = e->state;
@@ -344,26 +345,26 @@ static void finish(long long sid, int final_state)
         if (e->a_type == WRITE && prev_state == RUNNABLE) {
             long long rsid = e->version;
             if (final_state == REVERTED)
-                rsid = get_rsid(e->sid, e->name);
+                rsid = get_rsid(gents, e->sid, e->name);
             else {
                 Vol *vol = get_volume(e->wvid);
                 if (vol != NULL)
                     vars_put(vol->vars, e->name, e->version);
             }
 
-            Entry *we = get_min_waiting(e->name, WRITE);
+            Entry *we = get_min_waiting(gents, e->name, WRITE);
 
             long long wsid = MAX_LONG;
             if (we != NULL) {
                 wsid = we->sid;
-                sig = list_add(sig, we);
+                sig = list_prepend(sig, we);
             }
 
-            List *rents = list_waiting(wsid, e->name, READ);
+            List *rents = list_waiting(gents, wsid, e->name, READ);
             for (; rents != NULL; rents = list_next(rents)) {
                 Entry *re = rents->elem;
                 re->version = rsid;
-                sig = list_add(sig, re);
+                sig = list_prepend(sig, re);
             }
         }
 
@@ -371,7 +372,7 @@ static void finish(long long sid, int final_state)
     }
 
     wstate();
-    list_rm(&gents, NULL, rm_entry);
+    gents = list_rm(gents, NULL, rm_entry);
 
     for (; sig != NULL; sig = list_next(sig)) {
         Entry *e = sig->elem;
@@ -546,7 +547,7 @@ extern long long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
     for (int i = 0; i < wvars->len; ++i) {
         const char *name = wvars->names[i];
         int state = WAITING;
-        if (get_wsid(name) == -1)
+        if (get_wsid(gents, name) < 0)
             state = RUNNABLE;
 
         we[i] = add_entry(sid, name, WRITE, sid, state);
@@ -557,11 +558,11 @@ extern long long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
 
     for (int i = 0; i < rvars->len; ++i) {
         const char *name = rvars->names[i];
-        long long rsid = get_rsid(sid, name);
+        long long rsid = get_rsid(gents, sid, name);
 
         int state = RUNNABLE;
         if (rw) {
-            long long wsid = get_wsid(name);
+            long long wsid = get_wsid(gents, name);
             if (wsid > -1 && sid > wsid) {
                 rsid = -1;
                 state = WAITING;
@@ -596,7 +597,7 @@ extern long long enter(const char *eid, Vars *rvars, Vars *wvars, Mon *m)
 
 extern void tx_attach(const char *address)
 {
-    gio = sys_connect(address, STREAMED);
+    gio = sys_connect(address, IO_STREAM);
 }
 
 extern void tx_detach()
@@ -640,7 +641,7 @@ static void *tx_thread(void *io)
                 vars_write(rvars, io) < 0 ||
                 vars_write(wvars, io) < 0)
             {
-                tx_revert(sid);
+                finish(sid, REVERTED);
                 goto exit;
             }
 
@@ -702,7 +703,7 @@ exit:
 
     if (str_cmp(vid, "") != 0) {
         mon_lock(gmon);
-        list_rm(&gvols, vid, rm_volume);
+        gvols = list_rm(gvols, vid, rm_volume);
         mon_unlock(gmon);
 
         sys_log('T', "volume %s disconnected\n", vid);
@@ -715,7 +716,7 @@ exit:
 static void *serve(void *sio)
 {
     for (;;) {
-        IO *cio = sys_accept(sio, STREAMED);
+        IO *cio = sys_accept(sio, IO_STREAM);
         sys_thread(tx_thread, cio);
     }
 

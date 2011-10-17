@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ limitations under the License.
 #include "../array.h"
 #include "../config.h"
 #include "../memory.h"
+#include "../list.h"
 #include "../string.h"
 #include "../number.h"
 #include "../system.h"

@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -124,17 +124,17 @@ extern Head *head_join(Head *l, Head *r, int lpos[], int rpos[], int *len)
 {
     Head *res = head_cpy(l);
     for (int i = 0; i < r->len; ++i)
-        if (array_find(l->names, l->len,  r->names[i]) == -1) {
-             str_cpy(res->names[res->len],  r->names[i]);
-             res->types[res->len] = r->types[i];
-             res->len++;
+        if (array_find(l->names, l->len,  r->names[i]) < 0) {
+            str_cpy(res->names[res->len],  r->names[i]);
+            res->types[res->len] = r->types[i];
+            res->len++;
         }
 
     sort(res);
     *len = res->len;
     for (int i = 0; i < res->len; ++i) {
         lpos[i] = array_find(l->names, l->len, res->names[i]);
-        if (lpos[i] == -1)
+        if (lpos[i] < 0)
             rpos[i] = array_find(r->names, r->len, res->names[i]);
         else
             rpos[i] = -1;

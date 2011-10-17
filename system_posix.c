@@ -79,7 +79,7 @@ extern int sys_exec(char *const argv[])
     if ((pid = fork()) == 0) {
         execvp(argv[0], argv);
         sys_die("sys: execv of %s failed\n", argv[0]);
-    } else if (pid == -1)
+    } else if (pid < 0)
         sys_die("sys: cannot create a child process\n");
 
     return pid;
@@ -95,9 +95,9 @@ extern char sys_wait(int pid)
     int res, status;
     do {
         res = waitpid(pid, &status, WUNTRACED | WCONTINUED);
-    } while (res == -1 && errno == EINTR);
+    } while (res < 0 && errno == EINTR);
 
-    if (res == -1)
+    if (res < 0)
         sys_die("sys: wait for child pid %d failed\n", pid);
 
     return WIFEXITED(status) ? WEXITSTATUS(status) : PROC_FAIL;
@@ -133,7 +133,12 @@ extern IO *sys_accept(IO *sock, int chunked)
 
 extern void net_close(IO *io)
 {
-    if (close(io->fd) < 0)
+    int res = shutdown(io->fd, SHUT_RDWR);
+    if (res < 0 && errno != ENOTCONN)
+        sys_die("sys: cannot shutdown socket\n");
+
+    res = close(io->fd);
+    if (res < 0)
         sys_die("sys: cannot close socket\n");
 }
 
@@ -141,7 +146,7 @@ extern int net_port(int fd)
 {
     struct sockaddr_in addr;
     unsigned int size = sizeof(addr);
-    if (getsockname(fd, (struct sockaddr*) &addr, &size) == -1)
+    if (getsockname(fd, (struct sockaddr*) &addr, &size) < 0)
         sys_die("sys: cannot lookup the socket details\n");
 
     return ntohs(addr.sin_port);

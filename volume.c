@@ -33,10 +33,10 @@ limitations under the License.
 
 #include "volume.h"
 
-char path[MAX_FILE_PATH];
+static char path[MAX_FILE_PATH];
 
-const int SUFFIX_LEN = 5;
-const char *SUFFIX = ".part";
+static const int SUFFIX_LEN = 5;
+static const char *SUFFIX = ".part";
 
 static const int T_READ = 1;
 static const int R_READ = 2;
@@ -139,7 +139,6 @@ static int read_var(IO *io, char *name, long long *ver)
 static IO *get_io(const char *vid)
 {
     IO *res = NULL;
-
     for (List *it = gvols; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (str_cmp(e->id, vid) == 0) {
@@ -154,23 +153,22 @@ static IO *get_io(const char *vid)
 static IO *connect(const char *vid)
 {
     IO *io = get_io(vid);
-
     if (io == NULL) {
-        io = sys_try_connect(vid, STREAMED);
+        io = sys_try_connect(vid, IO_STREAM);
 
         if (io != NULL) {
             Entry *e = mem_alloc(sizeof(Entry));
             str_cpy(e->id, vid);
             e->io = io;
 
-            gvols = list_add(gvols, e);
+            gvols = list_prepend(gvols, e);
         }
     }
 
     return io;
 }
 
-static int rm_io(void *elem, const void *cmp)
+static int rm_io(List *head, void *elem, const void *cmp)
 {
     Entry *e = elem;
     if (str_cmp(e->id, cmp) == 0) {
@@ -186,7 +184,7 @@ static void close(const char *vid)
 {
     IO *io = get_io(vid);
     if (io != NULL) {
-        list_rm(&gvols, vid, rm_io);
+        gvols = list_rm(gvols, vid, rm_io);
         sys_close(io);
     }
 }
@@ -319,26 +317,36 @@ static void *vol_thread(void *io)
     long long ver;
 
     IO *cio = io;
-    while (!cio->err) {
+    while (!cio->stop) {
         int msg = 0;
-        if (sys_readn(cio, &msg, sizeof(msg)) == sizeof(msg)) {
-            if (msg == T_READ && read_var(cio, name, &ver)) {
+        if (sys_readn(cio, &msg, sizeof(msg)) == sizeof(msg) &&
+            read_var(cio, name, &ver))
+        {
+            char *op = "UNKNOWN";
+            if (msg == T_READ) {
+                msg = R_READ;
+                op = "R_READ";
+
                 TBuf *buf = read_file(name, ver);
                 if (buf != NULL) {
                     tbuf_write(buf, cio);
                     tbuf_free(buf);
-                    sys_write(cio, &R_READ, sizeof(R_READ));
                 }
-                sys_log('V', "file %s-%016llX read\n", name, ver);
-            } else if (msg == T_WRITE && read_var(cio, name, &ver)) {
+            } else if (msg == T_WRITE) {
+                msg = R_WRITE;
+                op = "R_WRITE";
+
                 TBuf *buf = tbuf_read(cio);
                 if (buf != NULL) {
                     write(name, ver, buf);
                     tbuf_free(buf);
-                    sys_write(cio, &R_WRITE, sizeof(R_WRITE));
                 }
-                sys_log('V', "file %s-%016llX written\n", name, ver);
             }
+
+            if (sys_write(cio, &msg, sizeof(msg)) < 0)
+                sys_log('V', "%s failed\n", op);
+            else
+                sys_log('V', "%s %s-%016llX succeeded\n", op, name, ver);
         }
     }
     sys_close(cio);
@@ -349,7 +357,7 @@ static void *vol_thread(void *io)
 static void *serve(void *sio)
 {
     for (;;) {
-        IO *cio = sys_accept(sio, STREAMED);
+        IO *cio = sys_accept(sio, IO_STREAM);
         sys_thread(vol_thread, cio);
     }
 

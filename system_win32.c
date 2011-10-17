@@ -169,7 +169,7 @@ extern int net_port(int fd)
 {
     struct sockaddr_in addr;
     int size = sizeof(addr);
-    if (getsockname(fd, (struct sockaddr*) &addr, &size) == -1)
+    if (getsockname(fd, (struct sockaddr*) &addr, &size) < 0)
         sys_die("sys: cannot lookup the socket details\n");
 
     return ntohs(addr.sin_port);

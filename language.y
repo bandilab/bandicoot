@@ -435,7 +435,7 @@ extern Head *env_head(Env *env, const char *var)
 extern Func *env_func(Env *env, const char *name)
 {
     int idx = array_scan(env->fns.names, env->fns.len, name);
-    return (idx == -1) ? NULL : env->fns.funcs[idx];
+    return idx < 0 ? NULL : env->fns.funcs[idx];
 }
 
 static L_Attrs attr_name(const char *name)
@@ -572,8 +572,7 @@ static void add_relvar_inline(Head *head, const char *var)
 static void add_relvar(const char *rel, const char *var)
 {
     int i = array_scan(genv->types.names, genv->types.len, rel);
-
-    if (i == -1)
+    if (i < 0)
         yyerror("unknown type '%s'", rel);
     else if (array_scan(genv->vars.names, genv->vars.len, var) > -1)
         yyerror("variable '%s' is already defined", var);
@@ -727,7 +726,7 @@ static void stmt_create(L_Stmt_Type type, const char *name, Rel *r)
             yyerror("cannot reassign variable '%s'", name);
 
         idx = array_scan(genv->vars.names, genv->vars.len, name);
-        if (idx == -1)
+        if (idx < 0)
             yyerror("unknown variable '%s'", name);
 
         Head *wh = genv->vars.heads[idx];
@@ -865,7 +864,7 @@ static Rel *r_load(const char *name)
         if (array_scan(fn->w.names, fn->w.len, name) > -1)
             yyerror("variable '%s' cannot be read (it was modified by "
                     "one of the previous statements)", name);
-        if (array_scan(fn->r.names, fn->r.len, name) == -1)
+        if (array_scan(fn->r.names, fn->r.len, name) < 0)
             fn->r.names[fn->r.len++] = str_dup(name);
 
         res = rel_load(genv->vars.heads[i], name);

@@ -19,13 +19,17 @@ limitations under the License.
 extern void sys_init(int log);
 
 /* input/output */
-static const int STREAMED = 0;
-static const int CHUNKED = 1;
+static const int IO_STREAM = 0;
+static const int IO_CHUNK = 1;
+
+/* io->stop flags */
+static const int IO_ERROR = 1;
+static const int IO_CLOSE = 2;
+static const int IO_TERM = 4;
 
 struct IO {
     int fd;
-    int err;
-    int term;
+    int stop;
     int (*read)(struct IO *io, void *buf, int size);
     int (*write)(struct IO *io, const void *buf, int size);
     void (*close)(struct IO *io);
@@ -72,7 +76,7 @@ extern IO *sys_accept(IO *socket, int chunked);
 extern IO *sys_connect(const char *address, int chunked);
 extern IO *sys_try_connect(const char *address, int chunked);
 extern int sys_iready(IO *io, int millis);
-extern int sys_proxy(IO *cio, IO *pio, int *cnt);
+extern void sys_proxy(IO *cio, int *ccnt, IO *pio, int *pcnt);
 
 /* misc */
 extern void sys_print(const char *msg, ...);

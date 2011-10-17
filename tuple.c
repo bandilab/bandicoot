@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -106,9 +106,7 @@ extern Tuple *tuple_join(Tuple *l, Tuple *r, int lpos[], int rpos[], int len)
 {
     Value res[len];
     for (int i = 0; i < len; ++i)
-        res[i] = rpos[i] == -1
-                 ? tuple_attr(l, lpos[i])
-                 : tuple_attr(r, rpos[i]);
+        res[i] = rpos[i] < 0 ? tuple_attr(l, lpos[i]) : tuple_attr(r, rpos[i]);
 
     return tuple_new(res, len);
 }

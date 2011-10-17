@@ -20,6 +20,7 @@ limitations under the License.
 #include "memory.h"
 #include "string.h"
 #include "array.h"
+#include "list.h"
 #include "head.h"
 #include "http.h"
 #include "value.h"
@@ -34,9 +35,14 @@ limitations under the License.
 
 extern const char *VERSION;
 
-#define QUEUE_LEN 128
+/* number of concurrently processing requests */
 #define THREADS 8
+
+/* how long to wait for a processor to connect */
 #define PROC_WAIT_SEC 5
+
+/* how long to keep-alive client connection since it was last used */
+#define KEEP_ALIVE_MS 5000
 
 /* error messages for the clients */
 static const int ERR_UNKNOWN_FN = 0;
@@ -54,56 +60,105 @@ static const struct {
                  {.code = 4, .msg = "duplicate parameters are not supported"}};
 
 typedef struct {
+    List *head;
+    List *tail;
+    Mon *mon;
+} Queue;
+
+typedef struct {
     char exe[MAX_FILE_PATH];
     char tx[MAX_ADDR];
+    Queue *runq;
+    Queue *waitq;
 } Exec;
 
-struct {
-    int pos;
-    int len;
-    IO *ios[QUEUE_LEN];
-    Mon *mon;
-} queue;
+typedef struct {
+    IO *io;
+    long long time;
+} Conn;
 
-static void queue_init()
+static Conn *conn_new(IO *io)
 {
-    queue.pos = -1;
-    queue.len = QUEUE_LEN;
-    queue.mon = mon_new();
+    Conn *res = mem_alloc(sizeof(Conn));
+    res->io = io;
+    res->time = sys_millis();
+
+    return res;
 }
 
-static void queue_put(IO *io)
+static void conn_free(Conn *c)
 {
-    mon_lock(queue.mon);
-    while (queue.pos >= queue.len)
-        mon_wait(queue.mon);
-
-    queue.pos++;
-    queue.ios[queue.pos] = io;
-
-    mon_signal(queue.mon);
-    mon_unlock(queue.mon);
+    sys_close(c->io);
+    mem_free(c);
 }
 
-static IO *queue_get()
+static Queue *queue_new()
 {
-    mon_lock(queue.mon);
-    while (queue.pos < 0)
-        mon_wait(queue.mon);
+    Queue *q = mem_alloc(sizeof(Queue));
+    q->head = NULL;
+    q->tail = NULL;
+    q->mon = mon_new();
 
-    IO *io = queue.ios[queue.pos];
-    queue.pos--;
+    return q;
+}
 
-    mon_signal(queue.mon);
-    mon_unlock(queue.mon);
+static void queue_free(Queue *q)
+{
+    for (List *it = q->head; it != NULL; it = list_next(it))
+        conn_free(it->elem);
+    mon_free(q->mon);
+    mem_free(q);
+}
 
-    return io;
+static void queue_put(Queue *q, Conn *conn)
+{
+    mon_lock(q->mon);
+
+    q->head = list_prepend(q->head, conn);
+    if (q->tail == NULL)
+        q->tail = q->head;
+
+    mon_signal(q->mon);
+    mon_unlock(q->mon);
+}
+
+static Conn *queue_get(Queue *q)
+{
+    mon_lock(q->mon);
+    while (q->tail == NULL)
+        mon_wait(q->mon);
+
+    Conn *conn = q->tail->elem;
+    q->tail = list_prev(q->tail);
+    if (q->tail == NULL)
+        q->head = NULL;
+
+    mon_unlock(q->mon);
+
+    return conn;
+}
+
+static void *waitq_thread(void *arg)
+{
+    Exec *e = arg;
+    for (;;) {
+        Conn *c = queue_get(e->waitq);
+        if (c->io->stop)
+            conn_free(c);
+        else if (sys_iready(c->io, 0))
+            queue_put(e->runq, c);
+        else if (sys_millis() - c->time > KEEP_ALIVE_MS)
+            conn_free(c);
+        else
+            queue_put(e->waitq, c);
+    }
+
+    return NULL;
 }
 
 static void *exec_thread(void *arg)
 {
-    Exec *x = arg;
-
+    Exec *e = arg;
     for (;;) {
         int p = 0, pid = -1;
 
@@ -111,25 +166,29 @@ static void *exec_thread(void *arg)
         IO *sio = sys_socket(&p);
         char port[8];
         str_print(port, "%d", p);
-        char *argv[] = {x->exe, "processor", "-p", port, "-t", x->tx, NULL};
+        char *argv[] = {e->exe, "processor", "-p", port, "-t", e->tx, NULL};
 
         pid = sys_exec(argv);
         if (!sys_iready(sio, PROC_WAIT_SEC)) {
             sys_log('E', "failed to fork a processor\n");
         } else {
-            IO *pio = sys_accept(sio, CHUNKED);
-            int err = 0, cnt = 0;
-            while (!err) {
-                IO *cio = queue_get();
-                err = sys_proxy(cio, pio, &cnt);
+            IO *pio = sys_accept(sio, IO_CHUNK);
+            int ok = 1;
+            while (ok) {
+                pio->stop = 0;
+                Conn *c = queue_get(e->runq);
 
-                if (err) {
-                    int status = -500;
-                    if (cnt == 0) /* only if nothing was sent to the client */
-                        status = http_500(cio);
+                int pcnt = 0, ccnt = 0;
+                sys_proxy(c->io, &ccnt, pio, &pcnt);
+
+                ok = pio->stop == IO_TERM || (ccnt == 0 && !pio->stop);
+                if (!ok && pcnt == 0) {
+                    int status = http_500(c->io);
                     sys_log('E', "failed with status %d\n", status);
                 }
-                sys_close(cio);
+
+                c->time = sys_millis();
+                queue_put(e->waitq, c);
             }
             sys_close(pio);
         }
@@ -141,7 +200,7 @@ static void *exec_thread(void *arg)
         }
     }
 
-    mem_free(x);
+    mem_free(e);
 
     return NULL;
 }
@@ -159,11 +218,12 @@ static char *err(int err, char *buf)
 static void processor(const char *tx_addr, int port)
 {
     sys_init(1);
+    sys_log('E', "started port=%d, tx=%s\n", port, tx_addr);
 
     /* connect to the control thread */
     char addr[MAX_ADDR];
     sys_address(addr, port);
-    IO *io = sys_connect(addr, CHUNKED);
+    IO *io = sys_connect(addr, IO_CHUNK);
 
     tx_attach(tx_addr);
 
@@ -171,7 +231,7 @@ static void processor(const char *tx_addr, int port)
     char *code = tx_program();
     char *res = mem_alloc(MAX_BLOCK);
 
-    while (!io->err) {
+    while (!io->stop) {
         sys_iready(io, -1);
 
         int status = -1;
@@ -182,7 +242,7 @@ static void processor(const char *tx_addr, int port)
         Vars *r = NULL, *w = NULL;
 
         Http_Req *req = http_parse(io);
-        if (io->err)
+        if (io->stop)
             goto exit;
 
         if (req == NULL) {
@@ -375,14 +435,20 @@ static int parse_port(char *p)
 
 static void multiplex(const char *exe, const char *tx_addr, int port)
 {
-    queue_init();
+    Queue *runq = queue_new();
+    Queue *waitq = queue_new();
 
     for (int i = 0; i < THREADS; ++i) {
         Exec *e = mem_alloc(sizeof(Exec));
         str_cpy(e->exe, exe);
         str_cpy(e->tx, tx_addr);
+        e->runq = runq;
+        e->waitq = waitq;
 
         sys_thread(exec_thread, e);
+
+        if (i == 0) /* only one waitq thread (reuses the same operand) */
+            sys_thread(waitq_thread, e);
     }
 
     IO *sio = sys_socket(&port);
@@ -390,11 +456,12 @@ static void multiplex(const char *exe, const char *tx_addr, int port)
     sys_log('E', "started port=%d, tx=%s\n", port, tx_addr);
 
     for (;;) {
-        IO *cio = sys_accept(sio, STREAMED);
-        queue_put(cio);
+        IO *io = sys_accept(sio, IO_STREAM);
+        queue_put(waitq, conn_new(io));
     }
 
-    mon_free(queue.mon);
+    queue_free(waitq);
+    queue_free(runq);
 }
 
 int main(int argc, char *argv[])

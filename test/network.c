@@ -21,7 +21,7 @@ static void test_basic(IO *sio, char *exec, char *addr)
 {
     char *a[] = {exec, "basic", addr, NULL};
     int pid = sys_exec(a);
-    IO *pio = sys_accept(sio, STREAMED);
+    IO *pio = sys_accept(sio, IO_STREAM);
 
     char buf[16];
     int read = sys_readn(pio, buf, 6);
@@ -43,25 +43,27 @@ static void test_proxy(IO *sio, char *exec, char *addr, char cm, char pm)
     char cmode[2]; cmode[0] = cm; cmode[1] = '\0';
     char *a1[] = {exec, "client", addr, cmode, NULL};
     int pid1 = sys_exec(a1);
-    IO *pio1 = sys_accept(sio, STREAMED);
+    IO *pio1 = sys_accept(sio, IO_STREAM);
 
     char pmode[2]; pmode[0] = pm; pmode[1] = '\0';
     char *a2[] = {exec, "processor", addr, pmode, NULL};
     int pid2 = sys_exec(a2);
-    IO *pio2 = sys_accept(sio, CHUNKED);
+    IO *pio2 = sys_accept(sio, IO_CHUNK);
 
-    int cnt = 0, err = sys_proxy(pio1, pio2, &cnt);
+    int ccnt = 0, pcnt = 0;
+    sys_proxy(pio1, &ccnt, pio2, &pcnt);
+    int err = pio1->stop || pio2->stop & ~IO_TERM;
     if (cm == OK && pm == OK) {
-        if (err || cnt == 0)
+        if (err || pcnt == 0)
             fail();
     } else if (cm == WAIT && pm == ERR_COMPLETE) {
-        if (!err || cnt > 0)
+        if (!err || pcnt > 0 || pio2->stop & IO_TERM)
             fail();
     } else if (cm == WAIT && pm == ERR_PARTIAL) {
-        if (!err || cnt == 0)
+        if (!err || pcnt == 0 || pio2->stop & IO_TERM)
             fail();
     } else if (cm == DISCONNECT && pm == OK) {
-        if (!err)
+        if (!err || pio1->stop & ~IO_CLOSE)
             fail();
     }
 
@@ -74,7 +76,7 @@ static void test_proxy(IO *sio, char *exec, char *addr, char cm, char pm)
 
 static void _basic(char *addr)
 {
-    IO *io = sys_connect(addr, STREAMED);
+    IO *io = sys_connect(addr, IO_STREAM);
     if (sys_write(io, "hello", 6) < 0)
         fail();
 
@@ -83,7 +85,7 @@ static void _basic(char *addr)
 
 static void _client(char *addr, char *m)
 {
-    IO *io = sys_connect(addr, STREAMED);
+    IO *io = sys_connect(addr, IO_STREAM);
     if (sys_write(io, "hello", 6) < 0)
         return;
 
@@ -101,7 +103,7 @@ static void _client(char *addr, char *m)
 
 static void _processor(char *addr, char *m)
 {
-    IO *io = sys_connect(addr, CHUNKED);
+    IO *io = sys_connect(addr, IO_CHUNK);
     char buf[6];
     int size = 6, read = sys_read(io, buf, size);
     if (read != size || str_cmp(buf, "hello") != 0)

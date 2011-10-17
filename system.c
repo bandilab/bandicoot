@@ -23,11 +23,13 @@ static int net_port(int fd);
 
 static int fs_read(IO *io, void *buf, int size)
 {
-    int res = read(io->fd, buf, size);
-    if (res < 0)
+    int r = read(io->fd, buf, size);
+    if (r < 0)
         sys_die("sys: cannot read %d bytes from file %d\n", size, io->fd);
+    if (r == 0)
+        io->stop |= IO_CLOSE;
 
-    return res;
+    return r;
 }
 
 static int fs_write(IO *io, const void *buf, int size)
@@ -45,20 +47,6 @@ static void fs_close(IO *io)
         sys_die("sys: cannot close file descriptor\n");
 }
 
-static int recvn(IO *io, void *buf, int size)
-{
-    int r, idx = 0;
-    do {
-        r = recv(io->fd, buf + idx, size - idx, 0);
-        r = (r < 0 ? -1 : r);
-        io->err = io->err || (r <= 0);
-
-        idx += r;
-    } while (r > 0 && idx < size);
-
-    return idx;
-}
-
 static int net_open()
 {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -67,83 +55,84 @@ static int net_open()
 
     char on[sizeof(int)];
     mem_set(on, 1, sizeof(on));
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, on, sizeof(on)) == -1)
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, on, sizeof(on)) < 0)
         return -1;
 
     mem_set(on, 1, sizeof(on));
-    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, on, sizeof(on)) == -1)
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, on, sizeof(on)) < 0)
         return -1;
 
     return fd;
 }
 
+static int readn(IO *io, void *buf, int size, int (*r)(IO*, void*, int))
+{
+    int read, idx = 0;
+    do {
+        read = r(io, buf + idx, size - idx);
+        idx += read < 0 ? 0 : read;
+    } while (!io->stop && idx < size);
+
+    return idx;
+}
+
 static int net_read(IO *io, void *buf, int size)
 {
     int r = recv(io->fd, buf, size, 0);
-    io->err = io->err || (r <= 0);
+    if (r < 0)
+        io->stop |= IO_ERROR;
+    if (r == 0)
+        io->stop |= IO_CLOSE;
 
     return r < 0 ? -1 : r;
 }
 
 static int net_read_chunk(IO *io, void *buf, int size)
 {
-    int sz = 0;
-    if (recvn(io, &sz, sizeof(sz)) != sizeof(sz))
-        io->err = 1;
-    else {
-        io->term = 0;
-        if (sz == -1)
-            io->term = 1;
+    int r = 0, sz = 0;
+    if (readn(io, &sz, sizeof(sz), net_read) == sizeof(sz)) {
+        if (sz < 0)
+            io->stop |= IO_TERM;
         else if (sz > size)
-            io->err = 1;
+            io->stop |= IO_ERROR;
         else if (sz > 0)
-            io->err = io->err || (recvn(io, buf, sz) != sz);
+            r = readn(io, buf, sz, net_read);
     }
 
-    return sz < 0 ? -1 : sz;
+    return io->stop & ~IO_TERM ? -1 : r;
 }
 
 static int net_write(IO *io, const void *buf, int size)
 {
     int w = send(io->fd, buf, size, 0) != size ? -1 : size;
-    io->err = io->err || (w == -1);
+    if (w < 0)
+        io->stop |= IO_ERROR;
 
     return w;
 }
 
 static int net_write_chunk(IO *io, const void *buf, int size)
 {
-    int off = 0, szof = sizeof(size);
+    if (size < 0)
+        net_write(io, &size, sizeof(size));
 
-    if (size == -1  && send(io->fd, (void*)&size, szof, 0) != szof)
-        io->err = 1;
+    int off = 0;
+    while (size > 0 && !io->stop) {
+        int len = size > MAX_BLOCK ? MAX_BLOCK : size;
 
-    while (size > 0 && !io->err) {
-        int len = (size > MAX_BLOCK) ? MAX_BLOCK : size;
-
-        if (send(io->fd, (void*)&len, sizeof(len), 0) != sizeof(len))
-            io->err = 1;
-        else {
-            int w = send(io->fd, buf + off, len, 0);
-            if (w != len) {
-                io->err = io->err;
-                off = -1;
-            } else
-                off += w;
-        }
-
+        net_write(io, &len, sizeof(len));
+        off += net_write(io, buf + off, len);
         size -= len;
     }
 
-    return off;
+    return io->stop ? -1 : off;
 }
 
 static IO *alloc_io(int fd)
 {
     IO *io = mem_alloc(sizeof(IO));
     io->fd = fd;
-    io->err = 0;
-    io->term = 0;
+    io->stop = 0;
 
     return io;
 }
@@ -197,6 +186,8 @@ static IO *_sys_open(const char *path, int mode, int binary)
 
 extern int sys_read(IO *io, void *buf, int size)
 {
+    if (io->stop)
+        return -1;
     if (size == 0)
         return 0;
 
@@ -205,20 +196,18 @@ extern int sys_read(IO *io, void *buf, int size)
 
 extern int sys_readn(IO *io, void *buf, int size)
 {
+    if (io->stop)
+        return -1;
     if (size == 0)
         return 0;
 
-    int r, idx = 0;
-    do {
-        r = io->read(io, buf + idx, size - idx);
-        idx += r;
-    } while (r > 0 && idx < size);
-
-    return idx;
+    return readn(io, buf, size, io->read);
 }
 
 extern int sys_write(IO *io, const void *buf, int size)
 {
+    if (io->stop)
+        return -1;
     if (size == 0)
         return 0;
 
@@ -227,6 +216,9 @@ extern int sys_write(IO *io, const void *buf, int size)
 
 extern int sys_term(IO *io)
 {
+    if (io->stop)
+        return -1;
+
     return io->write(io, NULL, -1);
 }
 
@@ -251,23 +243,22 @@ extern int sys_iready(IO *io, int sec)
     return ready == 1 && FD_ISSET(io->fd, &rfds);
 }
 
-/* data exchange between cio & pio (which must be a chunked IO with the
-   term attribute set on the last chunk)
-   the result indicates an error:
-       * cio is closed and there was no last chunk sent by pio
-       * pio is closed
- */
-extern int sys_proxy(IO *cio, IO *pio, int *cnt)
+/* data exchange between cio & pio. pio must be a chunked IO with the
+   explicit sys_term() call upon completion. ccnt and pcnt represent the
+   number of data reads from cio and pio accordingly (0 means no data
+   was read). */
+extern void sys_proxy(IO *cio, int *ccnt, IO *pio, int *pcnt)
 {
     void *tmp = mem_alloc(MAX_BLOCK); /* a buffer to be sent to client */
     void *buf = mem_alloc(MAX_BLOCK); /* an exchange buffer */
     void *p = NULL; /* just a pointer for swapping the buffers */
-    int tsz = 0, bsz = 0, term = 0;
+    int tsz = 0, bsz = 0;
 
-    *cnt = 0;
+    *ccnt = 0;
+    *pcnt = 0;
 
     fd_set read;
-    while (!cio->err && !pio->err && !term) {
+    while (!cio->stop && !pio->stop) {
         FD_ZERO(&read);
         FD_SET(cio->fd, &read);
         FD_SET(pio->fd, &read);
@@ -280,18 +271,18 @@ extern int sys_proxy(IO *cio, IO *pio, int *cnt)
 
         if (FD_ISSET(cio->fd, &read)) {
             bsz = sys_read(cio, buf, MAX_BLOCK);
-            if (bsz > 0)
+            if (bsz > 0) {
                 sys_write(pio, buf, bsz);
+                (*ccnt)++;
+            }
         }
 
         if (FD_ISSET(pio->fd, &read)) {
             bsz = sys_read(pio, buf, MAX_BLOCK);
-            term = pio->term;
-
             if (tsz > 0) {
                 sys_write(cio, tmp, tsz);
                 tsz = 0;
-                (*cnt)++;
+                (*pcnt)++;
             }
 
             if (bsz > 0) { /* swap the buffers */
@@ -305,7 +296,6 @@ extern int sys_proxy(IO *cio, IO *pio, int *cnt)
 
     mem_free(buf);
     mem_free(tmp);
-    return pio->err || (cio->err && !term);
 }
 
 extern void sys_address(char *result, int port)
@@ -357,16 +347,16 @@ extern IO *sys_socket(int *port)
     addr.sin_port = htons(*port);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(sfd, (struct sockaddr*) &addr, size) == -1)
+    if (bind(sfd, (struct sockaddr*) &addr, size) < 0)
         sys_die("sys: cannot bind a socket to port %d\n", *port);
 
     int backlog = 128;
-    if (listen(sfd, backlog) == -1)
+    if (listen(sfd, backlog) < 0)
         sys_die("sys: cannot listen (backlog: %d)\n", backlog);
 
     *port = net_port(sfd);
 
-    return new_net_io(sfd, STREAMED);
+    return new_net_io(sfd, IO_STREAM);
 }
 
 static IO *_sys_connect(struct sockaddr_in addr, int chunked)
@@ -403,7 +393,7 @@ extern int sys_exists(const char *path)
     struct stat st;
 
     int res = stat(path, &st);
-    if (res == -1) {
+    if (res < 0) {
         if (errno == ENOENT)
             return 0;
         else
@@ -415,13 +405,13 @@ extern int sys_exists(const char *path)
 
 extern void sys_remove(const char *path)
 {
-    if (unlink(path) == -1)
+    if (unlink(path) < 0)
         sys_die("sys: cannot remove %s\n", path);
 }
 
 extern void sys_move(const char *dest, const char *src)
 {
-    if (rename(src, dest) == -1)
+    if (rename(src, dest) < 0)
         sys_die("sys: cannot move %s -> %s\n", src, dest);
 }
 
