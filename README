@@ -2,6 +2,8 @@ Bandicoot - http://bandilab.org
 
 Compatibility Notes
 
+* v4: backward compatible with v3
+
 * v3: startup arguments have changed.
 
   The deploy action has been removed, and the start action has more parameters.
