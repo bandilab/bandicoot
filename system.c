@@ -493,6 +493,21 @@ extern char **sys_list(const char *path, int *len)
     return res;
 }
 
+extern int sys_fsize(const char *path)
+{
+    struct stat s;
+    int res = stat(path, &s);
+
+    if (res < 0 && errno != ENOENT)
+        sys_die("sys: cannot stat file %s\n", path);
+    else if (errno == ENOENT)
+        res = 0;
+    else
+        res = s.st_size;
+
+    return res;
+}
+
 extern void sys_print(const char *msg, ...)
 {
     va_list ap;

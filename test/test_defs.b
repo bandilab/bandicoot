@@ -789,3 +789,24 @@ fn store_union_2_res(x: Bookings)
 {
     union_2_res = x;
 }
+
+#
+# stress append
+#
+
+append_var: basic_01;
+
+fn append(a: basic_01)
+{
+    append_var += a;
+}
+
+fn list_append(): basic_01
+{
+    return append_var;
+}
+
+fn reset_append()
+{
+    append_var -= append_var;
+}

@@ -42,6 +42,10 @@ extern Head *gen_head();
 extern Tuple *gen_tuple(int i);
 extern TBuf *gen_tuples(int start, int end);
 extern Rel *gen_rel(int start, int end);
+extern void gen_rel_str(int num_chunks, int chunk_size,
+                        char *out_data[], int out_size[]);
+extern int http_req(const char *method, const char *addr, const char *fn,
+                    const char *data, int size);
 
 /* from tuple.c */
 extern Tuple *tuple_dec(void *mem, int *len);

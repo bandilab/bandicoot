@@ -56,14 +56,15 @@ extern void sys_remove(const char *path);
 extern char *sys_load(const char *path);
 extern char **sys_list(const char *dir, int *len);
 extern int sys_empty(const char *dir);
+extern int sys_fsize(const char *path);
 
 /* [multi]proc */
 static const char PROC_OK = 0x00;
 static const char PROC_FAIL = 0x01;
 
 extern int sys_exec(char *const argv[]);
-extern int sys_kill(int pid);
 extern char sys_wait(int pid);
+extern void sys_kill(int pid);
 extern void sys_sleep(int secs);
 extern void sys_thread(void *(*fn)(void *arg), void *arg);
 extern void sys_exit(char status);

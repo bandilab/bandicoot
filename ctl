@@ -4,6 +4,7 @@ VERSION="v4"
 
 BIN="bin"
 PORT=12345
+URL="http://127.0.0.1:$PORT"
 
 YACC_FLAGS="-DYYERROR_VERBOSE" # for bison
 WARN="-W -Wall -Wextra -Wredundant-decls -Wno-unused"
@@ -21,9 +22,9 @@ STRUCT_TESTS="$STRUCT_TESTS test/multiproc% test/network% test/number%"
 STRUCT_TESTS="$STRUCT_TESTS test/pack% test/relation% test/string%"
 STRUCT_TESTS="$STRUCT_TESTS test/summary% test/system% test/tuple%"
 STRUCT_TESTS="$STRUCT_TESTS test/transaction% test/value%"
-PERF_TESTS="test/perf/expression% test/perf/index% test/perf/multiproc%"
-PERF_TESTS="$PERF_TESTS test/perf/number% test/perf/relation%"
-PERF_TESTS="$PERF_TESTS test/perf/system% test/perf/tuple%"
+PERF_TESTS="test/perf/append% test/perf/expression% test/perf/index%"
+PERF_TESTS="$PERF_TESTS test/perf/multiproc% test/perf/number%"
+PERF_TESTS="$PERF_TESTS test/perf/relation% test/perf/system% test/perf/tuple%"
 PROGS="bandicoot%"
 
 if [ ! "`uname | grep -i CYGWIN`" = "" ]
@@ -76,7 +77,7 @@ compile()
         $CC $DIST_CFLAGS -c -o $i.o $i.c
         if [ "$?" != "0" ]
         then
-            echo "Compilation error. Abort."
+            echo "error: compilation failed."
             exit 1
         fi
     done
@@ -92,7 +93,7 @@ link()
         $CC $DIST_CFLAGS -o $e $libs $obj $LINK
         if [ "$?" != "0" ]
         then
-            echo "Linking error. Abort."
+            echo "error: ld failed."
             exit 1
         fi
     done
@@ -106,7 +107,7 @@ run()
         $BIN/$e
         if [ "$?" != "0" ]
         then
-            echo "    failed"
+            echo "error: test failed."
         fi
     done
 }
@@ -155,7 +156,7 @@ case $cmd in
         echo
         link $PROGS $STRUCT_TESTS $PERF_TESTS
         echo
-        echo "[P] ..."
+        echo "[P] preparing test data"
         $BIN/bandicoot start -c "test/test_defs.b" \
                              -d $BIN/volume \
                              -s $BIN/state \
@@ -168,9 +169,9 @@ case $cmd in
 
         for v in $ALL_VARS
         do
-            curl -s http://127.0.0.1:$PORT/load_$v > /dev/null
-            curl -s --data-binary @test/data/$v http://127.0.0.1:$PORT/store_$v
-            curl -s http://127.0.0.1:$PORT/load_$v > /dev/null
+            curl -s $URL/load_$v > /dev/null
+            curl -s --data-binary @test/data/$v $URL/store_$v
+            curl -s $URL/load_$v > /dev/null
         done
         kill $pid
         ;;
@@ -182,7 +183,7 @@ case $cmd in
         do
             for v in $ALL_VARS
             do
-                curl -s http://127.0.0.1:$PORT/load_$v -o /dev/null
+                curl -s $URL/load_$v -o /dev/null
                 if [ "$?" != "0" ]
                 then
                     exit
@@ -195,8 +196,7 @@ case $cmd in
         do
             for v in $ALL_VARS
             do
-                curl -s --data-binary @test/data/$v \
-                    http://127.0.0.1:$PORT/store_$v -o /dev/null
+                curl -s --data-binary @test/data/$v $URL/store_$v > /dev/null
                 if [ "$?" != "0" ]
                 then
                     exit
@@ -211,8 +211,8 @@ case $cmd in
         diff -u bin/all_sorted.out bin/lang_test.out
         if [ "$?" != "0" ]
         then
-            echo "---"
-            echo "language test failed (inspect the differences above)"
+            echo "error: language test failed (inspect the diff above)"
+            exit 1
         fi
         ;;
     todos)
@@ -221,12 +221,17 @@ case $cmd in
     dist)
         if [ "$2" != "-m32" ] && [ "$2" != "-m64" ]
         then
-            echo "---"
-            echo "expecting -m32|-m64 as the first parameter"
+            echo "error: dist expects either -m32 or -m64 parameter"
             exit 1
         fi
 
         dist "-Os $2" $3
+        ;;
+    start)
+        $BIN/bandicoot start -c "test/test_defs.b" \
+                             -d $BIN/volume \
+                             -s $BIN/state \
+                             -p $PORT
         ;;
     *)
         echo "unknown command '$cmd', usage: ctl <command>"
@@ -234,5 +239,8 @@ case $cmd in
         echo "    pack - compile and prepare for running tests"
         echo "    test - execute structured tests (prereq: pack)"
         echo "    perf - execute performance tests (prereq: pack)"
+        echo "    start - start-up a bandicoot test instance"
+        echo "    stress_read - read stress tests (prereq: start)"
+        echo "    stress_write - write stress tests (prereq: start)"
         echo "    clean - remove object files etc."
 esac

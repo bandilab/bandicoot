@@ -85,9 +85,10 @@ extern int sys_exec(char *const argv[])
     return pid;
 }
 
-extern int sys_kill(int pid)
+extern void sys_kill(int pid)
 {
-    return kill(pid, SIGKILL);
+    if (kill(pid, SIGKILL) < 0)
+        sys_die("sys: kill %d failed\n", pid);
 }
 
 extern char sys_wait(int pid)

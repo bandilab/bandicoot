@@ -102,7 +102,7 @@ extern int sys_exec(char *const a[])
     return pi.dwProcessId;
 }
 
-extern int sys_kill(int pid)
+extern void sys_kill(int pid)
 {
     HANDLE ph = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
     if (ph == NULL)
@@ -112,7 +112,8 @@ extern int sys_kill(int pid)
 
     CloseHandle(ph);
 
-    return res;
+    if (!res)
+        sys_die("sys: kill %d failed\n", pid);
 }
 
 extern char sys_wait(int pid)
