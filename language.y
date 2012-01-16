@@ -403,6 +403,8 @@ extern void env_free(Env *env)
                 tbuf_clean(r->body);
             rel_free(r);
         }
+        for (int j = 0; j < fn->pp.len; ++j)
+            mem_free(fn->pp.names[j]);
         if (fn->ret != NULL)
             rel_free(fn->ret);
 
@@ -799,9 +801,10 @@ static void fn_rel_params(L_Attrs names, Head *h)
         yyerror("identifier '%s' is already used for a global variable",
                 names.names[0]);
 
-    gfunc->rp.name = names.names[0];
+    gfunc->rp.name = str_dup(names.names[0]);
     gfunc->rp.rel = rel_param(h);
     mem_free(h); /* FIXME: it is duplicated in rel_param */
+    attr_free(names);
 }
 
 static void fn_prim_params(L_Attrs attrs)
@@ -817,8 +820,9 @@ static void fn_prim_params(L_Attrs attrs)
 
         int pos = gfunc->pp.len++;
         gfunc->pp.types[pos] = attrs.types[i];
-        gfunc->pp.names[pos] = attrs.names[i];
+        gfunc->pp.names[pos] = str_dup(attrs.names[i]);
     }
+    attr_free(attrs);
 }
 
 static void fn_start(const char *name)
@@ -883,7 +887,10 @@ static Rel *r_project(Rel *r, L_Attrs attrs)
         if (!head_find(r->head, attrs.names[i]))
             yyerror("unknown attribute '%s' in %s", attrs.names[i], hstr);
 
-    return rel_project(r, attrs.names, attrs.len);
+    Rel *res = rel_project(r, attrs.names, attrs.len);
+    attr_free(attrs);
+
+    return res;
 }
 
 static Rel *r_rename(Rel *r, L_Attrs attrs)
@@ -905,12 +912,18 @@ static Rel *r_rename(Rel *r, L_Attrs attrs)
                     renames[i], hstr);
     }
 
-    return rel_rename(r, attrs.names, renames, attrs.len);
+    Rel *res = rel_rename(r, attrs.names, renames, attrs.len);
+    attr_free(attrs);
+
+    return res;
 }
 
 static Rel *r_select(Rel *r, L_Expr *expr)
 {
-    return rel_select(r, p_convert(r->head, gfunc, expr, POS));
+    Rel *res = rel_select(r, p_convert(r->head, gfunc, expr, POS));
+    p_free(expr);
+
+    return res;
 }
 
 static Rel *r_extend(Rel *r, L_Attrs attrs)
@@ -931,7 +944,10 @@ static Rel *r_extend(Rel *r, L_Attrs attrs)
         yyerror("extend result type exceeds the maximum number "
                 "of attributes (%d)", MAX_ATTRS);
 
-    return rel_extend(r, attrs.names, extends, attrs.len);
+    Rel *res = rel_extend(r, attrs.names, extends, attrs.len);
+    attr_free(attrs);
+
+    return res;
 }
 
 static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs)
@@ -991,6 +1007,8 @@ static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs)
                 sums[i] = sum_max(pos, stype, v);
             else if (s.sum_type == ADD)
                 sums[i] = sum_add(pos, stype, v);
+
+            expr_free(def);
         }
     }
 
@@ -1003,6 +1021,7 @@ static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs)
 
         res = rel_sum(l, r, attrs.names, attrs.types, sums, attrs.len);
     }
+    attr_free(attrs);
 
     return res;
 }
