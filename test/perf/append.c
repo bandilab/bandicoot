@@ -80,6 +80,8 @@ static char *test_append(int num_chunks, int chunk_size)
     Mon *m = mon_new();
     int pid = sys_exec(e);
     sys_sleep(1);
+    /* FIXME: wrong place for cleanup. should either wait 30 secs or do it
+     * differently */
     if (!http_req("GET", "localhost:12345", "reset_append", "", 0))
         sys_die("reset_append failed\n");
     sys_sleep(1);
@@ -144,7 +146,7 @@ int main(void)
     sys_print("|\t|\t|\tmin time (ms per chunk)\n");
     sys_print("|\t|\t|\t|\tmax time (ms per chunk)\n");
     sys_print("|\t|\t|\t|\t|\tavg time (ms per chunk)\n");
-    sys_print("|\t|\t|\t|\t|\t|\tmin volume size (MiB)\n");
+    sys_print("|\t|\t|\t|\t|\t|\tactual volume size (MiB)\n");
     sys_print("|\t|\t|\t|\t|\t|\t|\tmax volume size (MiB)\n");
     for (int i = 0; i < len; ++i) {
         sys_print(res[i]);
