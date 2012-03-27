@@ -1,26 +1,13 @@
-rel T {
-    i: int,
-    l: long,
-    r: real,
-    s: string,
-}
+type T {i int, l long, r real, s string}
 
-t: T;
+var t T;
 
-fn test1(): T
+fn test1() T
 {
-    return t select(i < 2147483647 && i > -2147483648 &&
-                    l < 9223372036854775807L && l > -9223372036854775808L);
+	return (select i < 2147483647 && i > -2147483648 && l < 9223372036854775807L && l > -9223372036854775808L t);
 }
 
-fn test2(): T
+fn test2() T
 {
-    return t select(i < -37 && i > +37 &&
-                    i < i - -375 &&
-                    i > 1 + +735 &&
-                    i < i-735 &&
-                    i < i+735 &&
-                    r < -0.37 && r > +0.37 &&
-                    s != "hello");
+	return (select i < -37 && i > +37 && i < i - -375 && i > 1 + +735 && i < i - 735 && i < i + 735 && r < -0.37 && r > +0.37 && s != "hello" t);
 }
-

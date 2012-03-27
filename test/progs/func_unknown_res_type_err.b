@@ -1,12 +1,10 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-a: point;
-b: point;
+var a point;
 
-fn test(): unknown_t
+var b point;
+
+fn test() unknown_t
 {
-    return a + b;
+	return (union a b);
 }

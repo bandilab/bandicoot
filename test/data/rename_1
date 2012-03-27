@@ -1,4 +1,4 @@
-c:string,a:int,b:real
+c string,a int,b real
 first,1,1.01
 second,2,2.01
 third,3,1.03

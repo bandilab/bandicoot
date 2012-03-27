@@ -1,9 +1,6 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-fn test(p: point): point
+fn test(p point) point
 {
-    return p select(x < unknownFunc(y));
+	return (select x < (unknownFunc y) p);
 }

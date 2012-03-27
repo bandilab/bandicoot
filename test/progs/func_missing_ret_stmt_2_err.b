@@ -1,3 +1,2 @@
-fn test(): rel {x: int}
-{
-}
+fn test() {x int}
+{}

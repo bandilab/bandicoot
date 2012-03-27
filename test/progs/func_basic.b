@@ -1,17 +1,15 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-temperature: point;
-unemployment: point;
-currency: point;
+var temperature point;
 
-fn get_pointless_results(p: point): point
+var unemployment point;
+
+var currency point;
+
+fn get_pointless_results(p point) point
 {
-    return (temperature + currency * unemployment) - currency * temperature + p;
+	return (union (minus (union temperature (join currency unemployment)) (join currency temperature)) p);
 }
 
-fn empty()
-{
-}
+fn empty() void
+{}

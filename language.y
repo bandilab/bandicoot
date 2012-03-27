@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,8 +41,8 @@ extern int yylex();
 static Func *gfunc = NULL;
 static Env *genv = NULL;
 
-/* rel { a: string, ... } */
-static const int MAX_HEAD_STR_LEN = 5 + MAX_ATTRS * (MAX_NAME + 4 + 6) + 1 + 1;
+/* {a string, b int} */
+static const int MAX_HEAD_STR_LEN = 2 * MAX_ATTRS * MAX_NAME;
 
 static L_Attrs attr_name(const char *name);
 static L_Attrs attr_decl(L_Attrs attrs, Type type);
@@ -78,8 +78,8 @@ static void stmt_short(const char *name, Rel *r);
 static L_Sum sum_create(const char *func, const char *attr, L_Expr *def);
 
 static void add_head(const char *name, Head *head);
-static void add_relvar(const char *rel, const char *var);
-static void add_relvar_inline(Head *head, const char *var);
+static void add_relvar(const char *rel, L_Attrs vars);
+static void add_relvar_inline(Head *head, L_Attrs vars);
 
 static void fn_start(const char *name);
 static void fn_rel_params(L_Attrs names, Head *h);
@@ -99,41 +99,43 @@ static void fn_add();
     Rel *rel;
 };
 
-%token TK_REL TK_FN TK_RETURN
-%token TK_INT TK_LONG TK_REAL TK_STRING
+%token TK_TYPE TK_VAR TK_FN TK_RETURN
+%token TK_INT TK_LONG TK_REAL TK_STRING TK_TIME TK_VOID
 %token TK_PROJECT TK_RENAME TK_SELECT TK_EXTEND TK_SUMMARY
+%token TK_JOIN TK_UNION TK_MINUS
 %token TK_EQ TK_NEQ TK_AND TK_OR TK_LTE TK_GTE
 
 %token <name> TK_NAME
 %token <val> TK_INT_VAL TK_LONG_VAL TK_REAL_VAL TK_STRING_VAL
 
-%type <attrs> rel_attr rel_attrs rel_attrs_names
+%type <attrs> rel_attr rel_attrs attr_names
 %type <attrs> project_attr project_attrs
 %type <attrs> rename_attr rename_attrs
 %type <attrs> extend_attr extend_attrs
 %type <attrs> sum_attrs sum_attr
-%type <rel> rel_prim_expr rel_post_expr rel_mul_expr rel_expr
+%type <rel> rel_prim_expr rel_simple_expr rel_mul_expr rel_expr
 %type <expr> prim_const_expr prim_simple_expr prim_top_expr prim_unary_expr
 %type <expr> prim_mul_expr prim_add_expr prim_bool_cmp_expr prim_expr
 %type <sum> sum_func
 %type <head> rel_head
 
+%start program
 %%
 
 program:
-      program rel_decl
+      program type_decl
     | program relvar_decl
     | program func_decl
     |
     ;
 
-rel_decl:
-      TK_REL TK_NAME rel_head   { add_head($2, $3); }
+type_decl:
+      TK_TYPE TK_NAME rel_head  { add_head($2, $3); }
     ;
 
 rel_head:
-      '{' rel_attrs '}'     { $$ = rel_head($2); }
-    | '{' rel_attrs ',' '}' { $$ = rel_head($2); }
+      '{' rel_attrs '}'         { $$ = rel_head($2); }
+    | '{' rel_attrs ',' '}'     { $$ = rel_head($2); }
     ;
 
 rel_attrs:
@@ -141,21 +143,21 @@ rel_attrs:
     | rel_attrs ',' rel_attr    { $$ = attr_merge($1, $3);}
     ;
 
-rel_attrs_names:
-      TK_NAME                       { $$ = attr_name($1); }
-    | rel_attrs_names ',' TK_NAME   { $$ = attr_merge($1, attr_name($3)); }
+attr_names:
+      TK_NAME               { $$ = attr_name($1); }
+    | attr_names TK_NAME    { $$ = attr_merge($1, attr_name($2)); }
     ;
 
 rel_attr:
-      rel_attrs_names ':' TK_INT    { $$ = attr_decl($1, Int); }
-    | rel_attrs_names ':' TK_LONG   { $$ = attr_decl($1, Long); }
-    | rel_attrs_names ':' TK_REAL   { $$ = attr_decl($1, Real); }
-    | rel_attrs_names ':' TK_STRING { $$ = attr_decl($1, String); }
+      attr_names TK_INT     { $$ = attr_decl($1, Int); }
+    | attr_names TK_LONG    { $$ = attr_decl($1, Long); }
+    | attr_names TK_REAL    { $$ = attr_decl($1, Real); }
+    | attr_names TK_STRING  { $$ = attr_decl($1, String); }
     ;
 
 relvar_decl:
-      TK_NAME ':' TK_NAME ';'           { add_relvar($3, $1); }
-    | TK_NAME ':' TK_REL rel_head ';'   { add_relvar_inline($4, $1); }
+      TK_VAR attr_names TK_NAME ';'     { add_relvar($3, $2); }
+    | TK_VAR attr_names rel_head ';'    { add_relvar_inline($3, $2); }
     ;
 
 func_decl:
@@ -168,9 +170,9 @@ func_name:
     ;
 
 func_res:
-      ':' TK_NAME           { fn_result(inline_rel($2, NULL)); }
-    | ':' TK_REL rel_head   { fn_result(inline_rel(NULL, $3)); }
-    |                       { fn_result(inline_rel(NULL, NULL)); }
+      TK_VOID   { fn_result(inline_rel(NULL, NULL)); }
+    | TK_NAME   { fn_result(inline_rel($1, NULL)); }
+    | rel_head  { fn_result(inline_rel(NULL, $1)); }
     ;
 
 func_params:
@@ -182,10 +184,10 @@ func_params:
 func_param:
       rel_attr
         { fn_prim_params($1); }
-    | rel_attrs_names ':' TK_NAME
-        { fn_rel_params($1, inline_rel($3, NULL)); }
-    | rel_attrs_names ':' TK_REL rel_head
-        { fn_rel_params($1, inline_rel(NULL, $4)); }
+    | attr_names TK_NAME
+        { fn_rel_params($1, inline_rel($2, NULL)); }
+    | attr_names rel_head
+        { fn_rel_params($1, inline_rel(NULL, $2)); }
     ;
 
 func_body:
@@ -205,14 +207,16 @@ stmt_assigns:
     ;
 
 stmt_assign:
-      TK_NAME '=' rel_expr ';'      { stmt_create(ASSIGN, $1, $3); }
+      TK_NAME '=' rel_expr ';'
+        { stmt_create(ASSIGN, $1, $3); }
     | TK_NAME '+' '=' rel_expr ';'
         { stmt_create(ASSIGN, $1, r_union(r_load($1), $4)); }
     | TK_NAME '-' '=' rel_expr ';'
         { stmt_create(ASSIGN, $1, r_diff(r_load($1), $4)); }
     | TK_NAME '*' '=' rel_expr ';'
         { stmt_create(ASSIGN, $1, r_join(r_load($1), $4)); }
-    | TK_NAME ':' '=' rel_expr ';'  { stmt_create(TEMP, $1, $4); }
+    | TK_VAR TK_NAME '=' rel_expr ';'
+        { stmt_create(TEMP, $2, $4); }
     ;
 
 rel_prim_expr:
@@ -220,37 +224,44 @@ rel_prim_expr:
     | '(' rel_expr ')'  { $$ = $2; }
     ;
 
-rel_post_expr:
+rel_simple_expr:
       rel_prim_expr
         { $$ = $1; }
-    | rel_post_expr TK_PROJECT '(' project_attrs ')'
-        { $$ = r_project($1, $4); }
-    | rel_post_expr TK_RENAME '(' rename_attrs ')'
-        { $$ = r_rename($1, $4); }
-    | rel_post_expr TK_SELECT '(' prim_expr ')'
-        { $$ = r_select($1, $4); }
-    | rel_post_expr TK_EXTEND '(' extend_attrs ')'
-        { $$ = r_extend($1, $4); }
-    | rel_post_expr TK_SUMMARY '(' sum_attrs ')'
-        { $$ = r_sum($1, NULL, $4); }
-    | '(' rel_post_expr ',' rel_post_expr ')' TK_SUMMARY '(' sum_attrs ')'
-        { $$ = r_sum($2, $4, $8); }
+    | TK_SELECT prim_expr rel_prim_expr
+        { $$ = r_select($3, $2); }
+    | TK_EXTEND extend_attrs rel_prim_expr
+        { $$ = r_extend($3, $2); }
+    | TK_PROJECT project_attrs rel_prim_expr
+        { $$ = r_project($3, $2); }
+    | TK_RENAME rename_attrs rel_prim_expr
+        { $$ = r_rename($3, $2); }
+    | TK_JOIN rel_prim_expr rel_prim_expr
+        { $$ = r_join($2, $3); }
+    | TK_UNION rel_prim_expr rel_prim_expr
+        { $$ = r_union($2, $3); }
+    | TK_MINUS rel_prim_expr rel_prim_expr
+        { $$ = r_diff($2, $3); }
+    | TK_SUMMARY sum_attrs rel_prim_expr
+        { $$ = r_sum($3, NULL, $2); }
+    | TK_SUMMARY sum_attrs rel_prim_expr rel_prim_expr
+        { $$ = r_sum($3, $4, $2); }
     ;
 
 rel_mul_expr:
-      rel_post_expr                     { $$ = $1; }
-    | rel_mul_expr '*' rel_post_expr    { $$ = r_join($1, $3); }
+      rel_simple_expr                    { $$ = $1; }
+    | rel_mul_expr '*' rel_simple_expr   { $$ = r_join($1, $3); }
     ;
 
 rel_expr:
-      rel_mul_expr                      { $$ = $1; }
-    | rel_expr '+' rel_mul_expr         { $$ = r_union($1, $3); }
-    | rel_expr '-' rel_mul_expr         { $$ = r_diff($1, $3); }
+      rel_mul_expr                       { $$ = $1; }
+    | rel_expr '+' rel_mul_expr          { $$ = r_union($1, $3); }
+    | rel_expr '-' rel_mul_expr          { $$ = r_diff($1, $3); }
     ;
 
 project_attrs:
       project_attr                       { $$ = $1; }
     | project_attrs ',' project_attr     { $$ = attr_merge($1, $3); }
+    | '(' project_attrs ')'              { $$ = $2; }
     ;
 
 project_attr:
@@ -260,6 +271,7 @@ project_attr:
 rename_attrs:
       rename_attr                        { $$ = $1; }
     | rename_attrs ',' rename_attr       { $$ = attr_merge($1, $3); }
+    | '(' rename_attrs ')'               { $$ = $2; }
     ;
 
 rename_attr:
@@ -269,6 +281,7 @@ rename_attr:
 extend_attrs:
       extend_attr                        { $$ = $1; }
     | extend_attrs ',' extend_attr       { $$ = attr_merge($1, $3); }
+    | '(' extend_attrs ')'               { $$ = $2; }
     ;
 
 extend_attr:
@@ -278,6 +291,7 @@ extend_attr:
 sum_attrs:
       sum_attr                  { $$ = $1; }
     | sum_attrs ',' sum_attr    { $$ = attr_merge($1, $3); }
+    | '(' sum_attrs ')'         { $$ = $2; }
     ;
 
 sum_attr:
@@ -285,13 +299,15 @@ sum_attr:
     ;
 
 sum_func:
-      TK_NAME '(' ')'
+      TK_NAME
         { $$ = sum_create($1, "", NULL); }
-    | TK_NAME '(' TK_NAME ',' prim_expr ')'
-        { $$ = sum_create($1, $3, $5); }
+    | '(' TK_NAME ')'
+        { $$ = sum_create($2, "", NULL); }
+    | '(' TK_NAME TK_NAME prim_expr ')'
+        { $$ = sum_create($2, $3, $4); }
     ;
 
-/* TODO: func calls - rounding and type conversion */
+/* TODO: func calls (rounding, floor, ceiling, abs) */
 prim_const_expr:
       TK_INT_VAL                                { $$ = p_value($1, Int); }
     | TK_LONG_VAL                               { $$ = p_value($1, Long); }
@@ -302,9 +318,9 @@ prim_const_expr:
 prim_simple_expr:
       prim_const_expr                           { $$ = $1; }
     | '(' prim_expr ')'                         { $$ = $2; }
-    | TK_INT '(' prim_expr ')'                  { $$ = p_func("int", $3); }
-    | TK_REAL '(' prim_expr ')'                 { $$ = p_func("real", $3); }
-    | TK_LONG '(' prim_expr ')'                 { $$ = p_func("long", $3); }
+    | '(' TK_INT prim_expr ')'                  { $$ = p_func("int", $3); }
+    | '(' TK_REAL prim_expr ')'                 { $$ = p_func("real", $3); }
+    | '(' TK_LONG prim_expr ')'                 { $$ = p_func("long", $3); }
     ;
 
 prim_top_expr:
@@ -356,10 +372,10 @@ static void print_head(char *dest, Head *h)
         return;
     }
 
-    int off = str_print(dest, "%s", "rel {");
+    int off = str_print(dest, "%s", "{");
     for (int i = 0; i < h->len; ++i)
         off += str_print(dest + off,
-                         "%s: %s, ",
+                         (i == h->len - 1) ? "%s %s" : "%s %s, ",
                          h->names[i],
                          type_to_str(h->types[i]));
     dest[off++] = '}';
@@ -560,28 +576,34 @@ static void add_head(const char *name, Head *head)
     }
 }
 
-static void add_relvar_inline(Head *head, const char *var)
+static void add_relvar_inline(Head *head, L_Attrs vars)
 {
-    if (genv->vars.len == MAX_VARS)
-        yyerror("number of global variables exceeds the maximum (%d)",
-                MAX_VARS);
-
-    int i = genv->vars.len++;
-    genv->vars.names[i] = str_dup(var);
-    genv->vars.heads[i] = head;
+    for (int i = 0; i < vars.len; ++i) {
+        const char *var = vars.names[i];
+        if (array_scan(genv->vars.names, genv->vars.len, var) > -1)
+            yyerror("variable '%s' is already defined", var);
+        else if (array_scan(genv->types.names, genv->types.len, var) > -1)
+            yyerror("type '%s' cannot be used as a variable name", var);
+        else if (genv->vars.len == MAX_VARS)
+            yyerror("number of global variables exceeds the maximum (%d)",
+                    MAX_VARS);
+        else {
+            int j = genv->vars.len++;
+            genv->vars.names[j] = str_dup(var);
+            genv->vars.heads[j] = head;
+        }
+    }
+    attr_free(vars);
 }
 
-static void add_relvar(const char *rel, const char *var)
+static void add_relvar(const char *rel, L_Attrs vars)
 {
     int i = array_scan(genv->types.names, genv->types.len, rel);
-    if (i < 0)
+    if (i < 0) {
+        attr_free(vars);
         yyerror("unknown type '%s'", rel);
-    else if (array_scan(genv->vars.names, genv->vars.len, var) > -1)
-        yyerror("variable '%s' is already defined", var);
-    else if (array_scan(genv->types.names, genv->types.len, var) > -1)
-        yyerror("type '%s' cannot be used as a variable name", var);
-    else
-        add_relvar_inline(head_cpy(genv->types.heads[i]), var);
+    } else
+        add_relvar_inline(head_cpy(genv->types.heads[i]), vars);
 }
 
 static int func_param(Func *fn, char *name, int *pos, Type *type) {

@@ -1,17 +1,10 @@
-rel test {
-    i: int,
-    s: string,
-}
+type test {i int, s string}
 
-t: test;
+var t test;
 
-rel test_res {
-    i: int,
-    s: string,
-    x: int,
-}
+type test_res {i int, s string, x int}
 
-fn s_mul_err(): test_res
+fn s_mul_err() test_res
 {
-    return t extend(x = i * s);
+	return (extend x = i * s t);
 }

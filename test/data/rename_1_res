@@ -1,4 +1,4 @@
-new_some:real,new_name:string,new_id:int
+new_some real,new_name string,new_id int
 1.01,first,1
 2.01,second,2
 1.03,third,3

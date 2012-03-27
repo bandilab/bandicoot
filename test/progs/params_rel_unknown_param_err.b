@@ -1,9 +1,6 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-fn svc_basic(): point
+fn svc_basic() point
 {
-    return p;
+	return p;
 }

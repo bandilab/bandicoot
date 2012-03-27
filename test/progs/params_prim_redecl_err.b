@@ -1,3 +1,2 @@
-fn test(a: int, a: long)
-{
-}
+fn test(a int, a long) void
+{}

@@ -1,11 +1,8 @@
-rel test {
-    r: real,
-    s: string,
-}
+type test {r real, s string}
 
-t: test;
+var t test;
 
-fn s_eq_err(): test
+fn s_eq_err() test
 {
-    return t select(r == s);
+	return (select r == s t);
 }

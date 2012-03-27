@@ -1,12 +1,7 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-rel address {
-    street: string,
-    building: int,
-}
+type address {street string, building int}
 
-a: point;
-a: address;
+var a point;
+
+var a address;

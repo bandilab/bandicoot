@@ -1,8 +1,6 @@
-rel Emp {
-    salary: int,
-}
+type Emp {salary int}
 
-fn addUp(e: Emp): rel {salary: real}
+fn addUp(e Emp) {salary real}
 {
-    return e summary(salary = avg(s, 0.0));
+	return (summary salary = (avg s 0.0) e);
 }

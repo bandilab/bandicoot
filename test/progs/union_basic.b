@@ -1,12 +1,10 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-p1: point;
-p2: point;
+var p1 point;
 
-fn s_union(): point
+var p2 point;
+
+fn s_union() point
 {
-    return p1 + p2;
+	return (union p1 p2);
 }

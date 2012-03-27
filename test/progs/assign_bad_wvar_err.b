@@ -1,11 +1,8 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-p: point;
+var p point;
 
-fn cannot_assign()
+fn cannot_assign() void
 {
-    does_not_exist = p;
+	does_not_exist = p;
 }

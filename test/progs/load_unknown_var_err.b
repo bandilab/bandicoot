@@ -1,9 +1,6 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-fn cannot_load_a(): point
+fn cannot_load_a() point
 {
-    return a;
+	return a;
 }

@@ -216,7 +216,7 @@ static void test_split()
     char str[64];
 
     str_cpy(str, "a`b`");
-    char **s = str_split(str, '`', &cnt);
+    char **s = str_split_big(str, "`", &cnt);
 
     if (cnt != 3)
         fail();
@@ -229,7 +229,7 @@ static void test_split()
 
     mem_free(s);
     str_cpy(str, "");
-    s = str_split(str, '=', &cnt);
+    s = str_split_big(str, "=", &cnt);
 
     if (cnt != 1)
         fail();
@@ -238,7 +238,7 @@ static void test_split()
 
     mem_free(s);
     str_cpy(str, "c:string,a:int");
-    s = str_split(str, ',', &cnt);
+    s = str_split_big(str, ",", &cnt);
 
     if (cnt != 2)
         fail();
@@ -248,8 +248,19 @@ static void test_split()
         fail();
 
     mem_free(s);
+    str_cpy(str, "c:string");
+    s = str_split_big(str, " :\t", &cnt);
+
+    if (cnt != 2)
+        fail();
+    if (str_cmp("c", s[0]) != 0)
+        fail();
+    if (str_cmp("string", s[1]) != 0)
+        fail();
+
+    mem_free(s);
     str_cpy(str, "hello world,123430");
-    s = str_split(str, ',', &cnt);
+    s = str_split_big(str, ",", &cnt);
 
     if (cnt != 2)
         fail();
@@ -260,7 +271,7 @@ static void test_split()
 
     mem_free(s);
     str_cpy(str, "hello\\\\,world,123430");
-    s = str_split(str, ',', &cnt);
+    s = str_split_big(str, ",", &cnt);
 
     if (cnt != 3)
         fail();
@@ -273,7 +284,7 @@ static void test_split()
 
     mem_free(s);
     str_cpy(str, "hello\\,world,123430");
-    s = str_split(str, ',', &cnt);
+    s = str_split_big(str, ",", &cnt);
 
     if (cnt != 2)
         fail();
@@ -284,7 +295,7 @@ static void test_split()
 
     mem_free(s);
     str_cpy(str, "hello\\");
-    s = str_split(str, ',', &cnt);
+    s = str_split_big(str, ",", &cnt);
 
     if (cnt != 1)
         fail();
@@ -293,7 +304,7 @@ static void test_split()
 
     mem_free(s);
     str_cpy(str, "hello\\,");
-    s = str_split(str, ',', &cnt);
+    s = str_split_big(str, ",", &cnt);
 
     if (cnt != 1)
         fail();
@@ -302,7 +313,7 @@ static void test_split()
 
     mem_free(s);
     str_cpy(str, "hello\\\\,");
-    s = str_split(str, ',', &cnt);
+    s = str_split_big(str, ",", &cnt);
 
     if (cnt != 2)
         fail();

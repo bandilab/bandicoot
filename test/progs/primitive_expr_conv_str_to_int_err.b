@@ -1,8 +1,6 @@
-rel T {
-    s: string
-}
+type T {s string}
 
-fn test(t: T): T
+fn test(t T) T
 {
-    return t select(5 > int(s));
+	return (select 5 > (int s) t);
 }

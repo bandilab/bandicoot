@@ -1,4 +1,4 @@
-fn svc_hello(p: unknown_t)
+fn svc_hello(p unknown_t) void
 {
-    return p;
+	return p;
 }

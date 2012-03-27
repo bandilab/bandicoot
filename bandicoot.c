@@ -33,6 +33,7 @@ limitations under the License.
 #include "environment.h"
 #include "pack.h"
 
+extern void conv_parse();
 extern const char *VERSION;
 
 /* number of concurrently processing requests */
@@ -419,6 +420,15 @@ static void usage(char *p)
     sys_print("  tx    -p <port> -c <source.file> -s <state.file>\n");
     sys_print("  vol   -p <port> -d <data.dir> -t <tx.host:port>\n");
     sys_print("  exec  -p <port> -t <tx.host:port>\n\n");
+    sys_print("program converter (v5 syntax):\n");
+    sys_print(
+"  convert - transforms v4 programs to the v5 syntax. the source program is\n");
+    sys_print(
+"  read from stdin and the result is printed to stdout. all identifiers\n");
+    sys_print(
+"  which clash with the new keywords will be prefixed with '___'. please\n");
+    sys_print(
+"  ensure that you review the resulting program.\n\n");
 
     sys_die(VERSION);
 }
@@ -522,6 +532,10 @@ int main(int argc, char *argv[])
     {
         tx_attach(tx_addr);
         multiplex(argv[0], tx_addr, port);
+    } else if (str_cmp(argv[1], "convert") == 0 && source == NULL &&
+               data == NULL && state == NULL && port == 0 && tx_addr == NULL)
+    {
+        conv_parse();
     } else
         usage(argv[0]);
 

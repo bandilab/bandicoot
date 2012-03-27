@@ -1,17 +1,12 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-p1: point;
+var p1 point;
 
-rel key {
-    x: real,
-}
+type key {x real}
 
-p2: key;
+var p2 key;
 
-fn s_assign()
+fn s_assign() void
 {
-    p1 -= p2;
+	p1 -= p2;
 }

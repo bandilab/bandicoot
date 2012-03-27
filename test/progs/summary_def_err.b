@@ -1,8 +1,6 @@
-rel Emp {
-    salary: int,
-}
+type Emp {salary int}
 
-fn addUp(e: Emp): Emp
+fn addUp(e Emp) Emp
 {
-    return e summary(salary = add(salary, 0.0));
+	return (summary salary = (add salary 0.0) e);
 }

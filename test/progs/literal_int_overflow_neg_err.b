@@ -1,8 +1,8 @@
-rel T { i: int }
+type T {i int}
 
-t: T;
+var t T;
 
-fn test(): T
+fn test() T
 {
-    return t select(i > -2147483649);
+	return (select i > -2147483649 t);
 }

@@ -211,27 +211,59 @@ extern char *str_trim(char *s)
     return s + left;
 }
 
-extern char **str_split(char *buf, char delim, int *parts)
+static int is_delim(char c, const char *delims)
+{
+    while (*delims != '\0')
+        if (c == *delims)
+            return 1;
+        else
+            delims++;
+
+    return 0;
+}
+
+static int _str_split(char *s, const char *delims, char ***out, int max)
 {
     /* TODO: get rid of str_len */
-    int len = str_len(buf) + 1;
-    char **res = 0;
-    char esc = '\\', prev = ' ';
-    *parts = 0;
+    int len = str_len(s) + 1;
+    char esc = '\\', prev = '\0';
+    int parts = 0;
+    int size = max;
 
+    char **res = *out;
     for (int i = 0, start = 0; i < len; ++i) {
-        if ((buf[i] == delim && (prev != esc)) || (i + 1) == len) {
-            *parts += 1;
-            res = mem_realloc(res, *parts * sizeof(char*));
-            res[*parts - 1] = buf + start;
-            buf[i] = '\0';
+        if ((is_delim(s[i], delims) && prev != esc) || (i + 1) == len) {
+            parts++;
+            if (max == 0 && parts > size) {
+                size = size == 0 ? 2 : size * 2;
+                res = mem_realloc(res, size * sizeof(char*));
+            } else if (max != 0 && parts > max) {
+                parts = -1;
+                break;
+            }
+
+            res[parts - 1] = s + start;
+            s[i] = '\0';
             start = i + 1;
         }
 
-        prev = (prev == esc) ? ' ' : buf[i];
+        prev = (prev == esc) ? '\0' : s[i];
     }
+    *out = res;
 
+    return parts;
+}
+
+extern char **str_split_big(char *s, const char *delims, int *parts)
+{
+    char **res = NULL;
+    *parts = _str_split(s, delims, &res, 0);
     return res;
+}
+
+extern int str_split(char *s, const char *delims, char *out[], int max)
+{
+    return _str_split(s, delims, &out, max);
 }
 
 extern long long str_to_sid(char *str)

@@ -1,9 +1,6 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-fn test(): point
+fn test() point
 {
-    return unknown_tmp_var;
+	return unknown_tmp_var;
 }

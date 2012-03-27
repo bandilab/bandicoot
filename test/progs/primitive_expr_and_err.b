@@ -1,11 +1,8 @@
-rel test {
-    i: int,
-    s: string,
-}
+type test {i int, s string}
 
-t: test;
+var t test;
 
-fn s_and_err(): test
+fn s_and_err() test
 {
-    return t select(s && i);
+	return (select s && i t);
 }

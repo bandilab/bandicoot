@@ -1,12 +1,8 @@
-rel point {
-    x: real,
-    y: real,
-    time: int,
-}
+type point {x real, y real, when int}
 
-p: point;
+var p point;
 
-fn cannot_rename(): point
+fn cannot_rename() point
 {
-    return p rename(x_coord = x, time = y);
+	return (rename x_coord = x, when = y p);
 }

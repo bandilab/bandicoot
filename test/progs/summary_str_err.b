@@ -1,8 +1,6 @@
-rel Emp {
-    name: string,
-}
+type Emp {name string}
 
-fn addUp(e: Emp): Emp
+fn addUp(e Emp) Emp
 {
-    return e summary(name = min(name, ""));
+	return (summary name = (min name "") e);
 }

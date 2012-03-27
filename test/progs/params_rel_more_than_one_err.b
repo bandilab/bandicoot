@@ -1,10 +1,6 @@
-rel point {
-    x: int,
-    y: int,
-}
+type point {x int, y int}
 
-p: point;
+var p point;
 
-fn test(a, b: point}
-{
-}
+fn test(a b point) void
+{}

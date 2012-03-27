@@ -378,18 +378,20 @@ static void test_compound()
 
     /* compound with a parameter */
     char union_2_l[1024];
-    str_cpy(union_2_l, "car:string,date:string,email:string,"
-                  "name:string,phone:string,pos:int,time:int\n"
-                  "myCar,28-Jun-2010,myEmail,myName,myPhone,2,14");
+    str_cpy(union_2_l,
+            "car:string,date:string,email:string,"
+            "name:string,phone:string,pos:int,when:int\n"
+            "myCar,28-Jun-2010,myEmail,myName,myPhone,2,14");
 
     if (!equal(rel_union(pack(union_2_l),
                          load("union_2_r")),
                "union_2_res"))
         fail();
 
-    str_cpy(union_2_l, "car:string,date:string,email:string,"
-                  "name:string,phone:string,pos:int,time:int\n"
-                  "myCar,28-Jun-2010,myEmail,myName,myPhone,2,14");
+    str_cpy(union_2_l,
+            "car:string,date:string,email:string,"
+            "name:string,phone:string,pos:int,when:int\n"
+            "myCar,28-Jun-2010,myEmail,myName,myPhone,2,14");
     if (!equal(rel_union(load("union_2_r"),
                          pack(union_2_l)),
                "union_2_res"))

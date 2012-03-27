@@ -1,9 +1,9 @@
-rel point { x: int }
+type point {x int}
 
-p: point;
+var p point;
 
-fn test(t: point)
+fn test(t point) void
 {
-   p = p + t;
-   p = t;
+	p = (union p t);
+	p = t;
 }

@@ -1,12 +1,7 @@
-rel A {
-    a: int,
-    b: string,
-    c: real,
-}
+type A {a int, b string, c real}
 
-rel B {
-    a: int,
-}
+type B {a int}
 
-a: A;
-b: B;
+var a A;
+
+var b B;

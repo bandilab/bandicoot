@@ -1,22 +1,10 @@
-rel T {
-    i: int,
-    r: real,
-    l: long,
-}
+type T {i int, r real, l long}
 
-fn test(t: T): T
+fn test(t T) T
 {
-    i_sel := t select(i < int(i))
-               select(i < int(r))
-               select(i < int(l));
+	var i_sel = (select i < (int l) (select i < (int r) (select i < (int i) t)));
+	var r_sel = (select r < (real l) (select r < (real r) (select r < (real i) t)));
+	var l_sel = (select l < (long l) (select l < (long r) (select l < (long i) t)));
 
-    r_sel := t select(r < real(i))
-               select(r < real(r))
-               select(r < real(l));
-
-    l_sel := t select(l < long(i))
-               select(l < long(r))
-               select(l < long(l));
-
-    return i_sel + r_sel + l_sel;
+	return (union (union i_sel r_sel) l_sel);
 }

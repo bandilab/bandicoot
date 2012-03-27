@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,14 +71,20 @@ static int feed_lex(void *buf, int max_size)
 "long"              { return TK_LONG; }
 "real"              { return TK_REAL; }
 "string"            { return TK_STRING; }
-"rel"               { return TK_REL; }
+"void"              { return TK_VOID; }
 "fn"                { return TK_FN; }
+"var"               { return TK_VAR; }
+"type"              { return TK_TYPE; }
 "return"            { return TK_RETURN; }
 "project"           { return TK_PROJECT; }
 "rename"            { return TK_RENAME; }
 "select"            { return TK_SELECT; }
 "extend"            { return TK_EXTEND; }
 "summary"           { return TK_SUMMARY; }
+"join"              { return TK_JOIN; }
+"minus"             { return TK_MINUS; }
+"union"             { return TK_UNION; }
+"time"              { return TK_TIME; }
 
                     /* TODO: hex & octal numbers? */
 [0-9]+              {
@@ -140,7 +146,6 @@ static int feed_lex(void *buf, int max_size)
 ")"                 { return ')'; }
 "]"                 { return ']'; }
 "["                 { return '['; }
-":"                 { return ':'; }
 ";"                 { return ';'; }
 ","                 { return ','; }
 "!"                 { return '!'; }

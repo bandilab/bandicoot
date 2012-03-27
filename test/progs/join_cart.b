@@ -1,22 +1,12 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-rel color {
-    r: int,
-    g: int,
-    b: int,
-}
+type color {r int, g int, b int}
 
-p1: point;
-p2: color;
+var p1 point;
 
-fn s_join(): rel { x: real,
-                   y: real,
-                   r: int,
-                   g: int,
-                   b: int }
+var p2 color;
+
+fn s_join() {x real, y real, r int, g int, b int}
 {
-    return p1 * p2;
+	return (join p1 p2);
 }

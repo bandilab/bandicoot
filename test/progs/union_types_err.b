@@ -1,17 +1,12 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-rel address {
-    street: string,
-    building: int,
-}
+type address {street string, building int}
 
-p: point;
-a: address;
+var p point;
 
-fn cannot_union(): point
+var a address;
+
+fn cannot_union() point
 {
-    return p + a;
+	return (union p a);
 }

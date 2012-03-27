@@ -1,4 +1,4 @@
-c:string,b:real
+c string,b real
 first,1.01
 second,2.01
 third,1.03

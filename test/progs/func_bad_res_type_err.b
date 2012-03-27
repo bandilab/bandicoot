@@ -1,16 +1,12 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-a: point;
-b: point;
+var a point;
 
-rel point_res {
-    r: real,
-}
+var b point;
 
-fn test(): point_res
+type point_res {r real}
+
+fn test() point_res
 {
-    return a - b;
+	return (minus a b);
 }

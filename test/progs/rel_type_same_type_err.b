@@ -1,9 +1,3 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-rel point {
-    a: real,
-    b: real,
-}
+type point {a real, b real}

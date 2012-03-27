@@ -1,18 +1,12 @@
-rel 2Dpoint {
-    x: real,
-    y: real,
-}
+type 2Dpoint {x real, y real}
 
-rel 3Dpoint{
-    x: int,
-    y: int,
-    z: int,
-}
+type 3Dpoint {x int, y int, z int}
 
-p1: 2Dpoint;
-p2: 3Dpoint;
+var p1 2Dpoint;
 
-fn s_join(): 3Dpoint
+var p2 3Dpoint;
+
+fn s_join() 3Dpoint
 {
-    return p1 * p2;
+	return (join p1 p2);
 }

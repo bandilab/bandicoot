@@ -1,8 +1,8 @@
-rel T { v: long }
+type T {v long}
 
-t: T;
+var t T;
 
-fn test(): T
+fn test() T
 {
-    return t select(v > -9223372036854775809L);
+	return (select v > -9223372036854775809L t);
 }

@@ -1,22 +1,15 @@
-rel some_type {
-    hello: int,
-    world: real,
-    str: string,
+type some_type {hello int, world real, str string}
+
+var some_var some_type;
+
+fn some_svc() some_type
+{
+	return some_var;
 }
 
-some_var: some_type;
+var inline_test {when money long, bid ask real};
 
-fn some_svc(): some_type
+fn test(p {x y real}) {x y z real}
 {
-    return some_var;
-}
-
-inline_test: rel {
-    time, money: long,
-    bid, ask: real
-};
-
-fn test(p: rel {x, y: real}): rel { x, y, z: real }
-{
-    return p extend(z = 0.0);
+	return (extend z = 0.0 p);
 }

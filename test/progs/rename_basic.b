@@ -1,16 +1,10 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-p: point;
+var p point;
 
-rel point_res {
-    x_coord: real,
-    y_coord: real,
-}
+type point_res {x_coord real, y_coord real}
 
-fn s_rename(): point_res
+fn s_rename() point_res
 {
-    return p rename(x_coord = x, y_coord = y);
+	return (rename x_coord = x, y_coord = y p);
 }

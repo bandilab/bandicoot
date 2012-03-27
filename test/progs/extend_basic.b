@@ -1,16 +1,13 @@
-rel point {
-    x: real,
-    y: real
+type point {x real, y real}
+
+var p point;
+
+fn test() {x real, y real, color int}
+{
+	return (extend color = 0 p);
 }
 
-p: point;
-
-fn test(): rel {x: real, y: real, color: int}
+fn test2(c int) {x real, y real, color int}
 {
-    return p extend(color = 0);
-}
-
-fn test2(c: int): rel {x: real, y: real, color: int}
-{
-    return p extend(color = c);
+	return (extend color = c p);
 }

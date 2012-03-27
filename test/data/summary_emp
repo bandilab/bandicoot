@@ -1,4 +1,4 @@
-age:int,name:string,salary:real,dep_name:string,birth:long
+age int,name string,salary real,dep_name string,birth long
 30,A,1250.50,HR,2147483647
 40,B,-990.0,IT,2147483647
 50,C,-2007.0,IT,4294967294

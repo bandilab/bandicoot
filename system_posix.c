@@ -49,6 +49,7 @@ limitations under the License.
 
 extern void sys_init(int log)
 {
+    errno = 0;
     signal(SIGPIPE, SIG_IGN);
     str_init();
     glog = log;

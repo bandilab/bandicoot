@@ -1,59 +1,44 @@
-rel Pos { pos: int }
-rel Time { time: long }
+type Pos {pos int}
 
-pos: Pos;
-time: Time;
+type Time {when long}
 
-rel Dims {
-    min_time: long,
-    max_time: long,
-    min_pos: int,
-    max_pos: int,
-    avg_pos: real,
-    add_pos: int
-}
+var pos Pos;
 
-fn dim1(): Dims
+var when Time;
+
+type Dims {min_time long, max_time long, min_pos int, max_pos int, avg_pos real, add_pos int}
+
+fn dim1() Dims
 {
-    t := time extend(id = 1);
-    p := pos extend(id = 1);
+	var t = (extend id = 1 when);
+	var p = (extend id = 1 pos);
+	var st = (summary min_time = (min when 0L), max_time = (max when -3L) t (project id t));
+	var sp = (summary min_pos = (min pos 0), max_pos = (max pos 0), avg_pos = (avg pos 0.0), add_pos = (add pos 0) p (project id p));
 
-    st := (t, t project(id)) summary(min_time = min(time, 0L),
-                                     max_time = max(time, -3L));
-
-    sp := (p, p project(id)) summary(min_pos = min(pos, 0),
-                                     max_pos = max(pos, 0),
-                                     avg_pos = avg(pos, 0.0),
-                                     add_pos = add(pos, 0));
-
-    return (st * sp);
+	return (join st sp);
 }
 
-fn dim2(): Dims
+fn dim2() Dims
 {
-    return time summary(min_time = min(time, 0L), max_time = max(time, 0L))
-           * pos summary(min_pos = min(pos, 0), 
-                         max_pos = max(pos, 0),
-                         avg_pos = avg(pos, 0.0),
-                         add_pos = add(pos, 0));
+	return (join (summary min_time = (min when 0L), max_time = (max when 0L) when) (summary min_pos = (min pos 0), max_pos = (max pos 0), avg_pos = (avg pos 0.0), add_pos = (add pos 0) pos));
 }
 
-rel Queue {
-    order: int,
-}
+type Queue {order int}
 
-queue: Queue;
+var queue Queue;
 
-fn next(): rel {order: int}
+fn next() {order int}
 {
-    return queue summary(order = max(order, 0))
-                 extend(norder = order + 1)
-                 project(norder)
-                 rename(order = norder);
+	return (rename order = norder (project norder (extend norder = order + 1 (summary order = (max order 0) queue))));
 }
 
-
-fn count(): rel {count: int}
+fn count() {count int}
 {
-    return queue summary(count = cnt());
+	return (summary count = cnt queue);
+}
+
+fn SumPrecedenceCheck() void
+{
+	var t = (extend id = 1 when);
+	var st = (select min_time > 0L (summary min_time = (min when 0L), max_time = (max when -3L) t (project id t)));
 }

@@ -441,26 +441,25 @@ static void tx_init(const char *source, const char *state)
 
     long long vers[MAX_VARS];
     char *names[MAX_VARS];
-    int len;
+    char *lines[MAX_VARS];
+    char *name_sid[2];
 
     char *buf = sys_load(gstate);
-    char **lines = str_split(buf, '\n', &len);
+    int len = str_split(buf, "\n", lines, MAX_VARS);
+    if (len < 0)
+        sys_die("number of variables in the state file exceeds %d", MAX_VARS);
+
     if (str_len(lines[len - 1]) == 0)
         --len;
 
     for (int i = 0; i < len; ++i) {
-        int cnt;
-        char **name_sid = str_split(lines[i], ',', &cnt);
+        int cnt = str_split(lines[i], ",", name_sid, 2);
         if (cnt != 2)
             sys_die("bad line %s:%d\n", gstate, i + 1);
 
         names[i] = str_dup(name_sid[0]);
         vers[i] = str_to_sid(name_sid[1]);
-
-        mem_free(name_sid);
     }
-
-    mem_free(lines);
     mem_free(buf);
 
     gvars.len = len;

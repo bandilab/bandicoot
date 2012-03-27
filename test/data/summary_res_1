@@ -1,4 +1,4 @@
-dep_name:string,employees:int,min_age:int,max_age:int,avg_age:real,add_age:int,min_salary:real,max_salary:real,avg_salary:real,add_salary:real,min_birth:long,max_birth:long,avg_birth:real,add_birth:long
+dep_name string,employees int,min_age int,max_age int,avg_age real,add_age int,min_salary real,max_salary real,avg_salary real,add_salary real,min_birth long,max_birth long,avg_birth real,add_birth long
 IT,3,40,72,54.0,162,-2007.0,-3.75,-1000.25,-3000.75,0,4294967294,2147483647.0,6442450941
 HR,2,30,60,45.0,90,2.0,1250.50,626.25,1252.50,-147483647,2147483647,1000000000.0,2000000000
 SecretDep,0,-1,-1,1.0,-1,0.0,0.0,0.0,0.0,-1,0,-0.99,0

@@ -1,9 +1,10 @@
-rel point { x: real, y: real }
+type point {x real, y real}
 
-gp: point;
+var gp point;
 
-fn test(p: point): point
+fn test(p point) point
 {
-    gp = p;
-    return gp;
+	gp = p;
+
+	return gp;
 }

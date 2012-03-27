@@ -1,4 +1,4 @@
-c:string,d:int,a:int
+c string,d int,a int
 one_name,0,1
 two_name,0,2
 three_name,0,3

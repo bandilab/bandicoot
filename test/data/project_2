@@ -1,4 +1,4 @@
-c:string,a:int,b:real
+c string,a int,b real
 hello,1,1.01
 hello,2,2.01
 hello,3,1.03

@@ -1,10 +1,8 @@
-rel test {
-    r: real,
-}
+type test {r real}
 
-t: test;
+var t test;
 
-fn s_not(): test
+fn s_not() test
 {
-    return t select(!r);
+	return (select !r t);
 }

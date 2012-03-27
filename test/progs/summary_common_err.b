@@ -1,14 +1,10 @@
-rel Emp {
-    salary: int,
-}
+type Emp {salary int}
 
-rel Dep {
-    name: string
-}
+type Dep {name string}
 
-d: Dep;
+var d Dep;
 
-fn addUp(e: Emp): rel {avg_salary: real}
+fn addUp(e Emp) {avg_salary real}
 {
-    return (e, d) summary(avg_salary = avg(salary, (1.0 * salary)));
+	return (summary avg_salary = (avg salary (1.0 * salary)) e d);
 }

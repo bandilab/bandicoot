@@ -1,17 +1,10 @@
-rel test {
-    i: int,
-    r: real,
-}
+type test {i int, r real}
 
-t: test;
+var t test;
 
-rel test_res {
-    i: int,
-    r: real,
-    x: int,
-}
+type test_res {i int, r real, x int}
 
-fn s_sum_err()
+fn s_sum_err() void
 {
-    return t extend(x = i + r);
+	return (extend x = i + r t);
 }

@@ -150,7 +150,7 @@ static void test_unpack()
     int i = 0;
     char str[11 + MAX_STRING];
 
-    char *data = "a:int,c:string\n123,hehehe\n";
+    char *data = "a int,c string\n123,hehehe\n";
     str_cpy(str, data);
 
     Rel *rel = pack_init(str);
@@ -168,7 +168,7 @@ static void test_unpack()
     p[MAX_STRING] = '\n';
     p[MAX_STRING + 1] = '\0';
 
-    data = "a:string\n";
+    data = "a string\n";
     char data2[str_len(data) + str_len(p)];
     str_cpy(data2, data);
     str_cpy(data2 + str_len(data), p);

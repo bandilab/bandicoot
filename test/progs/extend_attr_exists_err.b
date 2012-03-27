@@ -1,11 +1,8 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-p: point;
+var p point;
 
-fn test(): point
+fn test() point
 {
-    return p extend(x = "replacing an attribute");
+	return (extend x = "replacing an attribute" p);
 }

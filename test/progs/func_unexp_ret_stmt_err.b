@@ -1,12 +1,10 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-a: point;
-b: point;
+var a point;
 
-fn test()
+var b point;
+
+fn test() void
 {
-    return a * b;
+	return (join a b);
 }

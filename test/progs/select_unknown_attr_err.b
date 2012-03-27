@@ -1,9 +1,6 @@
-rel point {
-    x: int,
-    y: int,
-}
+type point {x int, y int}
 
-fn test(p: point): point
+fn test(p point) point
 {
-    return p select(z > 10);
+	return (select z > 10 p);
 }

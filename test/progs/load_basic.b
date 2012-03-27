@@ -1,11 +1,8 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-p: point;
+var p point;
 
-fn s_load(): point
+fn s_load() point
 {
-    return p;
+	return p;
 }

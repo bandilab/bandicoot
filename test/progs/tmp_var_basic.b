@@ -1,13 +1,15 @@
-rel point { x: real, y: real }
+type point {x real, y real}
 
-p1: point;
-p2: point;
+var p1 point;
 
-store: point;
+var p2 point;
 
-fn hello(): point
+var store point;
+
+fn hello() point
 {
-    tmp := p1 - p2;
-    store = tmp;
-    return tmp;
+	var tmp = (minus p1 p2);
+	store = tmp;
+
+	return tmp;
 }

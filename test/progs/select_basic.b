@@ -1,16 +1,13 @@
-rel point {
-    x: int,
-    y: int,
+type point {x int, y int}
+
+fn test(p point) point
+{
+	return (select x > 10 p);
 }
 
-fn test(p: point): point
-{
-    return p select(x > 10);
-}
+var p point;
 
-p: point;
-
-fn test2(i: int): point
+fn test2(i int) point
 {
-    return p select(x > i);
+	return (select x > i p);
 }

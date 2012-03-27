@@ -12,9 +12,9 @@ CC="gcc -g -std=c99 $WARN $YACC_FLAGS"
 YACC="yacc -d"
 LEX="flex -I"
 
-LIBS="array% expression% head% http% index% memory% pack% relation%"
-LIBS="$LIBS string% summary% tuple% transaction% value% version% volume%"
-LIBS="$LIBS test/common% lex.yy% y.tab%"
+LIBS="array% convert% convert.lex% expression% head% http% index% memory% pack%"
+LIBS="$LIBS relation% string% summary% tuple% transaction% value% version%"
+LIBS="$LIBS volume% test/common% lex.yy% y.tab%"
 STRUCT_TESTS="test/array% test/expression% test/head% test/http% test/index%"
 STRUCT_TESTS="$STRUCT_TESTS test/language% test/list% test/memory%"
 STRUCT_TESTS="$STRUCT_TESTS test/multiproc% test/network% test/number%"
@@ -54,6 +54,8 @@ prepare_lang()
 {
     $YACC language.y
     $LEX language.l
+    $YACC -o convert.c -p conv_ convert.y
+    $LEX -o convert.lex.c -P conv_ convert.l
 }
 
 prepare_version()
@@ -115,7 +117,7 @@ clean()
 {
     find . -name '*.o' -exec rm {} \;
     find . -name '*.log' -exec rm {} \;
-    rm -rf version.c y.tab.[ch] lex.yy.c $BIN
+    rm -rf version.c y.tab.[ch] convert.[ch] lex.yy.c convert.lex.c $BIN
     rm -rf "bandicoot-$VERSION"
 }
 

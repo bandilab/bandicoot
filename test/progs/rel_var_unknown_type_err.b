@@ -1,7 +1,5 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-p: point;
-de: doesnt_exist;
+var p point;
+
+var de doesnt_exist;

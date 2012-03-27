@@ -1,6 +1,3 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-point: point;
+var point point;

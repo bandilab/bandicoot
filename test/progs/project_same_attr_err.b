@@ -1,15 +1,10 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-p: point;
+var p point;
 
-rel point_res {
-    x: real,
-}
+type point_res {x real}
 
-fn cannot_project(): point_res
+fn cannot_project() point_res
 {
-    return p project(x, x);
+	return (project x, x p);
 }

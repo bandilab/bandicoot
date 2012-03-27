@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,10 +50,14 @@ static void test_rel_types()
 static void test_rel_vars()
 {
     OK("rel_var_basic.b");
+    OK("rel_var_multiple_decls.b");
     FAIL("rel_var_unknown_type_err.b");
     FAIL("rel_var_reassign_err.b");
     FAIL("rel_var_redecl_err.b");
     FAIL("rel_var_redecl_2_err.b");
+    FAIL("rel_var_redecl_3_err.b");
+    FAIL("rel_var_redecl_4_err.b");
+    FAIL("rel_var_redecl_5_err.b");
     FAIL("rel_var_name_err.b");
     FAIL("rel_var_read_after_assign_err.b");
     FAIL("rel_var_max_vars_err.b");
@@ -66,6 +70,7 @@ static void test_func()
     FAIL("func_unknown_res_type_err.b");
     FAIL("func_bad_res_type_err.b");
     FAIL("func_unexp_ret_stmt_err.b");
+    FAIL("func_missing_res_type_err.b");
     FAIL("func_missing_ret_stmt_err.b");
     FAIL("func_missing_ret_stmt_2_err.b");
     FAIL("func_stmt_exceeded_err.b");

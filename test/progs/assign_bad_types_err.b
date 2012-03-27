@@ -1,17 +1,12 @@
-rel point {
-    x: real,
-    y: real,
-}
+type point {x real, y real}
 
-rel user {
-    id: int,
-    name: string,
-}
+type user {id int, name string}
 
-p: point;
-u: user;
+var p point;
 
-fn cannot_assign()
+var u user;
+
+fn cannot_assign() void
 {
-    p = u;
+	p = u;
 }

@@ -1,11 +1,8 @@
-rel test {
-    i: int,
-    r: real,
-}
+type test {i int, r real}
 
-t: test;
+var t test;
 
-fn s_neq_err(): test
+fn s_neq_err() test
 {
-    return t select(i != r);
+	return (select i != r t);
 }

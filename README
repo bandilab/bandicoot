@@ -2,6 +2,13 @@ Bandicoot - http://bandilab.org
 
 Compatibility Notes
 
+* v5: synax changes: calling conventions, type declarations
+
+  Use "bandicoot convert" to transform programs to the v5 syntax. Keep in mind
+  that bandicoot stores the currently deployed version of your program as
+  ".source" in the data directory ("-d" startup argument). This program needs
+  to be converted as well.
+
 * v4: backward compatible with v3
 
 * v3: startup arguments have changed.

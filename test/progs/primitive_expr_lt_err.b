@@ -1,11 +1,8 @@
-rel test {
-    i: int,
-    r: real,
-}
+type test {i int, r real}
 
-t: test;
+var t test;
 
-fn s_lt_err(): test
+fn s_lt_err() test
 {
-    return t select(r < i);
+	return (select r < i t);
 }
