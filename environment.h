@@ -34,12 +34,14 @@ typedef struct {
     struct {
         char *name;
         Rel *rel;
+        int position;
     } rp; /* relational input parameter */
 
     struct {
         int len;
         char *names[MAX_ATTRS];
         Type types[MAX_ATTRS];
+        int positions[MAX_ATTRS];
     } pp; /* primitive input parameters */
 } Func;
 
@@ -61,5 +63,6 @@ extern Env *env_new(const char *path, const char *program);
 extern void env_free(Env *env);
 
 extern Func *env_func(Env *env, const char *name);
+extern Func **env_funcs(Env *env, const char *name, int *cnt);
 extern Head *env_head(Env *env, const char *var);
 extern int env_compat(Env *old, Env *new);

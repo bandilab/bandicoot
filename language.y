@@ -1,6 +1,6 @@
 /*
 Copyright 2008-2012 Ostap Cherkashin
-Copyright 2008-2011 Julius Chrobak
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ limitations under the License.
 extern void yyerror(const char *, ...);
 extern int yylex();
 
+static int gposition = 0;
 static Func *gfunc = NULL;
 static Env *genv = NULL;
 
@@ -456,6 +457,25 @@ extern Func *env_func(Env *env, const char *name)
     return idx < 0 ? NULL : env->fns.funcs[idx];
 }
 
+extern Func **env_funcs(Env *env, const char *name, int *cnt)
+{
+    int len = str_len(name);
+    if (len == 0)
+        *cnt = env->fns.len;
+    else
+        *cnt = array_freq(env->fns.names, env->fns.len, name);
+
+    if (*cnt == 0)
+        return NULL;
+
+    Func **res = mem_alloc(sizeof(Func*) * (*cnt));
+    for (int j = 0, i = 0; i < env->fns.len; ++i)
+        if (len == 0 || str_cmp(name, env->fns.names[i]) == 0)
+            res[j++] = env->fns.funcs[i];
+
+    return res;
+}
+
 static L_Attrs attr_name(const char *name)
 {
     L_Attrs res = {.len = 1,
@@ -825,6 +845,7 @@ static void fn_rel_params(L_Attrs names, Head *h)
 
     gfunc->rp.name = str_dup(names.names[0]);
     gfunc->rp.rel = rel_param(h);
+    gfunc->rp.position = ++gposition;
     mem_free(h); /* FIXME: it is duplicated in rel_param */
     attr_free(names);
 }
@@ -843,6 +864,7 @@ static void fn_prim_params(L_Attrs attrs)
         int pos = gfunc->pp.len++;
         gfunc->pp.types[pos] = attrs.types[i];
         gfunc->pp.names[pos] = str_dup(attrs.names[i]);
+        gfunc->pp.positions[pos] = ++gposition;
     }
     attr_free(attrs);
 }
@@ -852,6 +874,7 @@ static void fn_start(const char *name)
     if (array_scan(genv->fns.names, genv->fns.len, name) > -1)
         yyerror("function '%s' is already defined", name);
 
+    gposition = 0;
     gfunc = mem_alloc(sizeof(Func));
     str_cpy(gfunc->name, name);
     gfunc->head = NULL;
@@ -862,12 +885,16 @@ static void fn_start(const char *name)
     gfunc->pp.len = 0;
     gfunc->rp.name = NULL;
     gfunc->rp.rel = NULL;
+    gfunc->rp.position = 0;
 }
 
 static void fn_add()
 {
     if (gfunc->head != NULL && gfunc->ret == NULL)
         yyerror("function '%s' is missing a return statement", gfunc->name);
+
+    if (genv->fns.len + 1 >= MAX_VARS)
+        yyerror("number of functions exceeds maximum (%d)", MAX_VARS);
 
     int len = genv->fns.len++;
     genv->fns.names[len] = gfunc->name;

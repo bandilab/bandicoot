@@ -1,0 +1,17 @@
+fname string,pattr string,pname string,ptype string
+test_sign1,,,
+test_sign1,fname,return,string
+test_sign1,pattr,return,string
+test_sign1,pname,return,string
+test_sign1,ptype,return,string
+test_sign1,,i,int
+test_sign1,,s,string
+test_sign1,,r,real
+test_sign1,,l,long
+test_sign1,car,rr,string
+test_sign1,date,rr,string
+test_sign1,email,rr,string
+test_sign1,name,rr,string
+test_sign1,phone,rr,string
+test_sign1,pos,rr,int
+test_sign1,when,rr,int

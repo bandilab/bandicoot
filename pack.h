@@ -15,5 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-extern TBuf *rel_pack_sep(char *buf, Head **head);
-extern int rel_unpack(Rel *r, char *buf, int size, int iteration);
+extern TBuf *pack_csv2rel(char *buf, Head **head);
+extern int pack_rel2csv(Rel *r, char *buf, int size, int iteration);
+extern int pack_fn2csv(Func **fns, int cnt, char *buf, int size, int *iteration);

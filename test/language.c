@@ -28,6 +28,20 @@ static char run(char *file)
     return ret;
 }
 
+static int pp_pos(Func *fn, const char *name)
+{
+    int i = array_scan(fn->pp.names, fn->pp.len, name);
+    return (i > -1) ? fn->pp.positions[i] : 0;
+}
+
+static int rp_pos(Func *fn, const char *name)
+{
+    if (str_cmp(fn->rp.name, name) == 0)
+        return fn->rp.position;
+
+    return 0;
+}
+
 #define OK(f) do { if (run("test/progs/" f)) fail(); } while (0)
 #define FAIL(f) do { if (!run("test/progs/" f)) fail(); } while (0)
 
@@ -35,6 +49,7 @@ static void test_basics()
 {
     OK("basic_empty.b");
     OK("basic_prog.b");
+    FAIL("basic_max_funcs_err.b");
 }
 
 static void test_rel_types()
@@ -173,6 +188,37 @@ static void test_params()
     FAIL("params_rel_more_than_one_err.b");
     FAIL("params_prim_redecl_err.b");
     FAIL("params_max_attrs_err.b");
+
+    const char *s = "test/progs/params_order.b";
+    char *c = sys_load(s);
+    Env *e = env_new(s, c);
+
+    Func *f = env_func(e, "rel_param1");
+    if (rp_pos(f, "p") != 1 ||
+        pp_pos(f, "i") != 2 ||
+        pp_pos(f, "l") != 3 ||
+        pp_pos(f, "r") != 4 ||
+        pp_pos(f, "s") != 5)
+        fail();
+
+    f = env_func(e, "rel_param2");
+    if (pp_pos(f, "l") != 1 ||
+        pp_pos(f, "i") != 2 ||
+        rp_pos(f, "p") != 3 ||
+        pp_pos(f, "r") != 4 ||
+        pp_pos(f, "s") != 5)
+        fail();
+
+    f = env_func(e, "rel_param3");
+    if (pp_pos(f, "s") != 1 ||
+        pp_pos(f, "r") != 2 ||
+        pp_pos(f, "l") != 3 ||
+        pp_pos(f, "i") != 4 ||
+        rp_pos(f, "p") != 5)
+        fail();
+
+    mem_free(c);
+    env_free(e);
 }
 
 static void test_compat()

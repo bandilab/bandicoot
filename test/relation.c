@@ -24,7 +24,7 @@ static Env *env = NULL;
 static Rel *pack(char *str)
 {
     Head *h;
-    TBuf *buf = rel_pack_sep(str, &h);
+    TBuf *buf = pack_csv2rel(str, &h);
     Rel *res = NULL;
 
     if (buf != NULL) {

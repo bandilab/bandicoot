@@ -27,6 +27,7 @@ limitations under the License.
 #include "expression.h"
 #include "summary.h"
 #include "relation.h"
+#include "environment.h"
 
 static int valid_id(const char *id)
 {
@@ -49,10 +50,10 @@ static int valid_id(const char *id)
 /*
 FIXME: report pack errors
 Rel *err = head_pack(...)
-Rel *err = rel_pack_sep(...)
+Rel *err = pack_csv2rel(...)
 
 static Rel *head_pack(char *buf, char *names[], Head **out);
-extern Rel *rel_pack_sep(char *buf, Head **res_h, TBuf *res_b);
+extern Rel *pack_csv2rel(char *buf, Head **res_h, TBuf *res_b);
 */
 static Head *head_pack(char *buf, char *names[])
 {
@@ -80,7 +81,7 @@ static Head *head_pack(char *buf, char *names[])
     return head_new(copy, types, attrs_len);
 }
 
-extern TBuf *rel_pack_sep(char *buf, Head **res_h)
+extern TBuf *pack_csv2rel(char *buf, Head **res_h)
 {
     Head *h = NULL;
     TBuf *tbuf = NULL, *res_tbuf = NULL;
@@ -195,7 +196,7 @@ static int tuple_unpack(char *dest, Tuple *t, int len, Type type[])
     return off;
 }
 
-extern int rel_unpack(Rel *r, char *buf, int size, int iteration)
+extern int pack_rel2csv(Rel *r, char *buf, int size, int iteration)
 {
     int off = 0;
 
@@ -223,6 +224,55 @@ extern int rel_unpack(Rel *r, char *buf, int size, int iteration)
         tbuf_free(r->body);
         r->body = NULL;
     }
+
+    return off;
+}
+
+extern int pack_fn2csv(Func **fns, int cnt, char *buf, int size, int *iteration)
+{
+    int idx = (*iteration)++, off = 0;
+    if (idx == 0) {
+        char *names[] = {"fname", "pname", "pattr", "ptype"};
+        Type types[] = {String, String, String, String};
+
+        Head *h = head_new(names, types, 4);
+        off = head_unpack(buf, h);
+        mem_free(h);
+    }
+
+    if (cnt <= idx)
+        return off;
+    Func *fn = fn = fns[idx];
+
+    char *pattern = "%s,%s,%s,%s\n";
+    char *name = fn->name;
+    Head *head = fn->head;
+
+    off += str_print(buf + off, pattern, name, "", "", "");
+
+    if (head != NULL)
+        for (int j = 0; j < head->len; ++j)
+            off += str_print(buf + off, pattern,
+                             name,
+                             head->names[j],
+                             "return",
+                             type_to_str(head->types[j]));
+
+    for (int j = 0; j < fn->pp.len; ++j)
+        off += str_print(buf + off, pattern,
+                         name,
+                         "",
+                         fn->pp.names[j],
+                         type_to_str(fn->pp.types[j]));
+
+    Rel *rp = fn->rp.rel;
+    if (rp != NULL)
+        for (int i = 0; i < rp->head->len; ++i)
+            off += str_print(buf + off, pattern,
+                             name,
+                             rp->head->names[i],
+                             fn->rp.name,
+                             type_to_str(rp->head->types[i]));
 
     return off;
 }

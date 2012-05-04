@@ -210,7 +210,7 @@ static char *err(int err, char *buf)
 {
     /* TODO: unpacking of the res must be less than MAX_BLOCK */
     Rel *res = rel_err(ERR_MSGS[err].code, ERR_MSGS[err].msg);
-    rel_unpack(res, buf, MAX_BLOCK, 0);
+    pack_rel2csv(res, buf, MAX_BLOCK, 0);
     rel_free(res);
 
     return buf;
@@ -257,6 +257,21 @@ static void processor(const char *tx_addr, int port)
         }
 
         env = env_new("net", code);
+
+        if (str_idx(req->path, "/fn") == 0) {
+            int idx = (req->path[3] == '/') ? 4 : 3;
+            int i = 0, len = 1, cnt = 0;
+            Func **fns = env_funcs(env, req->path + idx, &cnt);
+
+            status = http_200(io);
+            while (status == 200 && len) {
+                len = pack_fn2csv(fns, cnt, res, MAX_BLOCK, &i);
+                status = http_chunk(io, res, len);
+            }
+
+            mem_free(fns);
+            goto exit;
+        }
 
         /* compare the request with the function defintion */
         Func *fn = env_func(env, req->path + 1);
@@ -322,7 +337,7 @@ static void processor(const char *tx_addr, int port)
 
         if (fn->rp.name != NULL) {
             Head *head = NULL;
-            arg->body = rel_pack_sep(req->body, &head);
+            arg->body = pack_csv2rel(req->body, &head);
 
             int eq = 0;
             if (head != NULL) {
@@ -371,11 +386,11 @@ static void processor(const char *tx_addr, int port)
 
         tx_commit(sid);
 
-        int len = 0, i = 0;
-        while (status == 200 && (len = rel_unpack(fn->ret, res, MAX_BLOCK, i++)))
+        int len = 1, i = 0;
+        while (status == 200 && len) {
+            len = pack_rel2csv(fn->ret, res, MAX_BLOCK, i++);
             status = http_chunk(io, res, len);
-
-        status = http_chunk(io, NULL, 0);
+        }
 exit:
         if (status != -1)
             sys_log('E', "%016llX method %c, path %s, time %lldms - %3d\n",
@@ -400,7 +415,6 @@ exit:
             http_free(req);
         if (env != NULL)
             env_free(env);
-
         sys_term(io);
     }
 

@@ -731,3 +731,55 @@ fn store_union_2_res(x Bookings) void
 {
 	union_2_res = x;
 }
+
+type Signature {
+    fname string,
+    pname string,
+    pattr string,
+    ptype string
+}
+
+var sign Signature;
+var sign1 Signature;
+
+fn load_sign() Signature
+{
+    return sign;
+}
+
+fn store_sign(x Signature) void
+{
+    sign = x;
+}
+
+fn load_sign1() Signature
+{
+    return sign1;
+}
+
+fn store_sign1(x Signature) void
+{
+    sign1 = x;
+}
+
+fn test_sign1(i int, rr Bookings, s string, r real, l long) Signature
+{
+    return sign;
+}
+
+fn test_sign2() void
+{
+}
+
+fn test_sign3() Signature
+{
+    return sign;
+}
+
+fn test_sign4(i int) void
+{
+}
+
+fn test_sign5(rr Bookings) void
+{
+}

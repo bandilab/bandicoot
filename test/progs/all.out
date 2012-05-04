@@ -78,3 +78,4 @@ test/progs/summary_str_err.b:5: invalid type of default value: string
 test/progs/tmp_var_redecl_err.b:12: variable 'tmp' is already defined
 test/progs/tmp_var_unknown_err.b:5: unknown variable 'unknown_tmp_var'
 test/progs/union_types_err.b:11: use of union with different types ({x real, y real} and {building int, street string})
+test/progs/basic_max_funcs_err.b:128: number of functions exceeds maximum (128)

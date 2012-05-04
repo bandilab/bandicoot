@@ -160,7 +160,7 @@ int main()
         fail();
 
     Head *h = NULL;
-    TBuf *b = rel_pack_sep(req->body, &h);
+    TBuf *b = pack_csv2rel(req->body, &h);
     if (b == NULL || h == NULL)
         fail();
 
