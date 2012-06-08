@@ -554,7 +554,10 @@ static L_Sum sum_create(const char *func, const char *attr, L_Expr *def)
     else if (str_cmp(func, "add") == 0)
         res.sum_type = ADD;
     else
-        yyerror("unkown function in summary operator %s", func);
+        yyerror("unkown function in summary operator '%s'", func);
+
+    if (def == NULL)
+        yyerror("missing default value for the summary operator '%s'", func);
 
     str_cpy(res.attr, attr);
     res.def = def;

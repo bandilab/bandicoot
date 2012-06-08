@@ -263,6 +263,8 @@ static void test_summary()
     FAIL("summary_attr_exists_err.b");
     FAIL("summary_max_attrs_unary_err.b");
     FAIL("summary_max_attrs_binary_err.b");
+    FAIL("summary_brackets_err.b");
+    FAIL("summary_unknown_err.b");
 }
 
 static void test_literal()
