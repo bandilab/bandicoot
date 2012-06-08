@@ -554,7 +554,10 @@ static L_Sum sum_create(const char *func, const char *attr, L_Expr *def)
     else if (str_cmp(func, "add") == 0)
         res.sum_type = ADD;
     else
-        yyerror("unkown function in summary operator %s", func);
+        yyerror("unkown function in summary operator '%s'", func);
+
+    if (def == NULL)
+        yyerror("missing default value for the summary operator '%s'", func);
 
     str_cpy(res.attr, attr);
     res.def = def;
@@ -610,9 +613,10 @@ static void add_relvar_inline(Head *head, L_Attrs vars)
         else {
             int j = genv->vars.len++;
             genv->vars.names[j] = str_dup(var);
-            genv->vars.heads[j] = head;
+            genv->vars.heads[j] = head_cpy(head);
         }
     }
+    mem_free(head);
     attr_free(vars);
 }
 

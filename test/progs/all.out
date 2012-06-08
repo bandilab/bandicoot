@@ -69,12 +69,14 @@ test/progs/select_unknown_attr_err.b:5: unknown attribute 'z' in {x int, y int}
 test/progs/semidiff_types_err.b:11: use of semidiff with no commmon attributes ({x real, y real} and {building int, street string})
 test/progs/summary_attr_err.b:5: unknown attribute 's' in {salary int}
 test/progs/summary_attr_exists_err.b:9: attribute 'salary' already exists in per {name string, salary int}
+test/progs/summary_brackets_err.b:5: missing default value for the summary operator 'add'
 test/progs/summary_common_err.b:9: use of summary with no commmon attributes ({salary int} and {name string})
 test/progs/summary_def_err.b:5: invalid type of default value, expected 'int', found real
 test/progs/summary_expr_err.b:5: only constant expressions are allowed for default values
 test/progs/summary_max_attrs_binary_err.b:7: summary result type exceeds the maximum number of attributes (64)
 test/progs/summary_max_attrs_unary_err.b:7: number of attributes exceeds the maximum (64)
 test/progs/summary_str_err.b:5: invalid type of default value: string
+test/progs/summary_unknown_err.b:5: unkown function in summary operator 'xyz'
 test/progs/tmp_var_redecl_err.b:12: variable 'tmp' is already defined
 test/progs/tmp_var_unknown_err.b:5: unknown variable 'unknown_tmp_var'
 test/progs/union_types_err.b:11: use of union with different types ({x real, y real} and {building int, street string})

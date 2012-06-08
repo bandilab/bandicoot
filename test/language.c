@@ -263,6 +263,8 @@ static void test_summary()
     FAIL("summary_attr_exists_err.b");
     FAIL("summary_max_attrs_unary_err.b");
     FAIL("summary_max_attrs_binary_err.b");
+    FAIL("summary_brackets_err.b");
+    FAIL("summary_unknown_err.b");
 }
 
 static void test_literal()
@@ -313,8 +315,10 @@ int main(int argc, char *argv[])
         change_stderr(log);
 
         char *code = sys_load(argv[1]);
-        env_new(argv[1], code);
+        Env *env = env_new(argv[1], code);
         mem_free(code);
+
+        env_free(env);
 
         ret = PROC_OK;
     }
