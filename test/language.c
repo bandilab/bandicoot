@@ -315,8 +315,10 @@ int main(int argc, char *argv[])
         change_stderr(log);
 
         char *code = sys_load(argv[1]);
-        env_new(argv[1], code);
+        Env *env = env_new(argv[1], code);
         mem_free(code);
+
+        env_free(env);
 
         ret = PROC_OK;
     }

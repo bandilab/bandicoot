@@ -613,9 +613,10 @@ static void add_relvar_inline(Head *head, L_Attrs vars)
         else {
             int j = genv->vars.len++;
             genv->vars.names[j] = str_dup(var);
-            genv->vars.heads[j] = head;
+            genv->vars.heads[j] = head_cpy(head);
         }
     }
+    mem_free(head);
     attr_free(vars);
 }
 
