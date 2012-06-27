@@ -336,18 +336,22 @@ static void processor(const char *tx_addr, int port)
         }
 
         if (fn->rp.name != NULL) {
-            Head *head = NULL;
-            arg->body = pack_csv2rel(req->body, &head);
+            if (req->len > 0) {
+                Head *head = NULL;
+                arg->body = pack_csv2rel(req->body, &head);
 
-            int eq = 0;
-            if (head != NULL) {
-                eq = head_eq(head, fn->rp.rel->head);
-                mem_free(head);
-            }
+                int eq = 0;
+                if (head != NULL) {
+                    eq = head_eq(head, fn->rp.rel->head);
+                    mem_free(head);
+                }
 
-            if (arg->body == NULL || !eq) {
-                status = http_400(io);
-                goto exit;
+                if (arg->body == NULL || !eq) {
+                    status = http_400(io);
+                    goto exit;
+                }
+            } else {
+                arg->body = tbuf_new();
             }
         }
 

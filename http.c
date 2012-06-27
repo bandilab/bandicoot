@@ -225,6 +225,7 @@ extern Http_Req *http_parse(IO *io)
     req->body = (char*) (req + 1);
     req->method = m;
     req->args = args;
+    req->len = size;
     str_cpy(req->path, path);
     if (size > 0)
         mem_cpy(req->body, buf + body_start, size);
@@ -233,7 +234,6 @@ extern Http_Req *http_parse(IO *io)
 exit:
     mem_free(buf);
     if (req == NULL && args != NULL) {
-
         for (int i = 0; i < args->len; ++i) {
             mem_free(args->names[i]);
             mem_free(args->vals[i]);
