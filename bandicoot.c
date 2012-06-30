@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -127,7 +127,7 @@ static Conn *queue_get(Queue *q)
 {
     mon_lock(q->mon);
     while (q->tail == NULL)
-        mon_wait(q->mon);
+        mon_wait(q->mon, -1);
 
     Conn *conn = q->tail->elem;
     q->tail = list_prev(q->tail);
@@ -139,19 +139,37 @@ static Conn *queue_get(Queue *q)
     return conn;
 }
 
+static void queue_wait(Queue *q, int ms)
+{
+    mon_lock(q->mon);
+    mon_wait(q->mon, ms);
+    mon_unlock(q->mon);
+}
+
 static void *waitq_thread(void *arg)
 {
+    Conn *start = NULL;
     Exec *e = arg;
     for (;;) {
         Conn *c = queue_get(e->waitq);
-        if (c->io->stop)
+        if (c->io->stop) {
+            start = NULL;
             conn_free(c);
-        else if (sys_iready(c->io, 0))
+        } else if (sys_iready(c->io, 0)) {
+            start = NULL;
             queue_put(e->runq, c);
-        else if (sys_millis() - c->time > KEEP_ALIVE_MS)
+        } else if (sys_millis() - c->time > KEEP_ALIVE_MS) {
+            start = NULL;
             conn_free(c);
-        else
+        } else {
+            if (start == c)                 /* we are in the wait-loop */
+                queue_wait(e->waitq, 10);   /* wait for new connections */
+
+            if (start == NULL)
+                start = c;
+
             queue_put(e->waitq, c);
+        }
     }
 
     return NULL;

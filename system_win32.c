@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -201,12 +201,18 @@ extern void mon_unlock(Mon *m)
     LeaveCriticalSection(m->mutex);
 }
 
-extern void mon_wait(Mon *m)
+extern void mon_wait(Mon *m, int ms)
 {
+    DWORD timeout = INFINITE;
+    if (ms >= 0)
+        timeout = ms;
+
     if (!ResetEvent(m->cond))
         sys_die("monitor: reset failed\n");
+
     LeaveCriticalSection(m->mutex);
-    if (WAIT_OBJECT_0 != WaitForSingleObject(m->cond, INFINITE))
+    int res = WaitForSingleObject(m->cond, timeout);
+    if (res != WAIT_OBJECT_0 && res != WAIT_TIMEOUT)
         sys_die("monitor: wait failed\n");
     EnterCriticalSection(m->mutex);
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,6 +94,6 @@ typedef struct {
 extern Mon *mon_new();
 extern void mon_lock(Mon *m);
 extern void mon_unlock(Mon *m);
-extern void mon_wait(Mon *m);
+extern void mon_wait(Mon *m, int ms);
 extern void mon_signal(Mon *m);
 extern void mon_free(Mon *m);

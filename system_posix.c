@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -187,10 +187,22 @@ extern void mon_unlock(Mon *m)
     }
 }
 
-extern void mon_wait(Mon *m)
+extern void mon_wait(Mon *m, int ms)
 {
-    int res = pthread_cond_wait(m->cond, m->mutex);
-    if (res != 0) {
+    int res = 0;
+    if (ms < 0) {
+        res = pthread_cond_wait(m->cond, m->mutex);
+    } else {
+        long long end = sys_millis() + ms;
+        struct timespec timeout = {
+            .tv_sec = end / 1000LL,
+            .tv_nsec = (end % 1000LL) * 1000000LL
+        };
+
+        res = pthread_cond_timedwait(m->cond, m->mutex, &timeout);
+    }
+
+    if (res != 0 && res != ETIMEDOUT) {
         errno = res;
         sys_die("monitor: wait failed\n");
     }

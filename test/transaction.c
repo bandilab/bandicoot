@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,7 +48,7 @@ static void sem_dec(Mon *m)
 {
     mon_lock(m);
     while (m->value < 1)
-        mon_wait(m);
+        mon_wait(m, -1);
     m->value--;
     mon_unlock(m);
 }
@@ -57,7 +57,7 @@ static void sem_wait(Mon *m, int val)
 {
     mon_lock(m);
     while (m->value != val)
-        mon_wait(m);
+        mon_wait(m, -1);
     mon_unlock(m);
 }
 
