@@ -232,31 +232,32 @@ static void test_param()
 
     int i = 12345; double d = 12.345; long long l = 9223372036854775807LL;
     char *s = "string_1";
-    Arg arg;
-    arg.vals[0].v_int = i;
-    arg.vals[1].v_real = d;
-    arg.vals[2].v_long = l;
-    str_cpy(arg.vals[3].v_str, s);
+    Arg *arg = arg_new();
+    arg->vals[0].v_int = i;
+    arg->vals[1].v_real = d;
+    arg->vals[2].v_long = l;
+    arg->vals[3].v_str = str_dup(s);
 
     e = expr_eq(expr_int(i), expr_param(0, Int));
-    if (expr_bool_val(e, NULL, &arg) == 0)
+    if (expr_bool_val(e, NULL, arg) == 0)
         fail();
     expr_free(e);
 
     e = expr_eq(expr_real(d), expr_param(1, Real));
-    if (expr_bool_val(e, NULL, &arg) == 0)
+    if (expr_bool_val(e, NULL, arg) == 0)
         fail();
     expr_free(e);
 
     e = expr_eq(expr_long(l), expr_param(2, Long));
-    if (expr_bool_val(e, NULL, &arg) == 0)
+    if (expr_bool_val(e, NULL, arg) == 0)
         fail();
     expr_free(e);
 
     e = expr_eq(expr_str(s), expr_param(3, String));
-    if (expr_bool_val(e, NULL, &arg) == 0)
+    if (expr_bool_val(e, NULL, arg) == 0)
         fail();
     expr_free(e);
+    arg_free(arg);
 }
 
 static void test_compound()

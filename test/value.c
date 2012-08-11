@@ -96,19 +96,15 @@ static void test_encdec()
 
 static void test_to_str()
 {
-    char istr[MAX_STRING];
-    char rstr[MAX_STRING];
-    char sstr[MAX_STRING];
-    char lstr[MAX_STRING];
-
+    int ilen, rlen, slen, llen;
     int v_int = 123;
     double v_real = 123.232;
     char *v_str = "hello world";
     long long v_long = 0x7FFFFFFFFFFFFFFFLL;
-    int ilen = val_to_str(istr, val_new_int(&v_int), Int);
-    int rlen = val_to_str(rstr, val_new_real(&v_real), Real);
-    int slen = val_to_str(sstr, val_new_str(v_str), String);
-    int llen = val_to_str(lstr, val_new_long(&v_long), Long);
+    char *istr = val_to_str(val_new_int(&v_int), Int, &ilen);
+    char *rstr = val_to_str(val_new_real(&v_real), Real, &rlen);
+    char *sstr = val_to_str(val_new_str(v_str), String, &slen);
+    char *lstr = val_to_str(val_new_long(&v_long), Long, &llen);
 
     if (str_cmp(istr, "123") != 0 || ilen != 3)
         fail();
@@ -118,6 +114,11 @@ static void test_to_str()
         fail();
     if (str_cmp(lstr, "9223372036854775807") != 0 || llen != 19)
         fail();
+
+    mem_free(istr);
+    mem_free(rstr);
+    mem_free(sstr);
+    mem_free(lstr);
 }
 
 static void test_cmp()

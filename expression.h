@@ -16,13 +16,16 @@ limitations under the License.
 */
 
 typedef struct {
-    union {
+    struct {
         int v_int;
         double v_real;
         long long v_long;
-        char v_str[MAX_STRING];
+        char *v_str;
     } vals[MAX_ATTRS];
 } Arg;
+
+extern Arg *arg_new();
+extern void arg_free(Arg *arg);
 
 struct Expr {
     Type type;
@@ -31,7 +34,7 @@ struct Expr {
         int v_int;
         double v_real;
         long long v_long;
-        char v_str[MAX_STRING];
+        char *v_str;
     } val;
 
     void (*eval)(struct Expr *self, Tuple *t, Arg *arg);

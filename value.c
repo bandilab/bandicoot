@@ -86,23 +86,30 @@ extern int val_bin_enc(void *mem, Value v)
     return i;
 }
 
-extern int val_to_str(char *dest, Value v, Type t)
+extern char *val_to_str(Value v, Type t, int *len)
 {
-    int res = -1;
+    char *res = mem_alloc(512);
+    int required = 0;
+    *len = 0;
     switch (t) {
         case Int:
-            res = str_print(dest, "%d", val_int(v));
+            *len = str_print(res, "%d", val_int(v));
             break;
         case Real:
-            res = str_print(dest, "%g", val_real(v));
+            *len = str_print(res, "%g", val_real(v));
             break;
         case Long:
-            res = str_print(dest, "%lld", val_long(v));
+            *len = str_print(res, "%lld", val_long(v));
             break;
         case String:
-            res = str_cpy(dest, val_str(v));
+            required = str_len(val_str(v)) + 1;
+            if (required > 512)
+                res = mem_realloc(res, required);
+
+            *len = str_cpy(res, val_str(v));
             break;
     }
+    res[*len] = '\0';
 
     return res;
 }

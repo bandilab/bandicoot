@@ -308,7 +308,7 @@ static void processor(const char *tx_addr, int port)
             goto exit;
         }
 
-        arg = mem_alloc(sizeof(Arg));
+        arg = arg_new();
         for (int i = 0; i < fn->pp.len; ++i) {
             char *name = fn->pp.names[i];
             Type t = fn->pp.types[i];
@@ -330,9 +330,7 @@ static void processor(const char *tx_addr, int port)
             else if (t == Long)
                 arg->vals[i].v_long = str_long(val, &error);
             else if (t == String) {
-                error = str_len(val) > MAX_STRING;
-                if (!error)
-                    str_cpy(arg->vals[i].v_str, val);
+                arg->vals[i].v_str = str_dup(val);
             }
 
             if (error) {
@@ -435,11 +433,15 @@ static void processor(const char *tx_addr, int port)
         /* N.B. there is no explicit revert as the transaction manager handles
            nested tx_enter and a connectivity failure as a rollback */
 
-        int len = 1, i = 0;
+        int len = 1;
+        PBuf tmp = { .data = NULL, .len = 0, .iteration = 0 };
         while (status == 200 && len) {
-            len = pack_rel2csv(ret, res, MAX_BLOCK, i++);
+            len = pack_rel2csv(ret, res, MAX_BLOCK, &tmp);
             status = http_chunk(io, res, len);
         }
+
+        /* FIXME: mem leaks on tmp and fn->ret if http_chunk fails in the
+         * middle of a relation */
 exit:
         if (status != -1)
             sys_log('E', "%016llX method %c, path %s, time %lldms - %3d\n",
@@ -455,7 +457,7 @@ exit:
         if (w != NULL)
             vars_free(w);
         if (arg != NULL)
-            mem_free(arg);
+            arg_free(arg);
         if (req != NULL)
             http_free_req(req);
         if (env != NULL)

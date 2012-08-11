@@ -186,9 +186,27 @@ static void test_pack()
         fail();
 }
 
+static char* unpack(Rel *r, int buf_sz)
+{
+    PBuf tmp = { .data = NULL, .len = 0, .iteration = 0 };
+
+    int len = 1, off = 0, sz = buf_sz;
+    char *buf = mem_alloc(buf_sz), *res = mem_alloc(sz);
+
+    while (len > 0) {
+        len = pack_rel2csv(r, buf, buf_sz, &tmp);
+        sz += buf_sz;
+        res = mem_realloc(res, sz);
+        off += str_cpy(res + off, buf);
+    }
+    res[off++] = '\0';
+
+    mem_free(buf);
+    return res;
+}
+
 static void test_unpack()
 {
-    int i = 0;
     char str[11 + MAX_STRING];
 
     char *names[2];
@@ -196,51 +214,40 @@ static void test_unpack()
 
     names[0] = "a"; names[1] = "c";
     types[0] = Int; types[1] = String;
+
+    /* simple test - everything fits into the buffer */
     char *data = "a,c\n123,hehehe\n";
     str_cpy(str, data);
 
     Rel *rel = pack_init(str, names, types, 2, NULL);
-    char *unpacked = mem_alloc(MAX_BLOCK);
-    pack_rel2csv(rel, unpacked, MAX_BLOCK, i++);
-
+    char *unpacked = unpack(rel, MAX_BLOCK);
     if (str_cmp(data, unpacked) != 0)
         fail();
 
     rel_free(rel);
-
-    char *p = mem_alloc(MAX_STRING + 2);
-    for (int i = 0; i < MAX_STRING; ++i)
-        p[i] = 'A';
-    p[MAX_STRING] = '\n';
-    p[MAX_STRING + 1] = '\0';
+    mem_free(unpacked);
 
     names[0] = "a";
     types[0] = String;
-    data = "a\n";
-    char data2[str_len(data) + str_len(p)];
-    str_cpy(data2, data);
-    str_cpy(data2 + str_len(data), p);
-    str_cpy(str, data2);
 
-    i = 0;
+    /* single tuple is bigger than the buffer */
+    data = "a\nHello World!\n";
+    str_cpy(str, data);
+
     rel = pack_init(str, names, types, 1, NULL);
-    pack_rel2csv(rel, unpacked, MAX_BLOCK, i++);
-    if (str_cmp(data2, unpacked) != 0)
+    unpacked = unpack(rel, 12);
+    if (str_cmp(data, unpacked) != 0)
         fail();
 
     rel_free(rel);
+    mem_free(unpacked);
 
-    /* test of a file longer than MAX_BLOCK */
-    int start = 1, end = 100000;
+    /* small tuples, but whole relation does not fit into the buffer */
+    int start = 1, end = 10000;
     Head *h = gen_head();
     rel = gen_rel(start, end);
 
-    i = 0;
-    unpacked = mem_realloc(unpacked, 1024*1024*3);
-    int len = 0;
-    char *ptr = unpacked;
-    while ((len = pack_rel2csv(rel, ptr, MAX_BLOCK, i++)) > 0)
-        ptr += len;
+    unpacked = unpack(rel, 256);
 
     Rel *rel1 = gen_rel(start, end);
     Rel *rel2 = pack_init(unpacked, h->names, h->types, h->len, NULL);
@@ -251,10 +258,9 @@ static void test_unpack()
     rel_free(rel);
     rel_free(rel1);
     rel_free(rel2);
-
-    mem_free(p);
     mem_free(unpacked);
 
+    /* check if the config is allright, the header must fit into MAX_BLOCK */
     int max_tsize = MAX_ATTRS * MAX_STRING + MAX_ATTRS;
     if (max_tsize >= MAX_BLOCK)
         fail();

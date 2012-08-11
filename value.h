@@ -31,4 +31,4 @@ extern long long val_long(Value v);
 extern int val_int(Value v);
 extern int val_cmp(Value l, Value r);
 extern int val_bin_enc(void *mem, Value v);
-extern int val_to_str(char *dest, Value v, Type t);
+extern char *val_to_str(Value v, Type t, int *len);

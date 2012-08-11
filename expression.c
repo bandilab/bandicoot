@@ -29,6 +29,23 @@ limitations under the License.
 #define e_long(e) ((e)->val.v_long)
 #define e_str(e) ((e)->val.v_str)
 
+extern Arg *arg_new()
+{
+    Arg *res = mem_alloc(sizeof(Arg));
+    for (int i = 0; i < MAX_ATTRS; ++i)
+        res->vals[i].v_str = NULL;
+
+    return res;
+}
+
+extern void arg_free(Arg *arg)
+{
+    for (int i = 0; i < MAX_ATTRS; ++i)
+        if (arg->vals[i].v_str != NULL)
+            mem_free(arg->vals[i].v_str);
+    mem_free(arg);
+}
+
 typedef struct {
     Expr *left;
     Expr *right;
@@ -82,7 +99,7 @@ extern Expr *expr_real(double val)
 extern Expr *expr_str(const char *val)
 {
     Expr *res = alloc(String, 0, eval_noop, free_noop);
-    str_cpy(e_str(res), val);
+    e_str(res) = str_dup(val);
     return res;
 }
 
@@ -96,7 +113,7 @@ static void eval_attr(Expr *e, Tuple *t, Arg *arg)
     else if (e->type == Long)
         e_long(e) = val_long(v);
     else if (e->type == String)
-        str_cpy(e_str(e), val_str(v));
+        e_str(e) = str_dup(val_str(v));
 }
 
 extern Expr *expr_attr(int pos, Type type)
@@ -116,7 +133,7 @@ static void eval_param(Expr *e, Tuple *t, Arg *arg)
     else if (e->type == Long)
         e_long(e) = arg->vals[i].v_long;
     else if (e->type == String)
-        str_cpy(e_str(e), arg->vals[i].v_str);
+        e_str(e) = str_dup(arg->vals[i].v_str);
 }
 
 extern Expr *expr_param(int pos, Type type)
@@ -429,5 +446,7 @@ extern Value expr_new_val(Expr *e, Tuple *t, Arg *arg)
 extern void expr_free(Expr *e)
 {
     e->free(e);
+    if (e->type == String)
+        mem_free(e_str(e));
     mem_free(e);
 }

@@ -30,6 +30,7 @@ limitations under the License.
 #include "relation.h"
 #include "environment.h"
 #include "error.h"
+#include "pack.h"
 
 static int valid_id(const char *id)
 {
@@ -197,42 +198,94 @@ static int head_unpack(char *dest, Head *h)
     return off;
 }
 
-static int tuple_unpack(char *dest, Tuple *t, int len, Type type[])
+static char *tuple_unpack(Tuple *t, int len, Type type[], int *res_len)
 {
+    int sz = 512;
+    char *dest = mem_alloc(sz);
+
     int off = 0;
     for (int i = 0; i < len; i++) {
+        Value v = tuple_attr(t, i);
+        int slen = 0;
+        char *s = val_to_str(v, type[i], &slen);
+
+        int required = 2 + slen + 1; /* ',' + str_len(s) + 1 + '\0' */
+        if (sz - off < required) {
+            sz += required;
+            dest = mem_realloc(dest, sz);
+        }
+
         if (i != 0)
             dest[off++] = ',';
-
-        Value v = tuple_attr(t, i);
-        off += val_to_str(dest + off, v, type[i]);
+        off += str_cpy(dest + off, s);
+        mem_free(s);
     }
 
     dest[off] = '\0';
+    *res_len = off;
 
-    return off;
+    return dest;
 }
 
-extern int pack_rel2csv(Rel *r, char *buf, int size, int iteration)
+static int push(char *buf, int size, int off, PBuf *tmp)
 {
+    if (tmp->len <= 0)
+        return 0;
+
+    int start = off;
+    int avail = (size - off) - 2; /* possible \n + \0 */
+    if (avail <= 0)
+        return 0;
+
+    int i = (tmp->len < avail ? tmp->len : avail);
+    char *rest = str_dup(tmp->data + i);
+
+    tmp->data[i] = '\0';
+
+    /* copy to the destination buffer */
+    off += str_cpy(buf + off, tmp->data);
+
+    if (tmp->data != NULL) {
+        mem_free(tmp->data);
+        tmp->data = NULL;
+    }
+
+    tmp->len = str_len(rest);
+    if (tmp->len > 0)
+        tmp->data = rest;
+    else
+        mem_free(rest);
+
+    /* nothing is remaining in the buf == tuple is fully written */
+    if (tmp->len == 0)
+        buf[off++] = '\n';
+
+    return off - start;
+}
+
+extern int pack_rel2csv(Rel *r, char *buf, int size, PBuf *tmp)
+{
+    if (r == NULL)
+        return 0;
+
     int off = 0;
 
-    if (r == NULL || r->body == NULL)
-        return off;
-
-    if (iteration == 0)
+    if (tmp->iteration++ == 0)
         off = head_unpack(buf, r->head);
+
+    /* take care of remaining data from previous iteration */
+    off += push(buf, size, off, tmp);
 
     int len = r->head->len;
     Type *types = r->head->types;
 
-    int tsize = len * MAX_STRING + len;
     Tuple *t = NULL;
-    while ((size - off) > tsize && (t = tbuf_next(r->body)) != NULL) {
-        off += tuple_unpack(buf + off, t, len, types);
-        tuple_free(t);
+    while (tmp->len == 0 && r->body != NULL && (t = tbuf_next(r->body)) != NULL)
+    {
+        tmp->data = tuple_unpack(t, len, types, &tmp->len);
+        off += push(buf, size, off, tmp);
 
-        buf[off++] = '\n';
+        tuple_free(t);
     }
 
     buf[off] = '\0';
