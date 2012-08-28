@@ -47,6 +47,7 @@ static const int MAX_HEAD_STR_LEN = 2 * MAX_ATTRS * MAX_NAME;
 
 static L_Attrs attr_name(const char *name);
 static L_Attrs attr_decl(L_Attrs attrs, Type type);
+static L_Attrs attr_set(const char *name);
 static L_Attrs attr_rename(const char *from, const char *to);
 static L_Attrs attr_extend(const char *name, L_Expr *e);
 static L_Attrs attr_sum(const char *name, L_Sum sum);
@@ -150,7 +151,8 @@ attr_names:
     ;
 
 rel_attr:
-      attr_names TK_INT     { $$ = attr_decl($1, Int); }
+      TK_NAME               { $$ = attr_set($1); }
+    | attr_names TK_INT     { $$ = attr_decl($1, Int); }
     | attr_names TK_LONG    { $$ = attr_decl($1, Long); }
     | attr_names TK_REAL    { $$ = attr_decl($1, Real); }
     | attr_names TK_STRING  { $$ = attr_decl($1, String); }
@@ -493,6 +495,26 @@ static L_Attrs attr_decl(L_Attrs attrs, Type type)
         attrs.types[i] = type;
 
     return attrs;
+}
+
+static L_Attrs attr_set(const char *name)
+{
+    int idx = array_scan(genv->types.names, genv->types.len, name);
+    if (idx < 0)
+        yyerror("unknown type '%s'", name);
+
+    Head *h = genv->types.heads[idx];
+    L_Attrs res = {.len = h->len,
+                   .renames[0] = NULL,
+                   .exprs[0] = NULL,
+                   .sums[0].def = NULL};
+
+    for (int i = 0; i < res.len; ++i) {
+        res.names[i] = str_dup(h->names[i]);
+        res.types[i] = h->types[i];
+    }
+
+    return res;
 }
 
 static L_Attrs attr_rename(const char *from, const char *to)

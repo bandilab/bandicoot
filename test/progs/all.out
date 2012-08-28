@@ -3,6 +3,9 @@ test/progs/assign_bad_wvar_err.b:7: unknown variable 'does_not_exist'
 test/progs/assign_diff_bad_types_err.b:11: use of semidiff with no commmon attributes ({x real, y real} and {x int, y string})
 test/progs/assign_join_bad_types_err.b:11: attribute 'x' is of different type in right {x real, y real}
 test/progs/assign_union_bad_types_err.b:11: use of union with different types ({x real, y real} and {id int, name string})
+test/progs/attr_sets_out_of_order_decl_err.b:1: unknown type 'TaskId'
+test/progs/attr_sets_unknown_type_err.b:1: unknown type 'TaskId'
+test/progs/basic_max_funcs_err.b:128: number of functions exceeds maximum (128)
 test/progs/extend_attr_exists_err.b:7: attribute 'x' already exists in {x real, y real}
 test/progs/extend_max_attrs_err.b:7: extend result type exceeds the maximum number of attributes (64)
 test/progs/func_bad_res_type_err.b:11: invalid type in return, expects {r real}, found {x real, y real}
@@ -80,4 +83,3 @@ test/progs/summary_unknown_err.b:5: unkown function in summary operator 'xyz'
 test/progs/tmp_var_redecl_err.b:12: variable 'tmp' is already defined
 test/progs/tmp_var_unknown_err.b:5: unknown variable 'unknown_tmp_var'
 test/progs/union_types_err.b:11: use of union with different types ({x real, y real} and {building int, street string})
-test/progs/basic_max_funcs_err.b:128: number of functions exceeds maximum (128)

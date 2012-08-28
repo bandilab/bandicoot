@@ -283,6 +283,13 @@ static void test_extend()
     FAIL("extend_max_attrs_err.b");
 }
 
+static void test_attr_sets()
+{
+    OK("attr_sets_basic.b");
+    FAIL("attr_sets_unknown_type_err.b");
+    FAIL("attr_sets_out_of_order_decl_err.b");
+}
+
 int main(int argc, char *argv[])
 {
     exe = argv[0];
@@ -308,6 +315,7 @@ int main(int argc, char *argv[])
         test_summary();
         test_literal();
         test_extend();
+        test_attr_sets();
     } else {
         char log[MAX_FILE_PATH];
         str_print(log, "%s.log", argv[1]);
