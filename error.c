@@ -1,6 +1,5 @@
 /*
-Copyright 2008-2012 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2012 Ostap Cherkashin
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +13,26 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+#include <stdarg.h>
+#include <stdio.h>
 
-extern Error *pack_csv2rel(char *buf, Head **head, TBuf **body);
-extern int pack_rel2csv(Rel *r, char *buf, int size, int iteration);
-extern int pack_fn2csv(Func **fns, int cnt, char *buf, int size, int *iteration);
+#include "error.h"
+#include "string.h"
+#include "memory.h"
+
+extern Error *error_new(char *fmt, ...)
+{
+    va_list ap;
+
+    char *msg = NULL;
+    va_start(ap, fmt);
+    vasprintf(&msg, fmt, ap);
+    va_end(ap);
+
+    Error *err = mem_alloc(sizeof(Error) + str_len(msg) + 1);
+    err->msg = (char*) (err + 1);
+    str_cpy(err->msg, msg);
+    mem_free(msg);
+
+    return err;
+}

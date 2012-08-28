@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -196,4 +196,21 @@ extern Head *head_rename(Head *h,
         pos[i] = array_scan(names, h->len, res->names[i]);
 
     return res;
+}
+
+extern void head_to_str(char *dest, Head *h)
+{
+    if (h == NULL) {
+        dest = '\0';
+        return;
+    }
+
+    int off = str_print(dest, "%s", "{");
+    for (int i = 0; i < h->len; ++i)
+        off += str_print(dest + off,
+                         (i == h->len - 1) ? "%s %s" : "%s %s, ",
+                         h->names[i],
+                         type_to_str(h->types[i]));
+    dest[off++] = '}';
+    dest[off] = '\0';
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2010 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,18 +19,29 @@ limitations under the License.
 
 static Env *env;
 
-static Rel *pack_init(char *str)
+static Rel *pack_init(char *str, char *errmsg)
 {
-    Head *h;
-    Arg arg = { .body = pack_csv2rel(str, &h) };
-    Rel *res = NULL;
+    Head *h = NULL;
+    Arg arg = { .body = NULL };
+    Error *err = pack_csv2rel(str, &h, &arg.body);
 
-    if (arg.body != NULL) {
+    Rel *res = NULL;
+    if (err == NULL && arg.body != NULL) {
+        if (errmsg != NULL)
+            fail();
+
         Vars rvars = { .len = 0 };
         res = rel_param(h);
 
         rel_init(res, &rvars, &arg);
         mem_free(h);
+    } else {
+        if (errmsg == NULL)
+            fail();
+        if (str_cmp(err->msg, errmsg) != 0)
+            fail();
+
+        mem_free(err);
     }
 
     return res;
@@ -41,7 +52,7 @@ static void test_pack()
     char str[1024];
 
     str_cpy(str, "a:int,b:string");
-    Rel *rel = pack_init(str);
+    Rel *rel = pack_init(str, NULL);
     if (rel == NULL)
         fail();
     if (rel->head->len != 2)
@@ -53,7 +64,7 @@ static void test_pack()
     rel_free(rel);
 
     str_cpy(str, "c:string,a:long\nworld hello,12343");
-    rel = pack_init(str);
+    rel = pack_init(str, NULL);
     if (rel == NULL)
         fail();
     if (rel->head->len != 2)
@@ -75,7 +86,7 @@ static void test_pack()
     rel_free(rel);
 
     str_cpy(str, "c:string,a:int\nhello world,12343\nhello world,123430");
-    rel = pack_init(str);
+    rel = pack_init(str, NULL);
     if (rel == NULL)
         fail();
     if (rel->head->len != 2)
@@ -103,7 +114,7 @@ static void test_pack()
 
     /* test duplicate input */
     str_cpy(str, "c:string,a:int\nhello world,12343\nhello world,12343");
-    rel = pack_init(str);
+    rel = pack_init(str, NULL);
     if (rel == NULL)
         fail();
     if (rel->head->len != 2)
@@ -127,22 +138,23 @@ static void test_pack()
 
     /* test invalid input */
     str_cpy(str, "hehehe");
-    rel = pack_init(str);
+    rel = pack_init(str, "bad header: invalid name/type pair: 'hehehe'");
     if (rel != NULL)
         fail();
 
     str_cpy(str, "hehehe:hahaha");
-    rel = pack_init(str);
+    rel = pack_init(str, "bad header: invalid attribute type: 'hahaha'");
     if (rel != NULL)
         fail();
 
     str_cpy(str, "abc+_)# $!@#$:int");
-    rel = pack_init(str);
+    rel = pack_init(str, "bad header: invalid name/type pair: 'abc+_)#'");
     if (rel != NULL)
         fail();
 
     str_cpy(str, "a:int,b:string\nabc,123");
-    rel = pack_init(str);
+    rel = pack_init(str, "bad tuple on line 2: value 'abc' (attribute 'a') "
+                         "is not of type 'int'");
     if (rel != NULL)
         fail();
 }
@@ -155,7 +167,7 @@ static void test_unpack()
     char *data = "a int,c string\n123,hehehe\n";
     str_cpy(str, data);
 
-    Rel *rel = pack_init(str);
+    Rel *rel = pack_init(str, NULL);
     char *unpacked = mem_alloc(MAX_BLOCK);
     pack_rel2csv(rel, unpacked, MAX_BLOCK, i++);
 
@@ -177,7 +189,7 @@ static void test_unpack()
     str_cpy(str, data2);
 
     i = 0;
-    rel = pack_init(str);
+    rel = pack_init(str, NULL);
     pack_rel2csv(rel, unpacked, MAX_BLOCK, i++);
     if (str_cmp(data2, unpacked) != 0)
         fail();
@@ -196,7 +208,7 @@ static void test_unpack()
         ptr += len;
 
     Rel *rel1 = gen_rel(start, end);
-    Rel *rel2 = pack_init(unpacked);
+    Rel *rel2 = pack_init(unpacked, NULL);
     if (!rel_eq(rel1, rel2))
         fail();
 
@@ -232,8 +244,8 @@ static void test_fn2csv()
     len = pack_fn2csv(fns, cnt, buf, MAX_BLOCK, &iteration);
     if (iteration != 1 || len == 0)
         fail();
-    Rel *r1 = pack_init(buf);
-    Rel *r2 = pack_init(code);
+    Rel *r1 = pack_init(buf, NULL);
+    Rel *r2 = pack_init(code, NULL);
     if (!rel_eq(r1, r2))
         fail();
     len = pack_fn2csv(fns, cnt, buf, MAX_BLOCK, &iteration);
@@ -242,6 +254,8 @@ static void test_fn2csv()
 
     mem_free(fns);
     mem_free(code);
+    rel_free(r1);
+    rel_free(r2);
 
     cnt = 0;
     fns = env_funcs(env, "", &cnt);
@@ -260,14 +274,17 @@ static void test_fn2csv()
     }
     if (iteration != env->fns.len + 1)
         fail();
-    r1 = pack_init(fullbuf);
-    r2 = pack_init(code);
+    r1 = pack_init(fullbuf, NULL);
+    r2 = pack_init(code, NULL);
     if (!rel_eq(r1, r2))
         fail();
 
-    mem_free(code);
     mem_free(fns);
+    mem_free(code);
+    rel_free(r1);
+    rel_free(r2);
     mem_free(fullbuf);
+    mem_free(buf);
 }
 
 static void test_env()
@@ -302,7 +319,7 @@ int main()
     test_env();
     test_fn2csv();
 
-    mem_free(env);
+    env_free(env);
 
     return 0;
 }

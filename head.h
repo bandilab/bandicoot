@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,5 +39,5 @@ extern Head *head_rename(Head *h,
 extern int head_common(Head *l, Head *r, int lpos[], int rpos[]);
 extern int head_attr(Head *h, char *name, int *pos, Type *t);
 extern int head_find(Head *h, char *name);
-
 extern int head_eq(Head *l, Head *r);
+extern void head_to_str(char *dest, Head *h);

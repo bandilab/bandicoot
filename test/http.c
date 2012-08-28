@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -160,8 +160,9 @@ int main()
         fail();
 
     Head *h = NULL;
-    TBuf *b = pack_csv2rel(req->body, &h);
-    if (b == NULL || h == NULL)
+    TBuf *b = NULL;
+    Error *err = pack_csv2rel(req->body, &h, &b);
+    if (err != NULL || b == NULL || h == NULL)
         fail();
 
     tbuf_clean(b);

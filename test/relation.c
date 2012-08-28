@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,8 +23,13 @@ static Env *env = NULL;
 
 static Rel *pack(char *str)
 {
-    Head *h;
-    TBuf *buf = pack_csv2rel(str, &h);
+    Head *h = NULL;
+    TBuf *buf = NULL;
+    Error *err = pack_csv2rel(str, &h, &buf);
+    if (err != NULL) {
+        fail();
+    }
+
     Rel *res = NULL;
 
     if (buf != NULL) {

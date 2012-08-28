@@ -42,9 +42,6 @@ static int gposition = 0;
 static Func *gfunc = NULL;
 static Env *genv = NULL;
 
-/* {a string, b int} */
-static const int MAX_HEAD_STR_LEN = 2 * MAX_ATTRS * MAX_NAME;
-
 static L_Attrs attr_name(const char *name);
 static L_Attrs attr_decl(L_Attrs attrs, Type type);
 static L_Attrs attr_rename(const char *from, const char *to);
@@ -366,23 +363,6 @@ prim_expr:
 
 %%
 
-static void print_head(char *dest, Head *h)
-{
-    if (h == NULL) {
-        dest = '\0';
-        return;
-    }
-
-    int off = str_print(dest, "%s", "{");
-    for (int i = 0; i < h->len; ++i)
-        off += str_print(dest + off,
-                         (i == h->len - 1) ? "%s %s" : "%s %s, ",
-                         h->names[i],
-                         type_to_str(h->types[i]));
-    dest[off++] = '}';
-    dest[off] = '\0';
-}
-
 /* FIXME: the tbuf_clean needs to called for TEMP and PARAM relations
     ideally this is not exposed and is handled within the relations themselves
  */
@@ -644,8 +624,8 @@ static int func_param(Func *fn, char *name, int *pos, Type *type) {
 
 static Expr *p_convert(Head *h, Func *fn, L_Expr *e, L_Expr_Type parent_type)
 {
-    char hstr[MAX_HEAD_STR_LEN];
-    print_head(hstr, h);
+    char hstr[MAX_HEAD_STR];
+    head_to_str(hstr, h);
 
     Expr *res = NULL, *l = NULL, *r = NULL;
     L_Expr_Type t = e->node_type;
@@ -778,9 +758,9 @@ static void stmt_create(L_Stmt_Type type, const char *name, Rel *r)
             yyerror("unknown variable '%s'", name);
 
         Head *wh = genv->vars.heads[idx];
-        char wstr[MAX_HEAD_STR_LEN], bstr[MAX_HEAD_STR_LEN];
-        print_head(wstr, wh);
-        print_head(bstr, r->head);
+        char wstr[MAX_HEAD_STR], bstr[MAX_HEAD_STR];
+        head_to_str(wstr, wh);
+        head_to_str(bstr, r->head);
 
         if (!head_eq(r->head, wh))
             yyerror("invalid type in assignment, expects %s, found %s",
@@ -794,9 +774,9 @@ static void stmt_create(L_Stmt_Type type, const char *name, Rel *r)
 
         Head *h = r->head;
 
-        char hstr[MAX_HEAD_STR_LEN], res_str[MAX_HEAD_STR_LEN];
-        print_head(hstr, h);
-        print_head(res_str, fn->head);
+        char hstr[MAX_HEAD_STR], res_str[MAX_HEAD_STR];
+        head_to_str(hstr, h);
+        head_to_str(res_str, fn->head);
 
         int pos;
         Type t;
@@ -933,8 +913,8 @@ static Rel *r_load(const char *name)
 
 static Rel *r_project(Rel *r, L_Attrs attrs)
 {
-    char hstr[MAX_HEAD_STR_LEN];
-    print_head(hstr, r->head);
+    char hstr[MAX_HEAD_STR];
+    head_to_str(hstr, r->head);
 
     for (int i = 0; i < attrs.len; ++i)
         if (!head_find(r->head, attrs.names[i]))
@@ -948,8 +928,8 @@ static Rel *r_project(Rel *r, L_Attrs attrs)
 
 static Rel *r_rename(Rel *r, L_Attrs attrs)
 {
-    char hstr[MAX_HEAD_STR_LEN];
-    print_head(hstr, r->head);
+    char hstr[MAX_HEAD_STR];
+    head_to_str(hstr, r->head);
 
     char **renames = attrs.renames;
 
@@ -981,8 +961,8 @@ static Rel *r_select(Rel *r, L_Expr *expr)
 
 static Rel *r_extend(Rel *r, L_Attrs attrs)
 {
-    char hstr[MAX_HEAD_STR_LEN];
-    print_head(hstr, r->head);
+    char hstr[MAX_HEAD_STR];
+    head_to_str(hstr, r->head);
 
     Expr *extends[MAX_ATTRS];
     for (int i = 0; i < attrs.len; ++i) {
@@ -1005,10 +985,10 @@ static Rel *r_extend(Rel *r, L_Attrs attrs)
 
 static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs)
 {
-    char lhstr[MAX_HEAD_STR_LEN], rhstr[MAX_HEAD_STR_LEN];
-    print_head(lhstr, l->head);
+    char lhstr[MAX_HEAD_STR], rhstr[MAX_HEAD_STR];
+    head_to_str(lhstr, l->head);
     if (r != NULL)
-        print_head(rhstr, r->head);
+        head_to_str(rhstr, r->head);
 
     Rel *res = NULL;
     Sum *sums[MAX_ATTRS];
@@ -1081,8 +1061,8 @@ static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs)
 
 static Rel *r_join(Rel *l, Rel *r)
 {
-    char lhstr[MAX_HEAD_STR_LEN];
-    print_head(lhstr, l->head);
+    char lhstr[MAX_HEAD_STR];
+    head_to_str(lhstr, l->head);
     int num_attrs = l->head->len + r->head->len;
 
     for (int i = 0; i < l->head->len; ++i) {
@@ -1106,9 +1086,9 @@ static Rel *r_join(Rel *l, Rel *r)
 
 static Rel *r_union(Rel *l, Rel *r)
 {
-    char lhstr[MAX_HEAD_STR_LEN], rhstr[MAX_HEAD_STR_LEN];
-    print_head(lhstr, l->head);
-    print_head(rhstr, r->head);
+    char lhstr[MAX_HEAD_STR], rhstr[MAX_HEAD_STR];
+    head_to_str(lhstr, l->head);
+    head_to_str(rhstr, r->head);
 
     if (!head_eq(l->head, r->head))
         yyerror("use of union with different types (%s and %s)",
@@ -1119,9 +1099,9 @@ static Rel *r_union(Rel *l, Rel *r)
 
 static Rel *r_diff(Rel *l, Rel *r)
 {
-    char lhstr[MAX_HEAD_STR_LEN], rhstr[MAX_HEAD_STR_LEN];
-    print_head(lhstr, l->head);
-    print_head(rhstr, r->head);
+    char lhstr[MAX_HEAD_STR], rhstr[MAX_HEAD_STR];
+    head_to_str(lhstr, l->head);
+    head_to_str(rhstr, r->head);
 
     int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
     if (head_common(l->head, r->head, lpos, rpos) == 0)

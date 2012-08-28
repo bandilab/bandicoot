@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,6 +42,9 @@ limitations under the License.
 
 /* maximum length of a host:port string */
 #define MAX_ADDR 64
+
+/* maximum header length when transformed into a string '{a string, b int}' */
+#define MAX_HEAD_STR (2 * MAX_ATTRS * MAX_NAME)
 
 #ifndef NULL
 #define NULL ((void*) 0)

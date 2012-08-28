@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -68,7 +68,6 @@ static Tuple *rel_next(Rel *r)
 extern Rel *rel_param(Head *head);
 extern Rel *rel_clone(Rel *r);
 extern Rel *rel_load(Head *head, const char *name);
-extern Rel *rel_err(int code, char *msg);
 
 /* relations passed to both rel_store & rel_eq must be rel_init()'ed */
 extern void rel_store(const char *vid,

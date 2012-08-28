@@ -16,6 +16,7 @@ limitations under the License.
 */
 
 #include "config.h"
+#include "error.h"
 #include "system.h"
 #include "memory.h"
 #include "string.h"
@@ -44,21 +45,6 @@ extern const char *VERSION;
 
 /* how long to keep-alive client connection since it was last used */
 #define KEEP_ALIVE_MS 5000
-
-/* error messages for the clients */
-static const int ERR_UNKNOWN_FN = 0;
-static const int ERR_PARAMS_COUNT = 1;
-static const int ERR_PARAM_VALUE = 2;
-static const int ERR_PARAM_DUPLICATE = 3;
-
-static const struct {
-    int code;
-    char *msg;
-} ERR_MSGS[4] = {{.code = 1, .msg = "unknown function"},
-                 {.code = 2, .msg = "provided pararmeters do not "
-                                    "match the function declaration"},
-                 {.code = 3, .msg = "parameter value does not match the type"},
-                 {.code = 4, .msg = "duplicate parameters are not supported"}};
 
 typedef struct {
     List *head;
@@ -224,16 +210,6 @@ static void *exec_thread(void *arg)
     return NULL;
 }
 
-static char *err(int err, char *buf)
-{
-    /* TODO: unpacking of the res must be less than MAX_BLOCK */
-    Rel *res = rel_err(ERR_MSGS[err].code, ERR_MSGS[err].msg);
-    pack_rel2csv(res, buf, MAX_BLOCK, 0);
-    rel_free(res);
-
-    return buf;
-}
-
 static void processor(const char *tx_addr, int port)
 {
     sys_init(1);
@@ -294,7 +270,9 @@ static void processor(const char *tx_addr, int port)
         /* compare the request with the function defintion */
         Func *fn = env_func(env, req->path + 1);
         if (fn == NULL) {
-            status = http_404(io, err(ERR_UNKNOWN_FN, res));
+            Error *err = error_new("unknown function '%s'", req->path + 1);
+            status = http_404(io, err->msg);
+            mem_free(err);
             goto exit;
         }
 
@@ -312,13 +290,20 @@ static void processor(const char *tx_addr, int port)
         for (int i = 0; i < req->args->len; ++i) {
             char *name = req->args->names[i];
             if (array_freq(req->args->names, req->args->len, name) > 1) {
-                status = http_404(io, err(ERR_PARAM_DUPLICATE, res));
+                Error *err = error_new("duplicate parameter '%s' "
+                                       "(not supported)",
+                                       name);
+                status = http_404(io, err->msg);
+                mem_free(err);
                 goto exit;
             }
         }
 
         if (fn->pp.len != req->args->len) {
-            status = http_404(io, err(ERR_PARAMS_COUNT, res));
+            Error *err = error_new("expected %d primitive parameters, got %d",
+                                   fn->pp.len, req->args->len);
+            status = http_404(io, err->msg);
+            mem_free(err);
             goto exit;
         }
 
@@ -329,7 +314,9 @@ static void processor(const char *tx_addr, int port)
 
             int idx = array_scan(req->args->names, req->args->len, name);
             if (idx < 0) {
-                status = http_404(io, err(ERR_PARAMS_COUNT, res));
+                Error *err = error_new("unknown parameter '%s'", name);
+                status = http_404(io, err->msg);
+                mem_free(err);
                 goto exit;
             }
 
@@ -348,7 +335,11 @@ static void processor(const char *tx_addr, int port)
             }
 
             if (error) {
-                status = http_404(io, err(ERR_PARAM_VALUE, res));
+                Error *err = error_new("value '%s' (parameter '%s') "
+                                       "is not of type '%s'",
+                                       val, name, type_to_str(t));
+                status = http_404(io, err->msg);
+                mem_free(err);
                 goto exit;
             }
         }
@@ -356,18 +347,29 @@ static void processor(const char *tx_addr, int port)
         if (fn->rp.name != NULL) {
             if (req->len > 0) {
                 Head *head = NULL;
-                arg->body = pack_csv2rel(req->body, &head);
-
-                int eq = 0;
-                if (head != NULL) {
-                    eq = head_eq(head, fn->rp.rel->head);
-                    mem_free(head);
-                }
-
-                if (arg->body == NULL || !eq) {
-                    status = http_400(io);
+                Error *err = pack_csv2rel(req->body, &head, &arg->body);
+                if (err != NULL) {
+                    status = http_404(io, err->msg);
+                    mem_free(err);
                     goto exit;
                 }
+
+                if (!head_eq(head, fn->rp.rel->head)) {
+                    char head_exp[MAX_HEAD_STR];
+                    char head_got[MAX_HEAD_STR];
+
+                    head_to_str(head_exp, fn->rp.rel->head);
+                    head_to_str(head_got, head);
+
+                    Error *err = error_new("bad header: expected %s got %s",
+                                           head_exp, head_got);
+                    status = http_404(io, err->msg);
+                    mem_free(err);
+
+                    goto exit;
+                }
+
+                mem_free(head);
             } else {
                 arg->body = tbuf_new();
             }

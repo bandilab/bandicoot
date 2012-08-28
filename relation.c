@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -191,10 +191,6 @@ typedef struct {
     /* temp */
     int ccnt;
     Rel *clones[MAX_VARS];
-
-    /* error response */
-    int code;
-    char *msg;
 } Ctxt;
 
 static void free(Rel *r)
@@ -234,10 +230,6 @@ static Rel *alloc(void (*init)(Rel *r, Vars *s, Arg *a))
     return r;
 }
 
-static void init_noop(Rel *r, Vars *rvars, Arg *arg)
-{
-}
-
 static void init_load(Rel *r, Vars *rvars, Arg *arg)
 {
     Ctxt *c = r->ctxt;
@@ -253,26 +245,6 @@ extern Rel *rel_load(Head *head, const char *name)
 
     Ctxt *c = res->ctxt;
     str_cpy(c->name, name);
-
-    return res;
-}
-
-extern Rel *rel_err(int code, char *msg)
-{
-    Rel *res = alloc(init_noop);
-
-    char *names[] = {"code", "msg"};
-    Type types[] = {Int, String};
-    res->head = head_new(names, types, 2);
-
-    Ctxt *c = res->ctxt;
-    c->code = code;
-    c->msg = msg;
-
-    Value vals[2] = { val_new_int(&c->code), val_new_str(c->msg) };
-    Tuple *t = tuple_new(vals, 2);
-    res->body = tbuf_new();
-    tbuf_add(res->body, t);
 
     return res;
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2010 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +28,7 @@ limitations under the License.
 #include "summary.h"
 #include "relation.h"
 #include "environment.h"
+#include "error.h"
 
 static int valid_id(const char *id)
 {
@@ -47,119 +48,134 @@ static int valid_id(const char *id)
     return 1;
 }
 
-/*
-FIXME: report pack errors
-Rel *err = head_pack(...)
-Rel *err = pack_csv2rel(...)
-
-static Rel *head_pack(char *buf, char *names[], Head **out);
-extern Rel *pack_csv2rel(char *buf, Head **res_h, TBuf *res_b);
-*/
-static Head *head_pack(char *buf, char *names[])
+static Error *pack_csv2head(char *buf, char *names[], Head **out)
 {
     char *attrs[MAX_ATTRS], *name_type[MAX_ATTRS];
 
     int attrs_len = str_split(buf, ",", attrs, MAX_ATTRS);
     if (attrs_len < 1)
-        return NULL;
+        return error_new("bad header: '%s'", buf);
 
     Type types[MAX_ATTRS];
     char *copy[MAX_ATTRS];
     for (int i = 0; i < attrs_len; ++i) {
         int cnt = str_split(attrs[i], " :\t", name_type, MAX_ATTRS);
-        if (cnt != 2 || !valid_id(name_type[0]))
-            return NULL;
+        if (cnt != 2)
+            return error_new("bad header: invalid name/type pair: '%s'",
+                             attrs[i]);
+
+        if (!valid_id(name_type[0]))
+            return error_new("bad header: invalid attribute name: '%s'",
+                             name_type[0]);
 
         int bad_type;
         types[i] = type_from_str(str_trim(name_type[1]), &bad_type);
         if (bad_type)
-            return NULL;
+            return error_new("bad header: invalid attribute type: '%s'",
+                             name_type[1]);
 
         names[i] = copy[i] = str_trim(name_type[0]);
     }
 
-    return head_new(copy, types, attrs_len);
+    *out = head_new(copy, types, attrs_len);
+    return NULL;
 }
 
-extern TBuf *pack_csv2rel(char *buf, Head **res_h)
+static Error *pack_csv2tuple(char *buf, int line, char *names[], Head *head, Tuple **out)
 {
-    Head *h = NULL;
-    TBuf *tbuf = NULL, *res_tbuf = NULL;
-    char **lines = NULL, *str_vals[MAX_ATTRS], *names[MAX_ATTRS];
+    char *str_vals[MAX_ATTRS];
+
+    int attrs = str_split(buf, ",", str_vals, MAX_ATTRS);
+    if (attrs != head->len)
+        return error_new("bad tuple on line %d: expected %d attributes, got %d",
+                         line, head->len, attrs);
+
+    int v_ints[attrs];
+    double v_reals[attrs];
+    long long v_longs[attrs];
+    int v_int_cnt = 0, v_real_cnt = 0, v_long_cnt = 0;
+    Value v[attrs];
+
+    for (int i = 0; i < attrs; ++i) {
+        int pos = 0; Type t;
+        int res = head_attr(head, names[i], &pos, &t);
+        if (!res)
+            return error_new("bad header: unexpected attribute '%s'",
+                             names[i]);
+
+        int error = 0;
+        if (t == Int) {
+            v_ints[v_int_cnt] = str_int(str_vals[i], &error);
+            v[pos] = val_new_int(&v_ints[v_int_cnt++]);
+        } else if (t == Real) {
+            v_reals[v_real_cnt] = str_real(str_vals[i], &error);
+            v[pos] = val_new_real(&v_reals[v_real_cnt++]);
+        } else if (t == Long) {
+            v_longs[v_long_cnt] = str_long(str_vals[i], &error);
+            v[pos] = val_new_long(&v_longs[v_long_cnt++]);
+        } else if (t == String) {
+            error = str_len(str_vals[i]) > MAX_STRING;
+            v[pos] = val_new_str(str_vals[i]);
+        }
+
+        if (error)
+            return error_new("bad tuple on line %d: value '%s' "
+                             "(attribute '%s') is not of type '%s'",
+                             line, str_vals[i], names[i], type_to_str(t));
+    }
+
+    *out = tuple_new(v, attrs);
+    return NULL;
+}
+
+extern Error *pack_csv2rel(char *buf, Head **head, TBuf **body)
+{
+    Error *err = NULL;
+    char **lines = NULL;
+    char *names[MAX_ATTRS];
+
+    *head = NULL;
+    *body = NULL;
 
     int len;
     lines = str_split_big(buf, "\n", &len);
     if (len < 1)
-        goto failure;
+        goto exit;
 
-    if ((h = head_pack(lines[0], names)) == NULL)
-        goto failure;
+    if ((err = pack_csv2head(lines[0], names, head)) != NULL)
+        goto exit;
 
     if (str_len(lines[len - 1]) == 0)
         len--;
 
-    tbuf = tbuf_new();
+    *body = tbuf_new();
+    for (int i = 1; i < len; ++i) {
+        Tuple *t = NULL;
+        if ((err = pack_csv2tuple(lines[i], i + 1, names, *head, &t)) != NULL)
+            goto exit;
 
-    int i = 1;
-    for (; i < len; ++i) {
-        int attrs = str_split(lines[i], ",", str_vals, MAX_ATTRS);
-        if (attrs != h->len)
-            goto failure;
-
-        int v_ints[attrs];
-        double v_reals[attrs];
-        long long v_longs[attrs];
-        int v_int_cnt = 0, v_real_cnt = 0, v_long_cnt = 0;
-        Value v[attrs];
-
-        for (int j = 0; j < attrs; ++j) {
-            int pos = 0; Type t;
-            int res = head_attr(h, names[j], &pos, &t);
-            if (!res)
-                goto failure;
-
-            int error = 0;
-            if (t == Int) {
-                v_ints[v_int_cnt] = str_int(str_vals[j], &error);
-                v[pos] = val_new_int(&v_ints[v_int_cnt++]);
-            } else if (t == Real) {
-                v_reals[v_real_cnt] = str_real(str_vals[j], &error);
-                v[pos] = val_new_real(&v_reals[v_real_cnt++]);
-            } else if (t == Long) {
-                v_longs[v_long_cnt] = str_long(str_vals[j], &error);
-                v[pos] = val_new_long(&v_longs[v_long_cnt++]);
-            } else if (t == String) {
-                error = str_len(str_vals[j]) > MAX_STRING;
-                v[pos] = val_new_str(str_vals[j]);
-            }
-
-            if (error)
-                goto failure;
-        }
-
-        tbuf_add(tbuf, tuple_new(v, attrs));
+        tbuf_add(*body, t);
     }
 
-    *res_h = h;
-    h = NULL;
-
-    res_tbuf = tbuf;
-    tbuf = NULL;
-
-failure:
+exit:
     if (lines != NULL)
         mem_free(lines);
-    if (h != NULL)
-        mem_free(h);
-    if (tbuf != NULL) {
-        Tuple *t;
-        while ((t = tbuf_next(tbuf)) != NULL)
-            tuple_free(t);
 
-        mem_free(tbuf);
+    if (err != NULL && *head != NULL) {
+        mem_free(*head);
+        *head = NULL;
     }
 
-    return res_tbuf;
+    if (err != NULL && *body != NULL) {
+        Tuple *t = NULL;
+        while ((t = tbuf_next(*body)) != NULL)
+            tuple_free(t);
+
+        tbuf_free(*body);
+        *body = NULL;
+    }
+
+    return err;
 }
 
 static int head_unpack(char *dest, Head *h)
