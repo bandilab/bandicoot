@@ -29,6 +29,7 @@ limitations under the License.
 #include "../expression.h"
 #include "../summary.h"
 #include "../volume.h"
+#include "../variable.h"
 #include "../relation.h"
 #include "../transaction.h"
 #include "../environment.h"

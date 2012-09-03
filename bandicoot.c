@@ -29,6 +29,7 @@ limitations under the License.
 #include "volume.h"
 #include "expression.h"
 #include "summary.h"
+#include "variable.h"
 #include "relation.h"
 #include "transaction.h"
 #include "environment.h"
@@ -234,7 +235,7 @@ static void processor(const char *tx_addr, int port)
 
         Env *env = NULL;
         Arg *arg = NULL;
-        Vars *r = NULL, *w = NULL;
+        Vars *v = vars_new(0), *r = NULL, *w = NULL;
 
         Http_Req *req = http_parse_req(io);
         if (io->stop)
@@ -345,25 +346,27 @@ static void processor(const char *tx_addr, int port)
         }
 
         if (fn->rp.name != NULL) {
+            TBuf *body = NULL;
             if (req->len > 0) {
                 Head *head = NULL;
-                Error *err = pack_csv2rel(req->body, &head, &arg->body);
+                Error *err = pack_csv2rel(req->body, &head, &body);
                 if (err != NULL) {
                     status = http_404(io, err->msg);
                     mem_free(err);
                     goto exit;
                 }
 
-                if (!head_eq(head, fn->rp.rel->head)) {
+                if (!head_eq(head, fn->rp.head)) {
                     char head_exp[MAX_HEAD_STR];
                     char head_got[MAX_HEAD_STR];
 
-                    head_to_str(head_exp, fn->rp.rel->head);
+                    head_to_str(head_exp, fn->rp.head);
                     head_to_str(head_got, head);
 
                     Error *err = error_new("bad header: expected %s got %s",
                                            head_exp, head_got);
                     status = http_404(io, err->msg);
+
                     mem_free(err);
 
                     goto exit;
@@ -371,37 +374,57 @@ static void processor(const char *tx_addr, int port)
 
                 mem_free(head);
             } else {
-                arg->body = tbuf_new();
+                body = tbuf_new();
             }
+
+            vars_add(v, fn->rp.name, 0, body);
         }
 
         /* start a transaction */
         r = vars_new(fn->r.len);
         w = vars_new(fn->w.len);
         for (int i = 0; i < fn->r.len; ++i)
-            vars_put(r, fn->r.names[i], 0L);
+            vars_add(r, fn->r.names[i], 0, NULL);
         for (int i = 0; i < fn->w.len; ++i)
-            vars_put(w, fn->w.names[i], 0L);
+            vars_add(w, fn->w.names[i], 0, NULL);
 
         sid = tx_enter(addr, r, w);
 
-        /* execute the function body */
-        if (fn->rp.rel != NULL)
-            rel_init(fn->rp.rel, r, arg);
-
-        for (int i = 0; i < fn->t.len; ++i)
-            rel_init(fn->t.rels[i], r, arg);
-
-        for (int i = 0; i < fn->w.len; ++i) {
-            rel_init(fn->w.rels[i], r, arg);
-            rel_store(w->vols[i], w->names[i], w->vers[i], fn->w.rels[i]);
+        /* prepare variables */
+        for (int i = 0; i < r->len; ++i) {
+            TBuf *body = vol_read(r->vols[i], r->names[i], r->vers[i]);
+            vars_add(v, r->names[i], 0, body);
         }
+        for (int i = 0; i < w->len; ++i) {
+            int pos = array_scan(v->names, v->len, w->names[i]);
+            if (pos < 0)
+                vars_add(v, w->names[i], 0, NULL);
+        }
+        for (int i = 0; i < fn->t.len; ++i)
+            vars_add(v, fn->t.names[i], 0, NULL);
 
+        /* evaluate the function body */
+        for (int i = 0; i < fn->slen; ++i)
+            rel_eval(fn->stmts[i], v, arg);
+
+        /* prepare the return value. note, the resulting relation
+           is just a container for the body, so it is not freed */
+        Rel *ret = NULL;
         if (fn->ret != NULL)
-            rel_init(fn->ret, r, arg);
+            ret = fn->stmts[fn->slen - 1];
 
-        /* need to set to NULL do avoid double-free in exit */
-        arg->body = NULL;
+        /* persist the global variables */
+        for (int i = 0; i < w->len; ++i) {
+            int idx = array_scan(v->names, v->len, w->names[i]);
+            if (idx < 0) {
+                status = http_500(io);
+                goto exit;
+            }
+
+            vol_write(w->vols[i], v->vals[idx], w->names[i], w->vers[i]);
+            tbuf_free(v->vals[idx]);
+            v->vals[idx] = NULL;
+        }
 
         /* confirm a success and send the result back */
         status = http_200(io);
@@ -410,9 +433,12 @@ static void processor(const char *tx_addr, int port)
 
         tx_commit(sid);
 
+        /* N.B. there is no explicit revert as the transaction manager handles
+           nested tx_enter and a connectivity failure as a rollback */
+
         int len = 1, i = 0;
         while (status == 200 && len) {
-            len = pack_rel2csv(fn->ret, res, MAX_BLOCK, i++);
+            len = pack_rel2csv(ret, res, MAX_BLOCK, i++);
             status = http_chunk(io, res, len);
         }
 exit:
@@ -424,21 +450,24 @@ exit:
                          sys_millis() - time,
                          status);
 
+
         if (r != NULL)
             vars_free(r);
         if (w != NULL)
             vars_free(w);
-        if (arg != NULL) {
-            if (arg->body != NULL) {
-                tbuf_clean(arg->body);
-                tbuf_free(arg->body);
-            }
+        if (arg != NULL)
             mem_free(arg);
-        }
         if (req != NULL)
             http_free_req(req);
         if (env != NULL)
             env_free(env);
+        for (int i = 0; i < v->len; ++i)
+            if (v->vals[i] != NULL) {
+                tbuf_clean(v->vals[i]);
+                tbuf_free(v->vals[i]);
+            }
+        vars_free(v);
+
         sys_term(io);
     }
 

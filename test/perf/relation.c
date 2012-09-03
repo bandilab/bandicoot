@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,36 +20,33 @@ limitations under the License.
 static void perf_load_store(Env *env, int count)
 {
     Vars *wvars = vars_new(1), *rvars = vars_new(1), *evars = vars_new(0);
-    vars_put(rvars, "perf_rel", 0L);
-    vars_put(wvars, "perf_rel", 0L);
+    vars_add(rvars, "perf_rel", 0, NULL);
+    vars_add(wvars, "perf_rel", 0, NULL);
 
     Rel *r = gen_rel(0, count);
 
     long long sid = tx_enter("", evars, wvars);
-    rel_init(r, NULL, NULL);
+    rel_eval(r, NULL, NULL);
 
     long long time = sys_millis();
-    rel_store(wvars->vols[0], "perf_rel", wvars->vers[0], r);
+    vol_write(wvars->vols[0], r->body, "perf_rel", sid);
     sys_print("%8s %d tuples in %lldms\n", "write", count, sys_millis() - time);
 
     rel_free(r);
     tx_commit(sid);
 
-    Head *h = env_head(env, "perf_rel");
-    r = rel_load(h, "perf_rel");
     sid = tx_enter("", rvars, evars);
 
     time = sys_millis();
-    rel_init(r, rvars, NULL);
-    int i = 0;
+    TBuf *body = vol_read(rvars->vols[0], "perf_rel", rvars->vers[0]);
     Tuple *t;
-    while ((t = rel_next(r)) != NULL) {
-        i++;
+    int i = 0;
+    while ((t = tbuf_next(body)) != NULL) {
         tuple_free(t);
+        i++;
     }
     sys_print("%8s %d tuples in %lldms\n", "read", i, sys_millis() - time);
 
-    rel_free(r);
     tx_commit(sid);
 
     vars_free(wvars);
@@ -62,11 +59,11 @@ static void perf_join(int count)
     Rel *join = rel_join(gen_rel(0, count), gen_rel(-count / 2, count / 2));
 
     long long time = sys_millis();
-    rel_init(join, NULL, NULL);
+    rel_eval(join, NULL, NULL);
 
     Tuple *t;
     int res = 0;
-    while ((t = rel_next(join)) != 0) {
+    while ((t = tbuf_next(join->body)) != NULL) {
         tuple_free(t);
         res++;
     }
@@ -89,10 +86,10 @@ static void perf_project(int count)
     Rel *rel = rel_project(gen_rel(0, count), names, 1);
 
     long long time = sys_millis();
-    rel_init(rel, NULL, NULL);
+    rel_eval(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
-    while ((t = rel_next(rel)) != 0) {
+    while ((t = tbuf_next(rel->body)) != NULL) {
         tuple_free(t);
         i++;
     }
@@ -123,10 +120,10 @@ static void perf_select(int count)
     rel = rel_select(rel, e);
 
     long long time = sys_millis();
-    rel_init(rel, NULL, NULL);
+    rel_eval(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
-    while ((t = rel_next(rel)) != 0) {
+    while ((t = tbuf_next(rel->body)) != NULL) {
         tuple_free(t);
         i++;
     }
@@ -146,10 +143,10 @@ static void perf_diff(int count)
                         gen_rel(-count / 2, count / 2));
 
     long long time = sys_millis();
-    rel_init(rel, NULL, NULL);
+    rel_eval(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
-    while ((t = rel_next(rel)) != 0) {
+    while ((t = tbuf_next(rel->body)) != NULL) {
         tuple_free(t);
         i++;
     }
@@ -170,10 +167,10 @@ static void perf_union(int count)
                          gen_rel(-count / 2, count));
 
     long long time = sys_millis();
-    rel_init(rel, NULL, NULL);
+    rel_eval(rel, NULL, NULL);
     Tuple *t;
     int i = 0;
-    while ((t = rel_next(rel)) != 0) {
+    while ((t = tbuf_next(rel->body)) != NULL) {
         tuple_free(t);
         i++;
     }
@@ -206,13 +203,10 @@ static void perf_extend(int count)
     rel = rel_extend(rel, names, e, 2);
 
     long long time = sys_millis();
-    rel_init(rel, NULL, NULL);
+    rel_eval(rel, NULL, NULL);
     Tuple *t;
-    int i = 0;
-    while ((t = rel_next(rel)) != 0) {
+    while ((t = tbuf_next(rel->body)) != NULL)
         tuple_free(t);
-        i++;
-    }
 
     sys_print("%8s %d tuples in %lldms\n",
               "extend",
@@ -239,13 +233,10 @@ static void perf_sum(int count)
     rel = rel_sum(rel, gen_rel(0, count), names, types, sums, 3);
 
     long long time = sys_millis();
-    rel_init(rel, NULL, NULL);
+    rel_eval(rel, NULL, NULL);
     Tuple *t;
-    int i = 0;
-    while ((t = rel_next(rel)) != 0) {
+    while ((t = tbuf_next(rel->body)) != NULL)
         tuple_free(t);
-        i++;
-    }
 
     sys_print("%8s %dx%d tuples in %lldms\n",
               "sum",
@@ -261,8 +252,8 @@ static void perf_eq(int count)
     Rel *l = gen_rel(0, count);
     Rel *r = gen_rel(0, count);
 
-    rel_init(l, NULL, NULL);
-    rel_init(r, NULL, NULL);
+    rel_eval(l, NULL, NULL);
+    rel_eval(r, NULL, NULL);
 
     long long time = sys_millis();
 

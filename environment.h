@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,23 +17,22 @@ limitations under the License.
 
 typedef struct {
     char name[MAX_NAME];
-    Head *head;
-    Rel  *ret;
+    Head *ret;
 
     struct {
         int len;
         char *names[MAX_VARS];
-    } r; /* global variables read by the function */
+    } r, w; /* global variables read and written by the function */
 
     struct {
         int len;
-        char *names[MAX_STMTS];
-        Rel *rels[MAX_STMTS];
-    } w, t; /* variables modified by the function (global and temporary) */
+        char *names[MAX_VARS];
+        Head *heads[MAX_VARS];
+    } t; /* local (temporary) variables */
 
     struct {
         char *name;
-        Rel *rel;
+        Head *head;
         int position;
     } rp; /* relational input parameter */
 
@@ -43,6 +42,9 @@ typedef struct {
         Type types[MAX_ATTRS];
         int positions[MAX_ATTRS];
     } pp; /* primitive input parameters */
+
+    int slen;
+    Rel *stmts[MAX_STMTS];
 } Func;
 
 typedef struct {

@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,6 +26,7 @@ limitations under the License.
 #include "tuple.h"
 #include "expression.h"
 #include "summary.h"
+#include "variable.h"
 #include "relation.h"
 #include "list.h"
 #include "transaction.h"
@@ -271,7 +272,7 @@ static Vars *sync_tx()
     char addr[MAX_ADDR] = "";
     Vars *r = vars_new(0), *w = vars_new(gvars.len);
     for (int i = 0; i < gvars.len; ++i)
-        vars_put(w, gvars.names[i], 0L);
+        vars_add(w, gvars.names[i], 0, NULL);
 
     long long sid = tx_enter(addr, r, w);
 
@@ -287,7 +288,7 @@ static Vars *sync_tx()
         char name[MAX_NAME] = "";
         long long ver = parse(files[i], name);
         if (ver > 0)
-            vars_put(disk, name, ver);
+            vars_add(disk, name, ver, NULL);
     }
     mem_free(files);
 

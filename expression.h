@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2010 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,6 @@ limitations under the License.
 */
 
 typedef struct {
-    TBuf *body;
     union {
         int v_int;
         double v_real;

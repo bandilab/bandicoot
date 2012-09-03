@@ -27,6 +27,7 @@ limitations under the License.
 #include "tuple.h"
 #include "expression.h"
 #include "summary.h"
+#include "variable.h"
 #include "relation.h"
 
 #include "language.h"
@@ -39,15 +40,19 @@ extern void yyerror(const char *, ...);
 extern int yylex();
 
 static int gposition = 0;
+static int gfunc_ret = 0;
+static int gseq = 0;
 static Func *gfunc = NULL;
 static Env *genv = NULL;
 
+static L_Attrs attr_empty();
 static L_Attrs attr_name(const char *name);
 static L_Attrs attr_decl(L_Attrs attrs, Type type);
 static L_Attrs attr_rename(const char *from, const char *to);
 static L_Attrs attr_extend(const char *name, L_Expr *e);
 static L_Attrs attr_sum(const char *name, L_Sum sum);
 static L_Attrs attr_merge(L_Attrs l, L_Attrs r);
+static L_Attrs attr_arg(Rel *rexpr, L_Expr *pexpr);
 static void attr_free(L_Attrs attrs);
 
 static Head *rel_head(L_Attrs attrs);
@@ -62,6 +67,7 @@ static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs);
 static Rel *r_join(Rel *l, Rel *r);
 static Rel *r_union(Rel *l, Rel *r);
 static Rel *r_diff(Rel *l, Rel *r);
+static Rel *r_call(const char *func, L_Attrs args);
 
 static L_Expr *p_attr(const char *name);
 static L_Expr *p_value(L_Value val, Type t);
@@ -70,8 +76,10 @@ static L_Expr *p_func(const char *name, L_Expr *e);
 static void p_free(L_Expr *e);
 static int is_constant(L_Expr *e);
 
-static void stmt_create(L_Stmt_Type type, const char *name, Rel *r);
-static void stmt_short(const char *name, Rel *r);
+static void stmt_assign(const char *var, Rel *r);
+static void stmt_temp(const char *var, Rel *r);
+static void stmt_call(Rel *r);
+static void stmt_return(Rel *r);
 
 static L_Sum sum_create(const char *func, const char *attr, L_Expr *def);
 
@@ -110,8 +118,10 @@ static void fn_add();
 %type <attrs> project_attr project_attrs
 %type <attrs> rename_attr rename_attrs
 %type <attrs> extend_attr extend_attrs
-%type <attrs> sum_attrs sum_attr
+%type <attrs> sum_attr sum_attrs
+%type <attrs> func_arg func_args
 %type <rel> rel_prim_expr rel_simple_expr rel_mul_expr rel_expr
+%type <rel> func_with_args func_no_args
 %type <expr> prim_const_expr prim_simple_expr prim_top_expr prim_unary_expr
 %type <expr> prim_mul_expr prim_add_expr prim_bool_cmp_expr prim_expr
 %type <sum> sum_func
@@ -190,36 +200,62 @@ func_param:
 
 func_body:
       stmt_return
-    | stmt_assigns
-    | stmt_assigns stmt_return
+    | stmt_call_assign
+    | stmt_call_assign stmt_return
     |
     ;
 
-stmt_return:
-      TK_RETURN rel_expr ';'    { stmt_create(RETURN, "", $2); }
+stmt_call_assign:
+      stmt_assign
+    | stmt_call
+    | stmt_call_assign stmt_call
+    | stmt_call_assign stmt_assign
     ;
 
-stmt_assigns:
-      stmt_assign
-    | stmt_assigns stmt_assign
+stmt_return:
+      TK_RETURN rel_expr ';'    { stmt_return($2); }
+    ;
+
+stmt_call:
+      func_no_args ';'          { stmt_call($1); }
+    | func_with_args ';'        { stmt_call($1); }
     ;
 
 stmt_assign:
       TK_NAME '=' rel_expr ';'
-        { stmt_create(ASSIGN, $1, $3); }
+        { stmt_assign($1, $3); }
     | TK_NAME '+' '=' rel_expr ';'
-        { stmt_create(ASSIGN, $1, r_union(r_load($1), $4)); }
+        { stmt_assign($1, r_union(r_load($1), $4)); }
     | TK_NAME '-' '=' rel_expr ';'
-        { stmt_create(ASSIGN, $1, r_diff(r_load($1), $4)); }
+        { stmt_assign($1, r_diff(r_load($1), $4)); }
     | TK_NAME '*' '=' rel_expr ';'
-        { stmt_create(ASSIGN, $1, r_join(r_load($1), $4)); }
+        { stmt_assign($1, r_join(r_load($1), $4)); }
     | TK_VAR TK_NAME '=' rel_expr ';'
-        { stmt_create(TEMP, $2, $4); }
+        { stmt_temp($2, $4); }
+    ;
+
+func_no_args:
+      TK_NAME               { $$ = r_call($1, attr_empty()); }
+    ;
+
+func_with_args:
+      TK_NAME func_args     { $$ = r_call($1, $2); }
+    ;
+
+func_args:
+      func_arg              { $$ = $1; }
+    | func_args func_arg    { $$ = attr_merge($1, $2); }
+    ;
+
+func_arg:
+      rel_prim_expr         { $$ = attr_arg($1, NULL); }
+    /* FIXME this needs to be full prim_expr */
+    | prim_const_expr       { $$ = attr_arg(NULL, $1); }
     ;
 
 rel_prim_expr:
-      TK_NAME           { $$ = r_load($1); }
-    | '(' rel_expr ')'  { $$ = $2; }
+      func_no_args          { $$ = $1; }
+    | '(' rel_expr ')'      { $$ = $2; }
     ;
 
 rel_simple_expr:
@@ -243,6 +279,8 @@ rel_simple_expr:
         { $$ = r_sum($3, NULL, $2); }
     | TK_SUMMARY sum_attrs rel_prim_expr rel_prim_expr
         { $$ = r_sum($3, $4, $2); }
+    | func_with_args
+        { $$ = $1; }
     ;
 
 rel_mul_expr:
@@ -363,9 +401,6 @@ prim_expr:
 
 %%
 
-/* FIXME: the tbuf_clean needs to called for TEMP and PARAM relations
-    ideally this is not exposed and is handled within the relations themselves
- */
 extern void env_free(Env *env)
 {
     for (int i = 0; i < env->vars.len; ++i) {
@@ -373,39 +408,32 @@ extern void env_free(Env *env)
         mem_free(env->vars.heads[i]);
     }
 
-    for (int k = 0; k < env->types.len; ++k) {
-        mem_free(env->types.names[k]);
-        mem_free(env->types.heads[k]);
+    for (int i = 0; i < env->types.len; ++i) {
+        mem_free(env->types.names[i]);
+        mem_free(env->types.heads[i]);
     }
 
-    for (int x = 0; x < env->fns.len; ++x) {
-        Func *fn = env->fns.funcs[x];
+    for (int i = 0; i < env->fns.len; ++i) {
+        Func *fn = env->fns.funcs[i];
+        for (int j = 0; j < fn->slen; ++j)
+            rel_free(fn->stmts[j]);
         for (int j = 0; j < fn->r.len; ++j)
             mem_free(fn->r.names[j]);
-        for (int j = 0; j < fn->w.len; ++j) {
+        for (int j = 0; j < fn->w.len; ++j)
             mem_free(fn->w.names[j]);
-            rel_free(fn->w.rels[j]);
-        }
+        for (int j = 0; j < fn->pp.len; ++j)
+            mem_free(fn->pp.names[j]);
         for (int j = 0; j < fn->t.len; ++j) {
             mem_free(fn->t.names[j]);
-            Rel *r = fn->t.rels[j];
-            if (r->body != NULL)
-                tbuf_clean(r->body);
-            rel_free(r);
+            mem_free(fn->t.heads[j]);
         }
         if (fn->rp.name != NULL) {
             mem_free(fn->rp.name);
-            Rel *r = fn->rp.rel;
-            if (r->body != NULL)
-                tbuf_clean(r->body);
-            rel_free(r);
+            mem_free(fn->rp.head);
         }
-        for (int j = 0; j < fn->pp.len; ++j)
-            mem_free(fn->pp.names[j]);
         if (fn->ret != NULL)
-            rel_free(fn->ret);
+            mem_free(fn->ret);
 
-        mem_free(fn->head);
         mem_free(fn);
     }
 
@@ -456,14 +484,24 @@ extern Func **env_funcs(Env *env, const char *name, int *cnt)
     return res;
 }
 
-static L_Attrs attr_name(const char *name)
+static L_Attrs attr_empty()
 {
-    L_Attrs res = {.len = 1,
-                   .names[0] = str_dup(name),
+    L_Attrs res = {.len = 0,
+                   .names[0] = NULL,
                    .renames[0] = NULL,
                    .types[0] = -1,
-                   .exprs[0] = NULL,
+                   .pexprs[0] = NULL,
+                   .rexprs[0] = NULL,
                    .sums[0].def = NULL};
+    return res;
+}
+
+static L_Attrs attr_name(const char *name)
+{
+    L_Attrs res = attr_empty();
+    res.len = 1;
+    res.names[0] = str_dup(name);
+
     return res;
 }
 
@@ -485,7 +523,7 @@ static L_Attrs attr_rename(const char *from, const char *to)
 static L_Attrs attr_extend(const char *name, L_Expr *e)
 {
     L_Attrs res = attr_name(name);
-    res.exprs[0] = e;
+    res.pexprs[0] = e;
     return res;
 }
 
@@ -494,6 +532,18 @@ static L_Attrs attr_sum(const char *name, L_Sum sum)
     L_Attrs res = attr_name(name);
     res.types[0] = sum.def->type;
     res.sums[0] = sum;
+    return res;
+}
+
+static L_Attrs attr_arg(Rel *rexpr, L_Expr *pexpr)
+{
+    /* generate a unique name to avoid errors coming from attr_merge */
+    char name[MAX_NAME];
+    str_print(name, "%d", gseq++);
+
+    L_Attrs res = attr_name(name);
+    res.rexprs[0] = rexpr;
+    res.pexprs[0] = pexpr;
     return res;
 }
 
@@ -509,7 +559,8 @@ static L_Attrs attr_merge(L_Attrs l, L_Attrs r)
         l.names[l.len] = r.names[i];
         l.renames[l.len] = r.renames[i];
         l.types[l.len] = r.types[i];
-        l.exprs[l.len] = r.exprs[i];
+        l.pexprs[l.len] = r.pexprs[i];
+        l.rexprs[l.len] = r.rexprs[i];
         l.sums[l.len] = r.sums[i];
 
         l.len++;
@@ -550,8 +601,8 @@ static void attr_free(L_Attrs a) {
         mem_free(a.names[i]);
         if (a.renames[i] != NULL)
             mem_free(a.renames[i]);
-        if (a.exprs[i] != NULL)
-            p_free(a.exprs[i]);
+        if (a.pexprs[i] != NULL)
+            p_free(a.pexprs[i]);
         if (a.sums[i].def != NULL)
             mem_free(a.sums[i].def);
     }
@@ -741,60 +792,91 @@ static Expr *p_convert(Head *h, Func *fn, L_Expr *e, L_Expr_Type parent_type)
     return res;
 }
 
-static void stmt_create(L_Stmt_Type type, const char *name, Rel *r)
+static void stmt_assign(const char *var, Rel *r)
 {
-    Func *fn = gfunc;
-
-    if (fn->w.len + fn->t.len >= MAX_STMTS)
+    if (gfunc->slen >= MAX_STMTS)
         yyerror("number of statements exceeds the maximum (%d)", MAX_STMTS);
 
-    if (type == ASSIGN) {
-        int idx = array_scan(fn->w.names, fn->w.len, name);
-        if (idx != -1)
-            yyerror("cannot reassign variable '%s'", name);
+    int idx = array_scan(genv->vars.names, genv->vars.len, var);
+    if (idx < 0)
+        yyerror("unknown variable '%s'", var);
 
-        idx = array_scan(genv->vars.names, genv->vars.len, name);
-        if (idx < 0)
-            yyerror("unknown variable '%s'", name);
+    Head *wh = genv->vars.heads[idx];
+    char wstr[MAX_HEAD_STR], bstr[MAX_HEAD_STR];
+    head_to_str(wstr, wh);
+    head_to_str(bstr, r->head);
 
-        Head *wh = genv->vars.heads[idx];
-        char wstr[MAX_HEAD_STR], bstr[MAX_HEAD_STR];
-        head_to_str(wstr, wh);
-        head_to_str(bstr, r->head);
+    if (!head_eq(r->head, wh))
+        yyerror("invalid type in assignment, expects %s, found %s",
+                wstr, bstr);
 
-        if (!head_eq(r->head, wh))
-            yyerror("invalid type in assignment, expects %s, found %s",
-                    wstr, bstr);
+    idx = array_scan(gfunc->w.names, gfunc->w.len, var);
+    if (idx < 0)
+        gfunc->w.names[gfunc->w.len++] = str_dup(var);
 
-        fn->w.names[fn->w.len] = str_dup(name);
-        fn->w.rels[fn->w.len++] = r;
-    } else if (type == RETURN) {
-        if (fn->head == NULL)
-            yyerror("unexpected return in function with void result type");
+    gfunc->stmts[gfunc->slen++] = rel_store(var, r);
+}
 
-        Head *h = r->head;
+static int var_exists(const char *var)
+{
+    return (gfunc->rp.head != NULL && str_cmp(gfunc->rp.name, var) == 0) ||
+           (array_scan(gfunc->t.names, gfunc->t.len, var) > -1) ||
+           (array_scan(genv->vars.names, genv->vars.len, var) > -1);
+}
 
-        char hstr[MAX_HEAD_STR], res_str[MAX_HEAD_STR];
-        head_to_str(hstr, h);
-        head_to_str(res_str, fn->head);
+static void stmt_temp(const char *var, Rel *r)
+{
+    if (gfunc->slen >= MAX_STMTS)
+        yyerror("number of statements exceeds the maximum (%d)", MAX_STMTS);
 
-        int pos;
-        Type t;
-        for (int i = 0; i < fn->head->len; ++i)
-            if (!head_attr(h, fn->head->names[i], &pos, &t) ||
-                t != fn->head->types[i])
-                yyerror("invalid type in return, expects %s, found %s",
-                        res_str, hstr);
+    if (var_exists(var))
+        yyerror("identifier '%s' is already defined", var);
 
-        fn->ret = rel_project(r, fn->head->names, fn->head->len);
-    } else if (type == TEMP) {
-        if ((array_scan(fn->t.names, fn->t.len, name) != -1) ||
-            (array_scan(genv->vars.names, genv->vars.len, name) != -1))
-            yyerror("variable '%s' is already defined", name);
+    gfunc->t.names[gfunc->t.len] = str_dup(var);
+    gfunc->t.heads[gfunc->t.len++] = head_cpy(r->head);
+    gfunc->stmts[gfunc->slen++] = rel_store(var, r);
+}
 
-        fn->t.names[fn->t.len] = str_dup(name);
-        fn->t.rels[fn->t.len++] = r;
-    }
+static void stmt_call(Rel *r)
+{
+    if (gfunc->slen >= MAX_STMTS)
+        yyerror("number of statements exceeds the maximum (%d)", MAX_STMTS);
+
+    /* if a function return value is ignored, we create a temporary variable
+       to garbage collect the unused tuples */
+    if (r->head != NULL) {
+        char var[MAX_NAME];
+        str_print(var, "%d", gseq++);
+        stmt_temp(var, r);
+    } else
+        gfunc->stmts[gfunc->slen++] = r;
+}
+
+static void stmt_return(Rel *r)
+{
+    if (gfunc->slen >= MAX_STMTS)
+        yyerror("number of statements exceeds the maximum (%d)", MAX_STMTS);
+
+    if (gfunc->ret == NULL)
+        yyerror("unexpected return in function with void result type");
+
+    Head *h = r->head;
+
+    char hstr[MAX_HEAD_STR], res_str[MAX_HEAD_STR];
+    head_to_str(hstr, h);
+    head_to_str(res_str, gfunc->ret);
+
+    int pos;
+    Type t;
+    for (int i = 0; i < gfunc->ret->len; ++i)
+        if (!head_attr(h, gfunc->ret->names[i], &pos, &t) ||
+            t != gfunc->ret->types[i])
+            yyerror("invalid type in return, expects %s, found %s",
+                    res_str, hstr);
+
+    r = rel_project(r, gfunc->ret->names, gfunc->ret->len);
+    gfunc->stmts[gfunc->slen++] = r;
+    gfunc_ret = 1;
 }
 
 static Head *inline_rel(const char *name, Head *head)
@@ -815,7 +897,7 @@ static Head *inline_rel(const char *name, Head *head)
 
 static void fn_result(Head *h)
 {
-    gfunc->head = h;
+    gfunc->ret = h;
 }
 
 static void fn_rel_params(L_Attrs names, Head *h)
@@ -828,7 +910,7 @@ static void fn_rel_params(L_Attrs names, Head *h)
                 names.names[0]);
 
     gfunc->rp.name = str_dup(names.names[0]);
-    gfunc->rp.rel = rel_param(h);
+    gfunc->rp.head = head_cpy(h);
     gfunc->rp.position = ++gposition;
     mem_free(h); /* FIXME: it is duplicated in rel_param */
     attr_free(names);
@@ -861,20 +943,20 @@ static void fn_start(const char *name)
     gposition = 0;
     gfunc = mem_alloc(sizeof(Func));
     str_cpy(gfunc->name, name);
-    gfunc->head = NULL;
     gfunc->ret = NULL;
+    gfunc->slen = 0;
     gfunc->r.len = 0;
     gfunc->w.len = 0;
     gfunc->t.len = 0;
     gfunc->pp.len = 0;
     gfunc->rp.name = NULL;
-    gfunc->rp.rel = NULL;
+    gfunc->rp.head = NULL;
     gfunc->rp.position = 0;
 }
 
 static void fn_add()
 {
-    if (gfunc->head != NULL && gfunc->ret == NULL)
+    if (gfunc->ret != NULL && !gfunc_ret)
         yyerror("function '%s' is missing a return statement", gfunc->name);
 
     if (genv->fns.len + 1 >= MAX_VARS)
@@ -885,24 +967,20 @@ static void fn_add()
     genv->fns.funcs[len] = gfunc;
 
     gfunc = NULL;
+    gfunc_ret = 0;
 }
 
 static Rel *r_load(const char *name)
 {
-    Func *fn = gfunc;
-
     int i = -1;
     Rel *res = NULL;
-    if (fn->rp.name != NULL && str_cmp(fn->rp.name, name) == 0)
-        res = rel_clone(fn->rp.rel);
-    else if ((i = array_scan(fn->t.names, fn->t.len, name)) > -1)
-        res = rel_clone(fn->t.rels[i]);
+    if (gfunc->rp.name != NULL && str_cmp(gfunc->rp.name, name) == 0)
+        res = rel_load(gfunc->rp.head, name);
+    else if ((i = array_scan(gfunc->t.names, gfunc->t.len, name)) > -1)
+        res = rel_load(gfunc->t.heads[i], name);
     else if ((i = array_scan(genv->vars.names, genv->vars.len, name)) > -1) {
-        if (array_scan(fn->w.names, fn->w.len, name) > -1)
-            yyerror("variable '%s' cannot be read (it was modified by "
-                    "one of the previous statements)", name);
-        if (array_scan(fn->r.names, fn->r.len, name) < 0)
-            fn->r.names[fn->r.len++] = str_dup(name);
+        if (array_scan(gfunc->r.names, gfunc->r.len, name) < 0)
+            gfunc->r.names[gfunc->r.len++] = str_dup(name);
 
         res = rel_load(genv->vars.heads[i], name);
     } else
@@ -970,7 +1048,7 @@ static Rel *r_extend(Rel *r, L_Attrs attrs)
             yyerror("attribute '%s' already exists in %s",
                     attrs.names[i], hstr);
 
-        extends[i] = p_convert(r->head, gfunc, attrs.exprs[i], POS);
+        extends[i] = p_convert(r->head, gfunc, attrs.pexprs[i], POS);
     }
 
     if (r->head->len + attrs.len > MAX_ATTRS)
@@ -1109,6 +1187,101 @@ static Rel *r_diff(Rel *l, Rel *r)
                 lhstr, rhstr);
 
     return rel_diff(l, r);
+}
+
+static int merge_vars(char **dest, int dlen, char **src, int slen)
+{
+    for (int i = 0; i < slen; ++i) {
+        int pos = array_scan(dest, dlen, src[i]);
+        if (pos > -1)
+            continue;
+
+        if (dlen + 1 > MAX_VARS)
+            yyerror("number of variables exceeds the maximum (%d)", MAX_VARS);
+
+        dest[dlen] = str_dup(src[i]);
+        dlen++;
+    }
+
+    return dlen;
+}
+
+static Rel *r_call(const char *func, L_Attrs args)
+{
+    Rel *res = NULL;
+
+    /* gramatically there is no difference between a variable load and
+       a function call hence we first check if it is a load instruction */
+    if (var_exists(func)) {
+        res = r_load(func);
+        goto exit;
+    }
+
+    int idx = array_scan(genv->fns.names, genv->fns.len, func);
+    if (idx < 0)
+        yyerror("unknown identifier '%s' neither function call nor variable "
+                "declared with this name", func);
+
+    Func *fn = genv->fns.funcs[idx];
+    int cnt = fn->pp.len;
+    cnt += (fn->rp.head == NULL) ? 0 : 1;
+
+    if (args.len != cnt)
+        yyerror("invalid number of arguments, expected %d found %d",
+                cnt, args.len);
+
+    if (fn->rp.head != NULL) {
+        int pos = fn->rp.position;
+        if (args.rexprs[pos - 1] == NULL)
+            yyerror("expected a relational argument at position %d", pos);
+
+        if (!head_eq(fn->rp.head, args.rexprs[pos - 1]->head))
+            yyerror("invalid relational argument at position %d", pos);
+    }
+
+    for (int i = 0; i < fn->pp.len; ++i) {
+        int pos = fn->pp.positions[i];
+        if (args.pexprs[pos - 1] == NULL)
+            yyerror("expected a primitive argument at position %d", pos);
+
+        if (args.pexprs[pos - 1]->type != fn->pp.types[i])
+            yyerror("invalid primitive argument at position %d", pos);
+
+        mem_free(args.names[pos - 1]);
+        args.names[pos - 1] = str_dup(fn->pp.names[i]);
+    }
+
+    Rel *rexpr = NULL;
+    Expr *pexprs[MAX_ATTRS];
+    int plen = 0;
+    for (int i = 0; i < args.len; ++i) {
+        if (args.rexprs[i] != NULL)
+            rexpr = args.rexprs[i];
+
+        if (args.pexprs[i] != NULL) {
+            /* empty head due to constant expression */
+            Head *empty = head_new(NULL, NULL, 0);
+            pexprs[plen++] = p_convert(empty, gfunc, args.pexprs[i], POS);
+            mem_free(empty);
+        }
+    }
+
+    res = rel_call(fn->r.names, fn->r.len,
+                   fn->w.names, fn->w.len,
+                   fn->t.names, fn->t.len,
+                   fn->stmts, fn->slen,
+                   pexprs, plen,
+                   rexpr, fn->rp.name,
+                   fn->ret);
+
+    gfunc->r.len = merge_vars(gfunc->r.names, gfunc->r.len,
+                              fn->r.names, fn->r.len);
+    gfunc->w.len = merge_vars(gfunc->w.names, gfunc->w.len,
+                              fn->w.names, fn->w.len);
+
+exit:
+    attr_free(args);
+    return res;
 }
 
 static void p_free(L_Expr *e)

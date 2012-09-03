@@ -22,18 +22,21 @@ static Env *env;
 static Rel *pack_init(char *str, char *errmsg)
 {
     Head *h = NULL;
-    Arg arg = { .body = NULL };
-    Error *err = pack_csv2rel(str, &h, &arg.body);
+    TBuf *b = NULL;
+    Error *err = pack_csv2rel(str, &h, &b);
+    Vars *v = vars_new(1);
+    vars_add(v, "param", 0, b);
 
     Rel *res = NULL;
-    if (err == NULL && arg.body != NULL) {
+    if (err == NULL) {
         if (errmsg != NULL)
             fail();
 
-        Vars rvars = { .len = 0 };
-        res = rel_param(h);
+        /* FIXME: project should be part of the function call or the pack itself */
+        res = rel_project(rel_load(h, "param"), h->names, h->len);
 
-        rel_init(res, &rvars, &arg);
+        Arg arg;
+        rel_eval(res, v, &arg);
         mem_free(h);
     } else {
         if (errmsg == NULL)
@@ -53,11 +56,12 @@ static void test_pack()
 
     str_cpy(str, "a:int,b:string");
     Rel *rel = pack_init(str, NULL);
+
     if (rel == NULL)
         fail();
     if (rel->head->len != 2)
         fail();
-    Tuple *t = rel_next(rel);
+    Tuple *t = tbuf_next(rel->body);
     if (t != NULL)
         fail();
 
@@ -65,11 +69,12 @@ static void test_pack()
 
     str_cpy(str, "c:string,a:long\nworld hello,12343");
     rel = pack_init(str, NULL);
+
     if (rel == NULL)
         fail();
     if (rel->head->len != 2)
         fail();
-    t = rel_next(rel);
+    t = tbuf_next(rel->body);
     if (t == NULL)
         fail();
 
@@ -87,12 +92,13 @@ static void test_pack()
 
     str_cpy(str, "c:string,a:int\nhello world,12343\nhello world,123430");
     rel = pack_init(str, NULL);
+
     if (rel == NULL)
         fail();
     if (rel->head->len != 2)
         fail();
 
-    t = rel_next(rel);
+    t = tbuf_next(rel->body);
     if (t == NULL)
         fail();
 
@@ -102,7 +108,7 @@ static void test_pack()
         fail();
 
     tuple_free(t);
-    t = rel_next(rel);
+    t = tbuf_next(rel->body);
     if (t == NULL)
         fail();
 
@@ -115,12 +121,13 @@ static void test_pack()
     /* test duplicate input */
     str_cpy(str, "c:string,a:int\nhello world,12343\nhello world,12343");
     rel = pack_init(str, NULL);
+
     if (rel == NULL)
         fail();
     if (rel->head->len != 2)
         fail();
 
-    t = rel_next(rel);
+    t = tbuf_next(rel->body);
     if (t == NULL)
         fail();
 
@@ -130,7 +137,7 @@ static void test_pack()
         fail();
 
     tuple_free(t);
-    t = rel_next(rel);
+    t = tbuf_next(rel->body);
     if (t != NULL)
         fail();
 

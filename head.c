@@ -169,7 +169,6 @@ extern int head_eq(Head *l, Head *r)
               l->types[i] == r->types[i];
 
     return res;
-
 }
 
 extern Head *head_rename(Head *h,

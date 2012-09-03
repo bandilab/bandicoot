@@ -26,6 +26,7 @@ limitations under the License.
 #include "volume.h"
 #include "expression.h"
 #include "summary.h"
+#include "variable.h"
 #include "relation.h"
 #include "environment.h"
 #include "error.h"
@@ -81,7 +82,11 @@ static Error *pack_csv2head(char *buf, char *names[], Head **out)
     return NULL;
 }
 
-static Error *pack_csv2tuple(char *buf, int line, char *names[], Head *head, Tuple **out)
+static Error *pack_csv2tuple(char *buf,
+                             int line,
+                             char *names[],
+                             Head *head,
+                             Tuple **out)
 {
     char *str_vals[MAX_ATTRS];
 
@@ -262,17 +267,17 @@ extern int pack_fn2csv(Func **fns, int cnt, char *buf, int size, int *iteration)
 
     char *pattern = "%s,%s,%s,%s\n";
     char *name = fn->name;
-    Head *head = fn->head;
+    Head *ret = fn->ret;
 
     off += str_print(buf + off, pattern, name, "", "", "");
 
-    if (head != NULL)
-        for (int j = 0; j < head->len; ++j)
+    if (ret != NULL)
+        for (int j = 0; j < ret->len; ++j)
             off += str_print(buf + off, pattern,
                              name,
-                             head->names[j],
+                             ret->names[j],
                              "return",
-                             type_to_str(head->types[j]));
+                             type_to_str(ret->types[j]));
 
     for (int j = 0; j < fn->pp.len; ++j)
         off += str_print(buf + off, pattern,
@@ -281,14 +286,14 @@ extern int pack_fn2csv(Func **fns, int cnt, char *buf, int size, int *iteration)
                          fn->pp.names[j],
                          type_to_str(fn->pp.types[j]));
 
-    Rel *rp = fn->rp.rel;
+    Head *rp = fn->rp.head;
     if (rp != NULL)
-        for (int i = 0; i < rp->head->len; ++i)
+        for (int i = 0; i < rp->len; ++i)
             off += str_print(buf + off, pattern,
                              name,
-                             rp->head->names[i],
+                             rp->names[i],
                              fn->rp.name,
-                             type_to_str(rp->head->types[i]));
+                             type_to_str(rp->types[i]));
 
     return off;
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2010 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,7 +36,7 @@ extern Tuple *gen_tuple(int i)
     return tuple_new(vals, 2);
 }
 
-static void init_gen(Rel *r, Vars *rvars, Arg *arg) {}
+static void eval_gen(Rel *r, Vars *rvars, Arg *arg) {}
 static void free_gen(Rel *r) {}
 
 extern TBuf *gen_tuples(int start, int end)
@@ -73,7 +73,7 @@ extern Rel *gen_rel(int start, int end)
 {
     Rel *res = mem_alloc(sizeof(Rel));
     res->head = gen_head();
-    res->init = init_gen;
+    res->eval = eval_gen;
     res->free = free_gen;
     res->ctxt = NULL;
     res->body = gen_tuples(start, end);

@@ -15,79 +15,72 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-typedef struct {
-    int size;
-    int len;
-    char **names;
-    char **vols;
-    long long *vers;
-} Vars;
-
-extern Vars *vars_new(int len);
-extern Vars *vars_read(IO *io);
-extern int vars_write(Vars *v, IO *io);
-extern int vars_scan(Vars *v, const char *var, long long ver);
-extern void vars_put(Vars *v, const char *var, long long ver);
-extern void vars_free(Vars *v);
-extern void vars_cpy(Vars *dest, Vars *src);
-
 struct Rel {
     Head *head;
     TBuf *body;
     void *ctxt;
 
-    void (*init)(struct Rel *self, Vars *rvars, Arg *arg);
-    void (*free)(struct Rel *self);
+    void (*eval)(struct Rel *r, Vars *v, Arg *a);
+    void (*free)(struct Rel *r);
 };
 
 typedef struct Rel Rel;
 
-static void rel_init(Rel *r, Vars *rvars, Arg *arg)
-{
-    if (r->init != NULL)
-        r->init(r, rvars, arg);
-    if (r->body != NULL)
-        tbuf_reset(r->body);
-}
+/* evaluate a relation with the corresponding arguments */
+extern void rel_eval(Rel *r, Vars *v, Arg *a);
 
-static void rel_free(Rel *r)
-{
-    r->free(r);
-    if (r->body != NULL)
-        tbuf_free(r->body);
+/* free a relation */
+extern void rel_free(Rel *r);
 
-    mem_free(r->head);
-    mem_free(r);
-}
-
-static Tuple *rel_next(Rel *r)
-{
-    return tbuf_next(r->body);
-}
-
-extern Rel *rel_param(Head *head);
-extern Rel *rel_clone(Rel *r);
-extern Rel *rel_load(Head *head, const char *name);
-
-/* relations passed to both rel_store & rel_eq must be rel_init()'ed */
-extern void rel_store(const char *vid,
-                      const char *name,
-                      long long vers,
-                      Rel *r);
+/* check if two relations are identical (relations must be evaluated first) */
 extern int rel_eq(Rel *l, Rel *r);
 
+/* load a relation stored in a variable identified by name. this applies to
+   global and temporary variables as well as to the relational parameters
+   passed to functions */
+extern Rel *rel_load(Head *head, const char *name);
+
+/* store a relation in a variable identified by name */
+extern Rel *rel_store(const char *name, Rel *r);
+
+/* a function call */
+extern Rel *rel_call(char **r, int rlen,
+                     char **w, int wlen,
+                     char **t, int tlen,
+                     Rel **stmts, int slen,
+                     Expr **pexprs, int plen,
+                     Rel *rexpr, char *rname,
+                     Head *ret);
+
+/* natural join of two relations */
 extern Rel *rel_join(Rel *l, Rel *r);
+
+/* union of two relations */
 extern Rel *rel_union(Rel *l, Rel *r);
+
+/* difference of two relations (l \ r) */
 extern Rel *rel_diff(Rel *l, Rel *r);
+
+/* projection of a relation to the corresponding attribtues */
 extern Rel *rel_project(Rel *r, char *attrs[], int len);
+
+/* rename the attributes within a relation */
 extern Rel *rel_rename(Rel *r, char *from[], char *to[], int len);
+
+/* select tuples from a relation satisfying a boolean expression */
 extern Rel *rel_select(Rel *r, Expr *bool_expr);
+
+/* extend a relation with more attributes specified as primitive expressions */
 extern Rel *rel_extend(Rel *r, char *names[], Expr *e[], int len);
+
+/* summarize a relation with the help of aggregate functions */
 extern Rel *rel_sum_unary(Rel *r,
                           char *names[],
                           Type types[],
                           Sum *sums[],
                           int len);
+
+/* group the relation "r" per relation "per" and summarize each group */
 extern Rel *rel_sum(Rel *r,
                     Rel *per,
                     char *names[],

@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2010 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,6 @@ typedef enum { ATTR, VALUE, NOT, EQ, NEQ, AND,
                MUL, DIV, NEG, POS, FUNC } L_Expr_Type;
 
 typedef enum { CNT, MIN, MAX, AVG, ADD } L_Sum_Type;
-
-typedef enum { ASSIGN, RETURN, TEMP, PARAM } L_Stmt_Type;
 
 union L_Value {
     int v_int;
@@ -51,7 +49,8 @@ struct L_Attrs {
     char *names[MAX_ATTRS];
     char *renames[MAX_ATTRS];
     Type types[MAX_ATTRS];
-    struct L_Expr *exprs[MAX_ATTRS];
+    Rel *rexprs[MAX_ATTRS];
+    struct L_Expr *pexprs[MAX_ATTRS];
     struct L_Sum sums[MAX_ATTRS];
 };
 

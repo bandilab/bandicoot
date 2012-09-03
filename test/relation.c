@@ -17,25 +17,28 @@ limitations under the License.
 
 #include "common.h"
 
-static Vars *rvars;
-static Arg arg;
+static Vars *vars = NULL;
+static Vars *rvars = NULL;
 static Env *env = NULL;
+static Arg arg;
 
 static Rel *pack(char *str)
 {
-    Head *h = NULL;
-    TBuf *buf = NULL;
-    Error *err = pack_csv2rel(str, &h, &buf);
-    if (err != NULL) {
+    Head *head = NULL;
+    TBuf *body = NULL;
+    Error *err = pack_csv2rel(str, &head, &body);
+    if (err != NULL)
         fail();
-    }
 
     Rel *res = NULL;
+    if (body != NULL) {
+        int idx = array_scan(vars->names, vars->len, "___param");
+        if (idx < 0)
+            fail();
 
-    if (buf != NULL) {
-        arg.body = buf;
-        res = rel_param(h);
-        mem_free(h);
+        res = rel_load(head, "___param");
+        vars->vals[idx] = body;
+        mem_free(head);
     }
 
     return res;
@@ -47,20 +50,45 @@ static Rel *load(const char *name)
     return rel_load(head, name);
 }
 
+static void load_vars()
+{
+    for (int i = 0; i < rvars->len; ++i) {
+        int pos = array_scan(vars->names, vars->len, rvars->names[i]);
+        if (pos < 0)
+            fail();
+
+        vars->vals[pos] = vol_read(rvars->vols[i],
+                                   rvars->names[i],
+                                   rvars->vers[i]);
+    }
+}
+
+static void free_vars()
+{
+    for (int i = 0; i < vars->len; ++i)
+        if (vars->vals[i] != NULL) {
+            tbuf_clean(vars->vals[i]);
+            tbuf_free(vars->vals[i]);
+            vars->vals[i] = NULL;
+        }
+}
+
 static int equal(Rel *left, const char *name)
 {
     Rel *right = load(name);
     Vars *wvars = vars_new(0);
 
     long long sid = tx_enter("", rvars, wvars);
+    load_vars();
 
-    rel_init(left, rvars, &arg);
-    rel_init(right, rvars, &arg);
+    rel_eval(left, vars, &arg);
+    rel_eval(right, vars, &arg);
 
     int res = rel_eq(left, right);
 
     rel_free(left);
     rel_free(right);
+    free_vars();
 
     tx_commit(sid);
 
@@ -75,18 +103,24 @@ static int count(const char *name)
     Vars *wvars = vars_new(0);
 
     long long sid = tx_enter("", rvars, wvars);
+    load_vars();
 
-    rel_init(r, rvars, &arg);
+    rel_eval(r, vars, &arg);
 
     Tuple *t;
-    int i;
-    for (i = 0; (t = rel_next(r)) != 0; ++i)
+    int i = 0;
+    while ((t = tbuf_next(r->body)) != NULL) {
         tuple_free(t);
+        i++;
+    }
 
     rel_free(r);
+    free_vars();
+
     tx_commit(sid);
 
     vars_free(wvars);
+
     return i;
 }
 
@@ -103,7 +137,10 @@ static void test_load()
 static void test_param()
 {
     char param_1[1024];
+    /* FIXME: pack should be unique
     str_cpy(param_1, "a:int,c:string\n1,one\n2,two\n1,one\n2,two");
+     */
+    str_cpy(param_1, "a:int,c:string\n1,one\n2,two");
 
     if (!equal(pack(param_1), "param_1"))
         fail();
@@ -111,24 +148,21 @@ static void test_param()
 
 static int equal_clone(const char *name)
 {
-    Rel *rel = load(name);
-    Rel *cp1 = rel_clone(rel), *cp2 = rel_clone(rel);
+    Rel *cp1 = load(name);
+    Rel *cp2 = load(name);
     Vars *wvars = vars_new(0);
 
-    long sid = tx_enter("", rvars, wvars);
+    long long sid = tx_enter("", rvars, wvars);
+    load_vars();
 
-    rel_init(rel, rvars, &arg);
-    rel_init(cp1, rvars, &arg);
-    rel_init(cp2, rvars, &arg);
+    rel_eval(cp1, vars, &arg);
+    rel_eval(cp2, vars, &arg);
 
     int res = rel_eq(cp1, cp2);
 
-    if (rel->body != NULL)
-        tbuf_clean(rel->body);
-
-    rel_free(rel);
     rel_free(cp1);
     rel_free(cp2);
+    free_vars();
 
     tx_commit(sid);
 
@@ -145,7 +179,6 @@ static void test_clone()
     if (!equal_clone("storage_r1"))
         fail();
 }
-
 
 static void test_eq()
 {
@@ -170,17 +203,23 @@ static void test_store()
     Rel *r = load("one_r1");
 
     Vars *wvars = vars_new(1);
-    vars_put(wvars, "one_r1_cpy", 0L);
+    vars_add(wvars, "one_r1_cpy", 0, NULL);
 
     long long sid = tx_enter("", rvars, wvars);
-    rel_init(r, rvars, &arg);
-    rel_store(wvars->vols[0], "one_r1_cpy", wvars->vers[0], r);
+
+    load_vars();
+    rel_eval(r, vars, &arg);
+    vol_write(wvars->vols[0], r->body, wvars->names[0], wvars->vers[0]);
     rel_free(r);
+    free_vars();
+
     tx_commit(sid);
 
     vars_free(wvars);
     if (!equal(load("one_r1"), "one_r1_cpy"))
         fail();
+
+    /* TODO: test reassignment in one statement logic */
 }
 
 static void test_select()
@@ -208,7 +247,6 @@ static void test_select()
                    expr_lt(expr_attr(c, tc),
                            expr_str("aab")));
     r = rel_select(src, expr);
-    
     if (!equal(r, "select_2_res"))
         fail();
 
@@ -429,9 +467,9 @@ static void test_vars()
     Vars *v[] = {vars_new(0), vars_new(1), vars_new(3), vars_new(7)};
 
     for (unsigned i = 0; i < sizeof(v) / sizeof(Vars*); ++i) {
-        vars_put(v[i], "a1", 1);
-        vars_put(v[i], "a2", 2);
-        vars_put(v[i], "a3", 3);
+        vars_add(v[i], "a1", 1, NULL);
+        vars_add(v[i], "a2", 2, NULL);
+        vars_add(v[i], "a3", 3, NULL);
         for (int j = 0; j < 3; ++j)
             str_print(v[i]->vols[j], "%d", j + 3);
 
@@ -461,6 +499,40 @@ static void test_vars()
     }
 }
 
+static void test_call()
+{
+    char *r[] = { "one_r1" };
+    char *w[] = { };
+    char *t[] = { "___param" };
+
+    /* simulate a function call whih ignores the return value of a function
+       see stmt_call for implementation details */
+    Head *head = env_head(env, "one_r1");
+
+    Rel *stmts[] = { rel_store("___param", rel_load(head, "one_r1")),
+                     rel_store("___param", rel_load(head, "one_r1")) };
+
+    Rel *fn = rel_call(r, 1, w, 0, t, 1,
+                       stmts, 2,
+                       NULL, 0,
+                       NULL, "",
+                       NULL);
+
+    Vars *wvars = vars_new(0);
+    long long sid = tx_enter("", rvars, wvars);
+    vars_free(wvars);
+
+    load_vars();
+
+    rel_eval(fn, vars, &arg);
+    rel_free(fn);
+    rel_free(stmts[0]);
+    rel_free(stmts[1]);
+    free_vars();
+
+    tx_commit(sid);
+}
+
 int main()
 {
     int tx_port = 0;
@@ -477,9 +549,13 @@ int main()
     int len = 0;
     char **files = sys_list("test/data", &len);
 
+    vars = vars_new(len);
     rvars = vars_new(len);
-    for (int i = 0; i < len; ++i)
-        vars_put(rvars, files[i], 0L);
+    for (int i = 0; i < len; ++i) {
+        vars_add(rvars, files[i], 0, NULL);
+        vars_add(vars, files[i], 0, NULL);
+    }
+    vars_add(vars, "___param", 0, NULL);
 
     test_vars();
     test_load();
@@ -496,10 +572,12 @@ int main()
     test_summary();
     test_union();
     test_compound();
+    test_call();
 
     tx_free();
     env_free(env);
     mem_free(files);
+    vars_free(vars);
     vars_free(rvars);
 
     return 0;

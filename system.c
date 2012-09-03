@@ -249,7 +249,11 @@ extern int sys_iready(IO *io, int sec)
     FD_ZERO(&rfds);
     FD_SET(io->fd, &rfds);
 
-    int ready = select(io->fd + 1, &rfds, NULL, NULL, (sec < 0) ? NULL : &tv);
+    int ready = -1;
+    do {
+        ready = select(io->fd + 1, &rfds, NULL, NULL, (sec < 0) ? NULL : &tv);
+    } while (ready < 0 && errno == EINTR);
+
     if (ready < 0 && errno != EINTR)
         sys_die("sys: select failed\n");
 

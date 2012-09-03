@@ -26,6 +26,7 @@ limitations under the License.
 #include "volume.h"
 #include "expression.h"
 #include "summary.h"
+#include "variable.h"
 #include "relation.h"
 #include "environment.h"
 #include "list.h"
@@ -349,7 +350,7 @@ static void finish(long long sid, int final_state)
             else {
                 Vol *vol = get_volume(e->wvid);
                 if (vol != NULL)
-                    vars_put(vol->vars, e->name, e->version);
+                    vars_add(vol->vars, e->name, e->version, NULL);
             }
 
             Entry *we = get_min_waiting(gents, e->name, WRITE);
@@ -506,7 +507,7 @@ static Vars *volume_sync(const char *vid, Vars *in)
     for (List *it = gents; it != NULL; it = it->next) {
         Entry *e = it->elem;
         if (e->a_type == WRITE && e->state == COMMITTED)
-            vars_put(out, e->name, e->version);
+            vars_add(out, e->name, e->version, NULL);
     }
     set_vols(out, vid);
 

@@ -86,24 +86,26 @@ static void check(Proc *p, int value)
 
 static int count(Rel *r)
 {
-    int cnt = 0;
     Tuple *t = NULL;
-    for (; (t = rel_next(r)) != NULL; ++cnt)
+    int i = 0;
+    while ((t = tbuf_next(r->body)) != NULL) {
         tuple_free(t);
+        i++;
+    }
 
-    return cnt;
+    return i;
 }
 
 static void *exec_thread(void *arg)
 {
     Proc *p = arg;
-    Vars *rvars = vars_new(1);
+    Vars *r = vars_new(1);
     if (str_len(p->rname) > 0)
-        vars_put(rvars, p->rname, 0L);
+        vars_add(r, p->rname, 0, NULL);
 
-    Vars *wvars = vars_new(1);
+    Vars *w = vars_new(1);
     if (str_len(p->wname) > 0)
-        vars_put(wvars, p->wname, 0L);
+        vars_add(w, p->wname, 0, NULL);
 
     Rel *rel = NULL;
     long long sid = 0;
@@ -121,14 +123,18 @@ static void *exec_thread(void *arg)
             revert(sid);
         else if (action == TX_READ) {
             rel = rel_load(env_head(env, p->rname), p->rname);
-            rel_init(rel, rvars, NULL);
+            TBuf *body = vol_read(r->vols[0], r->names[0], r->vers[0]);
+            Vars *v = vars_new(1);
+            vars_add(v, p->rname, 0, body);
+            rel_eval(rel, v, NULL);
+            vars_free(v);
         } else if (action == TX_CHECK) {
             int cnt = count(rel);
             if (cnt != value) {
                 sys_print("%s: sid=%d, version=%d, expected=%d, got=%d\n",
                           current_test,
                           sid,
-                          rvars->vers[0],
+                          r->vers[0],
                           value,
                           cnt);
                 tx_state();
@@ -136,7 +142,7 @@ static void *exec_thread(void *arg)
             }
             rel_free(rel);
         } else if (action == TX_WRITE) {
-            rel_store(wvars->vols[0], wvars->names[0], wvars->vers[0], rel);
+            vol_write(w->vols[0], rel->body, w->names[0], w->vers[0]);
             rel_free(rel);
         }
 
@@ -151,12 +157,12 @@ static void *exec_thread(void *arg)
 
             sem_wait(gmon, value);
 
-            sid = enter("", rvars, wvars, gmon);
+            sid = enter("", r, w, gmon);
         }
     }
 
-    vars_free(rvars);
-    vars_free(wvars);
+    vars_free(r);
+    vars_free(w);
 
     return NULL;
 }
@@ -194,8 +200,8 @@ static void test(char *name, int cnt)
 static void test_basics()
 {
     /* test read */
-    Vars *w = vars_new(0), *r = vars_new(1);
-    vars_put(r, "tx_empty", 0L);
+    Vars *w = vars_new(0), *r = vars_new(1), *v = vars_new(1);
+    vars_add(r, "tx_empty", 0, NULL);
 
     long long sid = tx_enter("", r, w);
     long long ver = r->vers[0];
@@ -204,8 +210,9 @@ static void test_basics()
         fail();
 
     Rel *rel = rel_load(env_head(env, r->names[0]), r->names[0]);
-
-    rel_init(rel, r, NULL);
+    TBuf *body = vol_read(r->vols[0], r->names[0], r->vers[0]);
+    vars_add(v, r->names[0], 0, body);
+    rel_eval(rel, v, NULL);
     if (count(rel) != 0)
         fail();
 
@@ -214,11 +221,12 @@ static void test_basics()
 
     vars_free(r);
     vars_free(w);
+    vars_free(v);
 
     /* test write and revert */
     r = vars_new(0);
     w = vars_new(1);
-    vars_put(w, "tx_empty", 0L);
+    vars_add(w, "tx_empty", 0, NULL);
 
     sid = tx_enter("", r, w);
 
@@ -233,7 +241,7 @@ static void test_basics()
     /* test read and revert */
     r = vars_new(1);
     w = vars_new(0);
-    vars_put(r, "tx_empty", 0L);
+    vars_add(r, "tx_empty", 0, NULL);
 
     sid = tx_enter("", r, w);
 

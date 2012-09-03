@@ -67,20 +67,19 @@ static void test_rel_vars()
     OK("rel_var_basic.b");
     OK("rel_var_multiple_decls.b");
     FAIL("rel_var_unknown_type_err.b");
-    FAIL("rel_var_reassign_err.b");
     FAIL("rel_var_redecl_err.b");
     FAIL("rel_var_redecl_2_err.b");
     FAIL("rel_var_redecl_3_err.b");
     FAIL("rel_var_redecl_4_err.b");
     FAIL("rel_var_redecl_5_err.b");
     FAIL("rel_var_name_err.b");
-    FAIL("rel_var_read_after_assign_err.b");
     FAIL("rel_var_max_vars_err.b");
 }
 
 static void test_func()
 {
     OK("func_basic.b");
+    OK("func_calls_basic.b");
     FAIL("func_redecl_err.b");
     FAIL("func_unknown_res_type_err.b");
     FAIL("func_bad_res_type_err.b");
@@ -184,7 +183,8 @@ static void test_params()
     OK("params_basic.b");
     FAIL("params_rel_unknown_type_err.b");
     FAIL("params_rel_unknown_param_err.b");
-    FAIL("params_rel_redecl_param_err.b");
+    FAIL("params_rel_redecl_err.b");
+    FAIL("params_rel_redecl_2_err.b");
     FAIL("params_rel_more_than_one_err.b");
     FAIL("params_prim_redecl_err.b");
     FAIL("params_max_attrs_err.b");

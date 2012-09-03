@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2010 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -232,7 +232,7 @@ static void test_param()
 
     int i = 12345; double d = 12.345; long long l = 9223372036854775807LL;
     char *s = "string_1";
-    Arg arg = { .body = NULL };
+    Arg arg;
     arg.vals[0].v_int = i;
     arg.vals[1].v_real = d;
     arg.vals[2].v_long = l;

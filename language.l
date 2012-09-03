@@ -29,6 +29,7 @@ limitations under the License.
 #include "tuple.h"
 #include "expression.h"
 #include "summary.h"
+#include "variable.h"
 #include "relation.h"
 #include "language.h"
 #include "environment.h"
