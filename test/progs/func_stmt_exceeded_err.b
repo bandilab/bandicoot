@@ -246,15 +246,15 @@ var a119 point;
 
 fn test() void
 {
-	var tmp00 = (minus a b);
-	var tmp01 = (minus a b);
-	var tmp02 = (minus a b);
-	var tmp03 = (minus a b);
-	var tmp04 = (minus a b);
-	var tmp05 = (minus a b);
-	var tmp06 = (minus a b);
-	var tmp07 = (minus a b);
-	var tmp08 = (minus a b);
+	var tmp00 = (minus point a b);
+	var tmp01 = (minus point a b);
+	var tmp02 = (minus point a b);
+	var tmp03 = (minus point a b);
+	var tmp04 = (minus point a b);
+	var tmp05 = (minus point a b);
+	var tmp06 = (minus point a b);
+	var tmp07 = (minus point a b);
+	var tmp08 = (minus point a b);
 	a000 = tmp00;
 	a001 = tmp00;
 	a002 = tmp00;

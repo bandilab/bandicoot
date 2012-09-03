@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -397,6 +397,22 @@ extern Rel *rel_diff(Rel *l, Rel *r)
 
     Ctxt *c = res->ctxt;
     c->e.len = head_common(l->head, r->head, c->e.lpos, c->e.rpos);
+    c->left = l;
+    c->right = r;
+
+    return res;
+}
+
+extern Rel *rel_diff_safe(Head *h, Rel *l, Rel *r)
+{
+    Rel *res = alloc(init_diff);
+    res->head = head_cpy(l->head);
+
+    int tmp[MAX_ATTRS];
+
+    Ctxt *c = res->ctxt;
+    c->e.len = head_common(l->head, h, c->e.lpos, tmp);
+    head_common(h, r->head, tmp, c->e.rpos);
     c->left = l;
     c->right = r;
 

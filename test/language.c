@@ -116,6 +116,9 @@ static void test_semidiff()
 {
     OK("semidiff_basic.b");
     FAIL("semidiff_types_err.b");
+    FAIL("semidiff_safe_unknown_type_err.b");
+    FAIL("semidiff_safe_bad_left_head_err.b");
+    FAIL("semidiff_safe_bad_right_head_err.b");
 }
 
 static void test_select()
@@ -288,6 +291,7 @@ static void test_attr_sets()
     OK("attr_sets_basic.b");
     FAIL("attr_sets_unknown_type_err.b");
     FAIL("attr_sets_out_of_order_decl_err.b");
+    FAIL("attr_sets_redeclr_err.b");
 }
 
 int main(int argc, char *argv[])

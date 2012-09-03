@@ -8,7 +8,7 @@ var currency point;
 
 fn get_pointless_results(p point) point
 {
-	return (union (minus (union temperature (join currency unemployment)) (join currency temperature)) p);
+	return (union (minus point (union temperature (join currency unemployment)) (join currency temperature)) p);
 }
 
 fn empty() void

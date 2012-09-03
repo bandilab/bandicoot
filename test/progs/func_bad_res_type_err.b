@@ -8,5 +8,5 @@ type point_res {r real}
 
 fn test() point_res
 {
-	return (minus a b);
+	return (minus point a b);
 }

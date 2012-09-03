@@ -6,5 +6,5 @@ var p2 point;
 
 fn s_semidiff() point
 {
-	return (minus p1 p2);
+	return minus point p1 p2;
 }

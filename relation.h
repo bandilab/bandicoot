@@ -1,5 +1,5 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
+Copyright 2008-2012 Ostap Cherkashin
 Copyright 2008-2011 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,6 +80,7 @@ extern int rel_eq(Rel *l, Rel *r);
 extern Rel *rel_join(Rel *l, Rel *r);
 extern Rel *rel_union(Rel *l, Rel *r);
 extern Rel *rel_diff(Rel *l, Rel *r);
+extern Rel *rel_diff_safe(Head *h, Rel *l, Rel *r);
 extern Rel *rel_project(Rel *r, char *attrs[], int len);
 extern Rel *rel_rename(Rel *r, char *from[], char *to[], int len);
 extern Rel *rel_select(Rel *r, Expr *bool_expr);

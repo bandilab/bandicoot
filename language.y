@@ -66,6 +66,7 @@ static Rel *r_sum(Rel *l, Rel *r, L_Attrs attrs);
 static Rel *r_join(Rel *l, Rel *r);
 static Rel *r_union(Rel *l, Rel *r);
 static Rel *r_diff(Rel *l, Rel *r);
+static Rel *r_diff_safe(const char *name, Rel *l, Rel *r);
 
 static L_Expr *p_attr(const char *name);
 static L_Expr *p_value(L_Value val, Type t);
@@ -242,8 +243,8 @@ rel_simple_expr:
         { $$ = r_join($2, $3); }
     | TK_UNION rel_prim_expr rel_prim_expr
         { $$ = r_union($2, $3); }
-    | TK_MINUS rel_prim_expr rel_prim_expr
-        { $$ = r_diff($2, $3); }
+    | TK_MINUS TK_NAME rel_prim_expr rel_prim_expr
+        { $$ = r_diff_safe($2, $3, $4); }
     | TK_SUMMARY sum_attrs rel_prim_expr
         { $$ = r_sum($3, NULL, $2); }
     | TK_SUMMARY sum_attrs rel_prim_expr rel_prim_expr
@@ -1151,6 +1152,33 @@ static Rel *r_diff(Rel *l, Rel *r)
                 lhstr, rhstr);
 
     return rel_diff(l, r);
+}
+
+static Rel *r_diff_safe(const char *name, Rel *l, Rel *r)
+{
+    int idx = array_scan(genv->types.names, genv->types.len, name);
+    if (idx < 0)
+        yyerror("unknown type '%s'", name);
+
+    Head *h = genv->types.heads[idx];
+
+    char hstr[MAX_HEAD_STR_LEN];
+    char lstr[MAX_HEAD_STR_LEN];
+    char rstr[MAX_HEAD_STR_LEN];
+    print_head(hstr, h);
+    print_head(lstr, l->head);
+    print_head(rstr, r->head);
+
+    int lpos[MAX_ATTRS], rpos[MAX_ATTRS];
+    if (head_common(l->head, h, lpos, rpos) != h->len)
+        yyerror("left operand type %s does not match the attribute spec %s",
+                lstr, hstr);
+
+    if (head_common(h, r->head, lpos, rpos) != h->len)
+        yyerror("right operand type %s does not match the attribute spec %s",
+                rstr, hstr);
+
+    return rel_diff_safe(h, l, r);
 }
 
 static void p_free(L_Expr *e)

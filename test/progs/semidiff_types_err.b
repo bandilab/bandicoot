@@ -8,5 +8,5 @@ var a address;
 
 fn cannot_semidiff() point
 {
-	return (minus p a);
+	return p - a;
 }
