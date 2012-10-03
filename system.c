@@ -177,9 +177,22 @@ static IO *_sys_open(const char *path, int mode, int binary)
     if (mode & TRUNCATE)
         flags |= O_TRUNC;
 
-    int fd = open(path, flags | binary, S_IRUSR | S_IWUSR);
-    if (fd < 0)
-        sys_die("sys: cannot open %s\n", path);
+    int fd = -1;
+    if (str_cmp(path, "-") == 0) {
+        if (!(mode ^ READ))
+            fd = 0;
+        else if (!(mode ^ WRITE))
+            fd = 1;
+        else
+            sys_die("sys: bad open mode (%x)\n", mode);
+
+        fd = dup(fd);
+    } else {
+        fd = open(path, flags | binary, S_IRUSR | S_IWUSR);
+        if (fd < 0)
+            sys_die("sys: cannot open %s\n", path);
+    }
+
 
     return new_fs_io(fd);
 }

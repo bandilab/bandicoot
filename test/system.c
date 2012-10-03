@@ -17,6 +17,8 @@ limitations under the License.
 
 #include "common.h"
 
+#include <unistd.h>
+
 int main(void)
 {
     char str[] = "hello world\n";
@@ -59,6 +61,23 @@ int main(void)
     sys_close(rio2);
     sys_close(wio1);
     sys_close(wio2);
+
+    wio1 = sys_open("tmp_file1", WRITE);
+    dup2(wio1->fd, 1);
+
+    IO *sout = sys_open("-", WRITE);
+    sys_write(sout, str, len);
+    sys_close(sout);
+    sys_close(wio1);
+
+    rio1 = sys_open("tmp_file1", READ);
+    dup2(rio1->fd, 0);
+
+    char *buf2 = sys_load("-");
+    if (mem_cmp(str, buf2, len) != 0)
+        fail();
+    sys_close(rio1);
+    mem_free(buf2);
 
     sys_remove("tmp_file1");
     sys_remove("tmp_file2");
