@@ -236,7 +236,7 @@ static void processor(const char *tx_addr, int port)
         Arg *arg = NULL;
         Vars *r = NULL, *w = NULL;
 
-        Http_Req *req = http_parse(io);
+        Http_Req *req = http_parse_req(io);
         if (io->stop)
             goto exit;
 
@@ -436,7 +436,7 @@ exit:
             mem_free(arg);
         }
         if (req != NULL)
-            http_free(req);
+            http_free_req(req);
         if (env != NULL)
             env_free(env);
         sys_term(io);

@@ -1,0 +1,6 @@
+POST /some_form HTTP/1.1
+Transfer-Encoding: chunked
+All the lines are ignored until the empty one (\r\n\r\n)
+
+0
+

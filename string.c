@@ -321,3 +321,45 @@ failure:
 success:
     return res;
 }
+
+extern char *str_urlencode(char *src)
+{
+    char *res = NULL;
+
+    int off = 0, len = strlen(src);
+    char *tmp = mem_alloc(3 * len + 1);
+    char hex[3];
+
+    for (int i = 0; i < len; ++i) {
+        hex[1] = 0;
+        int v = (int) src[i];
+        if (v < 0)
+            goto exit;
+
+        str_print(hex, "%X", v);
+        if (hex[1] == 0) {
+            hex[1] = hex[0];
+            hex[0] = '0';
+        }
+        off += str_print(tmp + off, "%%%s", hex);
+    }
+
+    tmp[off] = '\0';
+    res = tmp;
+    tmp = NULL;
+
+exit:
+    if (tmp != NULL)
+        mem_free(tmp);
+
+    return res;
+}
+
+extern int str_hexdecode(char *str, int *error)
+{
+    char *end = NULL;
+    int res = strtol(str, &end, 16);
+    *error = (*str == '\0' || *end != '\0');
+
+    return res;
+}

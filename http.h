@@ -27,14 +27,27 @@ typedef struct {
 
 typedef struct {
     char method;
-    char path[MAX_NAME];
+    char path[MAX_STRING];
     Http_Args *args;
     char *body;
     int len;
 } Http_Req;
 
-extern Http_Req *http_parse(IO *io);
-extern void http_free(Http_Req *req);
+typedef struct {
+    int status;
+    char *reason;
+    char *body;
+    int len;
+} Http_Resp;
+
+extern Http_Req *http_parse_req(IO *io);
+extern Http_Resp *http_parse_resp(IO *io);
+extern int http_post(IO *io, const char *fn, Http_Args *args);
+extern int http_get(IO *io, const char *fn, Http_Args *args);
+
+extern void http_free_args(Http_Args *args);
+extern void http_free_req(Http_Req *req);
+extern void http_free_resp(Http_Resp *resp);
 
 extern int http_500(IO *io);
 extern int http_405(IO *io, const char method);
