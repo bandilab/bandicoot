@@ -1,0 +1,6 @@
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: OPTIONS, GET, POST
+Access-Control-Allow-Headers: Content-Type, Content-Length
+Content-Type: text/plain
+
