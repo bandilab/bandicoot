@@ -226,7 +226,7 @@ char *_http_500(IO *io, int *status)
     return "";
 }
 
-void OK_Resp(char* (*response)(IO *io, int *status))
+void ok_resp(char* (*response)(IO *io, int *status))
 {
     IO *io = sys_open("bin/tmp_file1", CREATE | WRITE);
     int status = 0;
@@ -247,7 +247,7 @@ void OK_Resp(char* (*response)(IO *io, int *status))
     sys_remove("bin/tmp_file1");
 }
 
-void FAIL_Resp(char *file)
+void fail_resp(char *file)
 {
     IO *io = sys_open(file, READ);
     Http_Resp *resp = http_parse_resp(io);
@@ -258,16 +258,16 @@ void FAIL_Resp(char *file)
 
 void test_resp()
 {
-    OK_Resp(_http_200);
-    OK_Resp(_http_400);
-    OK_Resp(_http_404);
-    OK_Resp(_http_405);
-    OK_Resp(_http_500);
+    ok_resp(_http_200);
+    ok_resp(_http_400);
+    ok_resp(_http_404);
+    ok_resp(_http_405);
+    ok_resp(_http_500);
 
-    FAIL_Resp("test/resp/bad_version");
-    FAIL_Resp("test/resp/bad_status_code");
-    FAIL_Resp("test/resp/malformed_1");
-    FAIL_Resp("test/resp/malformed_2");
+    fail_resp("test/resp/bad_version");
+    fail_resp("test/resp/bad_status_code");
+    fail_resp("test/resp/malformed_1");
+    fail_resp("test/resp/malformed_2");
 
     char *b = mem_alloc(MAX_BLOCK + 1);
     for (int i = 0; i < MAX_BLOCK; ++i)

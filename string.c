@@ -293,7 +293,7 @@ extern int str_from_sid(char *dest, long long sid)
 
 extern char *str_urldecode(char *src)
 {
-    char hex[4];
+    char hex[5];
     str_cpy(hex, "0x00");
     int off = 0, read = 0, idx = -1, len = str_len(src);
     char *res = mem_alloc(len + 1);

@@ -213,6 +213,7 @@ static int read_remaining(IO *io, Buf *b, int remaining)
         if (sys_readn(io, b->buf + b->read, remaining) != remaining)
             return 0;
         b->read += remaining;
+        b->buf[b->read] = '\0';
     }
 
     return 1;
