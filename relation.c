@@ -636,6 +636,15 @@ static void eval_call(Rel *r, Vars *v, Arg *a)
         v->vals[vpos] = nv->vals[nvpos];
         nv->vals[nvpos] = NULL;
     }
+    for (int i = 0; i < c->r.len; ++i) {
+        int vpos = array_scan(v->names, v->len, c->r.names[i]);
+        int nvpos = array_scan(nv->names, nv->len, c->r.names[i]);
+
+        if (nv->vals[nvpos] != NULL) {
+            v->vals[vpos] = nv->vals[nvpos];
+            nv->vals[nvpos] = NULL;
+        }
+    }
 
     /* garbage collect */
     for (int i = 0; i < c->t.len; ++i) {

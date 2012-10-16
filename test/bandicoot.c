@@ -38,7 +38,7 @@ static void post_books(char *fn)
     sys_close(io);
 }
 
-static void get(char *fn)
+static void get(char *fn, char *exp)
 {
     IO *io = sys_connect("localhost:12345", IO_STREAM);
 
@@ -50,6 +50,11 @@ static void get(char *fn)
     if (resp == NULL || resp->status != 200)
         fail();
 
+    if (str_cmp("", exp) != 0)
+        if (str_cmp(resp->body, exp) != 0)
+            fail();
+
+    http_free_resp(resp);
     sys_close(io);
 }
 
@@ -64,8 +69,10 @@ int main(void)
     int pid = sys_exec(argv);
     sys_sleep(1);
 
-    get("/Return");
-    get("/IndirectReturn");
+    get("/Reset", "");
+    get("/Return", "");
+    get("/IndirectReturn", "");
+    get("/IndirectReturnStore", "");
     post_books("/Echo");
     post_books("/IndirectEcho");
     post_books("/TmpReturn");
@@ -74,6 +81,8 @@ int main(void)
     post_books("/IndirectStoreReturn");
     post_books("/ReRead");
     post_books("/IndirectReRead");
+    get("/NextPrice", "price real\n1\n");
+    get("/IndirectNextPrice", "price real,title string\n2,hello1\n");
 
     sys_kill(pid);
 }

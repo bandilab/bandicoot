@@ -4,6 +4,12 @@ type Books {
 }
 
 var shelf Books;
+var priceSeq {price real};
+
+fn Reset() void {
+    shelf -= shelf;
+    priceSeq -= priceSeq;
+}
 
 fn Return() Books {
     return shelf;
@@ -31,6 +37,12 @@ fn IndirectReturn() Books {
     return Return;
 }
 
+fn IndirectReturnStore() Books {
+    var x = Return;
+    shelf = shelf;
+    return x;
+}
+
 fn IndirectStoreReturn(b Books) Books {
     return StoreReturn b;
 }
@@ -45,4 +57,16 @@ fn IndirectTmpReturn(b Books) Books {
 
 fn IndirectReRead(b Books) void {
     ReRead b;
+}
+
+fn NextPrice() {price real} {
+    priceSeq = project (price)
+        (extend price = m + 1.0
+             (summary m = (max price 0.0) priceSeq));
+
+    return priceSeq;
+}
+
+fn IndirectNextPrice() Books {
+    return extend title = "hello1" NextPrice;
 }

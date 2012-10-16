@@ -209,6 +209,7 @@ extern int tbuf_write(TBuf *b, IO *io)
     int used = 0, count = 0;
 
     Tuple *t;
+    tbuf_reset(b);
     while ((t = tbuf_next(b)) != NULL) {
         used = p - data_buf;
         if (MAX_BLOCK - used < t->size) {
