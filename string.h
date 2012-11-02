@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2012 Ostap Cherkashin
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@ limitations under the License.
 
 extern void str_init(); /* required to initialized STR_TO_SID array */
 
-extern int str_len(const char *s);
+extern long long str_len(const char *s);
 extern int str_cmp(const char *l, const char *r);
-extern int str_cpy(char *dest, const char *src);
+extern long long str_cpy(char *dest, const char *src);
 extern int str_print(char *res, const char *msg, ...);
 extern unsigned int str_uint(const char *s, int *error);
 extern int str_int(const char *s, int *error);
-extern int str_idx(const char *s, const char *seq);
+extern long long str_idx(const char *s, const char *seq);
 extern int str_match(const char *s1, const char *s2, char until);
 extern char *str_dup(const char *src);
 extern char *str_trim(char *s);

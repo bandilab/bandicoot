@@ -77,8 +77,8 @@ static const char *CHUNKED_ENCODING = "Transfer-Encoding: chunked";
 
 typedef struct {
     char *buf;
-    int read;
-    int size;
+    long long read;
+    long long size;
 } Buf;
 
 static Buf *alloc()
@@ -91,13 +91,16 @@ static Buf *alloc()
     return res;
 }
 
-static void extend(Buf *b, int size)
+static void ensure_capacity(Buf *b, long long size)
 {
+    if (b->size - b->read > size)
+        return;
+
     b->size += size;
     b->buf = mem_realloc(b->buf, b->size);
 }
 
-static char *next(char *buf, const char *sep, int *off)
+static char *next(char *buf, const char *sep, long long *off)
 {
     int len = str_len(sep), idx = str_idx(buf + *off, sep);
     if (idx < 0)
@@ -145,14 +148,14 @@ static Http_Args *args_parse(char *buf)
     if (buf == NULL)
         return res;
 
-    int off = 0, len = str_len(buf);
+    long long off = 0, len = str_len(buf);
     char *b = mem_alloc(len + 2), *p, *key, *val;
     str_cpy(b, buf);
     b[len++] = '&';
     b[len] = '\0';
 
     while ((p = next(b, "&", &off)) != NULL) {
-        int val_off = 0;
+        long long val_off = 0;
         if ((key = next(p, "=", &val_off)) == NULL)
             goto failure;
 
@@ -188,7 +191,7 @@ static int read_header(IO *io, Buf *b)
 {
     for (;;) {
         char *buf = b->buf + b->read;
-        int free = b->size - b->read;
+        long long free = b->size - b->read;
 
         int r = sys_read(io, buf, free - 1);
         if (r <= 0)
@@ -200,7 +203,7 @@ static int read_header(IO *io, Buf *b)
         if (str_idx(buf, "\r\n\r\n") > -1)
             break;
 
-        extend(b, MAX_BLOCK);
+        ensure_capacity(b, MAX_BLOCK);
     }
 
     return 1;
@@ -208,26 +211,28 @@ static int read_header(IO *io, Buf *b)
 
 static int read_remaining(IO *io, Buf *b, int remaining)
 {
-    if (remaining > 0) {
-        extend(b, remaining);
-        if (sys_readn(io, b->buf + b->read, remaining) != remaining)
-            return 0;
-        b->read += remaining;
+    // FIXME: avoid reads of MAX_BLOCKs. it is a workaround for #21 (a bug with
+    // chunked IO which prevents users from reading less than the chunk size)
+    long long start = b->read;
+    while (b->read - start < remaining && !io->stop) {
+        ensure_capacity(b, MAX_BLOCK);
+        b->read += sys_read(io, b->buf + b->read, MAX_BLOCK);
         b->buf[b->read] = '\0';
     }
 
-    return 1;
+    return b->read - start >= remaining;
 }
 
-static char *read_chunks(IO *io, Buf *b, int chunk_start, int *size)
+static char *read_chunks(IO *io, Buf *b, long long chunk_start, long long *size)
 {
     *size = 0;
     char *line = NULL, *chunks = NULL, *res = NULL;
-    int chunk_size = 0, error = 0;
+    long long chunk_size = 0;
+    int error = 0;
     do {
         /* try to read until the \r\n or an error */
         while (str_idx(b->buf + chunk_start, "\r\n") < 0) {
-            extend(b, MAX_BLOCK);
+            ensure_capacity(b, MAX_BLOCK);
             int r =  sys_read(io, b->buf + b->read, MAX_BLOCK);
             if (r < 0)
                 goto exit;
@@ -268,7 +273,11 @@ exit:
     return res;
 }
 
-static char *read_data(IO *io, Buf *b, int head_off, int body_start, int *size)
+static char *read_data(IO *io,
+                       Buf *b,
+                       long long head_off,
+                       long long body_start,
+                       long long *size)
 {
     *size = 0;
 
@@ -303,7 +312,7 @@ extern Http_Req *http_parse_req(IO *io)
     Http_Args *args = NULL;
     char *data = NULL, *p, *q;
     char path[MAX_STRING], method[MAX_NAME];
-    int body_start = 0, head_off = 0;
+    long long body_start = 0, head_off = 0;
 
     Buf *b = alloc();
     if (!read_header(io, b))
@@ -341,7 +350,8 @@ extern Http_Req *http_parse_req(IO *io)
     if (str_cmp(p, "HTTP/1.1") != 0)
         goto exit;
 
-    int m, size = 0;
+    int m = 0;
+    long long size = 0;
     if (str_cmp(method, "POST") == 0) {
         m = POST;
         data = read_data(io, b, head_off, body_start, &size);
@@ -386,7 +396,7 @@ extern Http_Resp *http_parse_resp(IO *io)
 {
     Http_Resp *resp = NULL;
     char *data = NULL, *p, *reason = NULL, *rp;
-    int body_start = 0, head_off = 0;
+    long long body_start = 0, head_off = 0;
 
     Buf *b = alloc();
     if (!read_header(io, b))
@@ -417,7 +427,7 @@ extern Http_Resp *http_parse_resp(IO *io)
 
     reason = str_dup(rp); /* copy required as b->buf gets reallocated */
 
-    int size = 0;
+    long long size = 0;
     if (status == 200 || status == 404)
         data = read_data(io, b, head_off, body_start, &size);
     else

@@ -144,8 +144,10 @@ extern Error *pack_csv2rel(char *buf, Head **head, TBuf **body)
 
     int len;
     lines = str_split_big(buf, "\n", &len);
-    if (len < 1)
+    if (len < 1) {
+        err = error_new("bad csv: missing header");
         goto exit;
+    }
 
     if ((err = pack_csv2head(lines[0], names, head)) != NULL)
         goto exit;

@@ -30,14 +30,14 @@ typedef struct {
     char path[MAX_STRING];
     Http_Args *args;
     char *body;
-    int len;
+    long long len;
 } Http_Req;
 
 typedef struct {
     int status;
     char *reason;
     char *body;
-    int len;
+    long long len;
 } Http_Resp;
 
 extern Http_Req *http_parse_req(IO *io);

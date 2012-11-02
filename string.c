@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2012 Ostap Cherkashin
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ extern void str_init()
         STR_TO_SID[i] = i - 'a' + 10;
 }
 
-extern int str_len(const char *s)
+extern long long str_len(const char *s)
 {
     return strlen(s);
 }
@@ -49,9 +49,9 @@ extern int str_cmp(const char *l, const char *r)
     return strcmp(l, r);
 }
 
-extern int str_cpy(char *dest, const char *src)
+extern long long str_cpy(char *dest, const char *src)
 {
-    int res = 0;
+    long long res = 0;
     while ((*dest++ = *src++))
         ++res;
 
@@ -68,16 +68,15 @@ extern char* str_dup(const char *src) {
 extern int str_print(char *res, const char *msg, ...)
 {
     va_list ap;
-    int chars;
 
     va_start(ap, msg);
-    chars = vsprintf(res, msg, ap);
+    int chars = vsprintf(res, msg, ap);
     va_end(ap);
 
     return chars;
 }
 
-extern int str_idx(const char *s, const char *seq)
+extern long long str_idx(const char *s, const char *seq)
 {
     char *pos = strstr(s, seq);
     return (pos == NULL) ? -1 : pos - s;
@@ -85,11 +84,11 @@ extern int str_idx(const char *s, const char *seq)
 
 extern int str_match(const char *s1, const char *s2, char until)
 {
-    int i = 0;
+    long long i = 0;
     for (; s1[i] != '\0' && s1[i] != until; ++i)
         ;
 
-    int j = 0;
+    long long j = 0;
     for (; j <= i && s2[j] != '\0' && s2[j] != until && s1[j] == s2[j]; ++j)
         ;
 
@@ -202,7 +201,7 @@ extern double str_real(const char *s, int *error)
 extern char *str_trim(char *s)
 {
     /* TODO: get rid of str_len */
-    int len = str_len(s), left = 0, right = len - 1;
+    long long len = str_len(s), left = 0, right = len - 1;
 
     for (; left < len && is_space(s[left]); ++left);
     for (; right > -1 && is_space(s[right]); --right);
@@ -222,16 +221,16 @@ static int is_delim(char c, const char *delims)
     return 0;
 }
 
-static int _str_split(char *s, const char *delims, char ***out, int max)
+static long _str_split(char *s, const char *delims, char ***out, int max)
 {
     /* TODO: get rid of str_len */
-    int len = str_len(s) + 1;
+    long long len = str_len(s) + 1;
     char esc = '\\', prev = '\0';
     int parts = 0;
     int size = max;
 
     char **res = *out;
-    for (int i = 0, start = 0; i < len; ++i) {
+    for (long long i = 0, start = 0; i < len; ++i) {
         if ((is_delim(s[i], delims) && prev != esc) || (i + 1) == len) {
             parts++;
             if (max == 0 && parts > size) {

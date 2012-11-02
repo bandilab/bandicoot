@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2011 Ostap Cherkashin
-Copyright 2008-2011 Julius Chrobak
+Copyright 2008-2012 Ostap Cherkashin
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -283,11 +283,16 @@ extern void sys_proxy(IO *cio, int *ccnt, IO *pio, int *pcnt)
 
         int ready = select(len, &read, NULL, NULL, NULL);
 
-        if (ready < 0 && errno != EINTR)
-            sys_die("sys: exchange failed\n");
+        if (ready < 0) {
+            if (errno != EINTR)
+                sys_die("sys: exchange failed\n");
+            else
+                continue;
+        }
 
         if (FD_ISSET(cio->fd, &read)) {
-            bsz = sys_read(cio, buf, MAX_BLOCK);
+            // FIXME: we should read a full MAX_BLOCK (see issues #21 #22)
+            bsz = sys_read(cio, buf, MAX_BLOCK - 16);
             if (bsz > 0) {
                 sys_write(pio, buf, bsz);
                 (*ccnt)++;
@@ -295,7 +300,8 @@ extern void sys_proxy(IO *cio, int *ccnt, IO *pio, int *pcnt)
         }
 
         if (FD_ISSET(pio->fd, &read)) {
-            bsz = sys_read(pio, buf, MAX_BLOCK);
+            // FIXME: we should read a full MAX_BLOCK (see issues #21 #22)
+            bsz = sys_read(pio, buf, MAX_BLOCK - 16);
             if (tsz > 0) {
                 sys_write(cio, tmp, tsz);
                 tsz = 0;

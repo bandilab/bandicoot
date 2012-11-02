@@ -1,6 +1,6 @@
 /*
-Copyright 2008-2010 Ostap Cherkashin
-Copyright 2008-2010 Julius Chrobak
+Copyright 2008-2012 Ostap Cherkashin
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,21 +20,21 @@ limitations under the License.
 
 #include "system.h"
 
-extern void *mem_alloc(unsigned int size)
+extern void *mem_alloc(long long size)
 {
     void *p = malloc(size);
     if (p == NULL)
-        sys_die("OOM: cannot allocate %d, exiting\n", size);
+        sys_die("OOM: cannot allocate %lld, exiting\n", size);
 
     return p;
 }
 
-extern void *mem_realloc(void *p, unsigned int nsize)
+extern void *mem_realloc(void *p, long long nsize)
 {
     void *res = realloc(p, nsize);
     if (res == NULL) {
         free(p);
-        sys_die("OOM: cannot realloc %p nsize=%d\n", p, nsize);
+        sys_die("OOM: cannot realloc %p nsize=%lld\n", p, nsize);
     }
 
     return res;
@@ -45,17 +45,17 @@ extern void mem_free(void *p)
     free(p);
 }
 
-extern void mem_cpy(void *dest, const void *src, unsigned int size)
+extern void mem_cpy(void *dest, const void *src, long long size)
 {
     memcpy(dest, src, size);
 }
 
-extern void mem_set(void *dest, int val, unsigned int size)
+extern void mem_set(void *dest, int val, long long size)
 {
     memset(dest, val, size);
 }
 
-extern int mem_cmp(const void *l, const void *r, unsigned int size)
+extern int mem_cmp(const void *l, const void *r, long long size)
 {
     return memcmp(l, r, size);
 }
