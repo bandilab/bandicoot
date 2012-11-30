@@ -369,6 +369,10 @@ static void processor(const char *tx_addr, int port)
 
                     mem_free(err);
 
+                    mem_free(head);
+                    tbuf_clean(body);
+                    tbuf_free(body);
+
                     goto exit;
                 }
 
@@ -378,6 +382,24 @@ static void processor(const char *tx_addr, int port)
             }
 
             vars_add(v, fn->rp.name, 0, body);
+
+            /* project the parameter */
+            Rel *param = rel_project(rel_load(fn->rp.head, fn->rp.name),
+                                     fn->rp.head->names,
+                                     fn->rp.head->len);
+
+            rel_eval(param, v, arg);
+
+            /* clean the previous version */
+            tbuf_clean(body);
+            tbuf_free(body);
+
+            /* replace with the new body */
+            int vpos = array_scan(v->names, v->len, fn->rp.name);
+            v->vals[vpos] = param->body;
+
+            param->body = NULL;
+            rel_free(param);
         }
 
         /* start a transaction */
