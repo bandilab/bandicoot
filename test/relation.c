@@ -22,11 +22,18 @@ static Vars *rvars = NULL;
 static Env *env = NULL;
 static Arg arg;
 
-static Rel *pack(char *str)
+static Rel *pack(char *str, char *names[], Type types[], int len)
 {
-    Head *head = NULL;
+    char *n[len];
+    Type t[len];
+    for (int i = 0; i < len; ++i) {
+        n[i] = names[i];
+        t[i] = types[i];
+    }
+
+    Head *head = head_new(n, t, len);
     TBuf *body = NULL;
-    Error *err = pack_csv2rel(str, &head, &body);
+    Error *err = pack_csv2rel(str, head, &body);
     if (err != NULL)
         fail();
 
@@ -38,9 +45,9 @@ static Rel *pack(char *str)
 
         res = rel_load(head, "___param");
         vars->vals[idx] = body;
-        mem_free(head);
     }
 
+    mem_free(head);
     return res;
 }
 
@@ -136,13 +143,15 @@ static void test_load()
 
 static void test_param()
 {
+    char *names[] = {"a", "c"};
+    Type types[] = {Int, String};
     char param_1[1024];
     /* FIXME: pack should be unique
-    str_cpy(param_1, "a:int,c:string\n1,one\n2,two\n1,one\n2,two");
+    str_cpy(param_1, "a,c\n1,one\n2,two\n1,one\n2,two");
      */
-    str_cpy(param_1, "a:int,c:string\n1,one\n2,two");
+    str_cpy(param_1, "a,c\n1,one\n2,two");
 
-    if (!equal(pack(param_1), "param_1"))
+    if (!equal(pack(param_1, names, types, 2), "param_1"))
         fail();
 }
 
@@ -420,23 +429,23 @@ static void test_compound()
         fail();
 
     /* compound with a parameter */
+    char *names[] = {"car", "date", "email", "name", "phone", "pos", "when"};
+    Type types[] = {String, String, String, String, String, Int, Int};
     char union_2_l[1024];
     str_cpy(union_2_l,
-            "car:string,date:string,email:string,"
-            "name:string,phone:string,pos:int,when:int\n"
+            "car,date,email,name,phone,pos,when\n"
             "myCar,28-Jun-2010,myEmail,myName,myPhone,2,14");
 
-    if (!equal(rel_union(pack(union_2_l),
+    if (!equal(rel_union(pack(union_2_l, names, types, 7),
                          load("union_2_r")),
                "union_2_res"))
         fail();
 
     str_cpy(union_2_l,
-            "car:string,date:string,email:string,"
-            "name:string,phone:string,pos:int,when:int\n"
+            "car,date,email,name,phone,pos,when\n"
             "myCar,28-Jun-2010,myEmail,myName,myPhone,2,14");
     if (!equal(rel_union(load("union_2_r"),
-                         pack(union_2_l)),
+                         pack(union_2_l, names, types, 7)),
                "union_2_res"))
         fail();
 }

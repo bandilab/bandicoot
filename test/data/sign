@@ -1,4 +1,4 @@
-fname string,pattr string,pname string,ptype string
+fname,pattr,pname,ptype
 load_compound_1,,,
 load_compound_1,a,return,int
 load_compound_1,c,return,string

@@ -1,2 +1,2 @@
-add_salary real,min_age int,max_age int,min_salary real,max_salary real,count int
+add_salary,min_age,max_age,min_salary,max_salary,count
 -1748.25,30,72,-2007.0,1250.50,5

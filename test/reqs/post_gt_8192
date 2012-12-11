@@ -2,11 +2,11 @@ POST /store_storage_r1 HTTP/1.1
 User-Agent: curl/7.21.0 (x86_64-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18
 Host: localhost:12345
 Accept: */*
-Content-Length: 14825
+Content-Length: 14805
 Content-Type: application/x-www-form-urlencoded
 Expect: 100-continue
 
-id:int,string_val:string,int_val:int,real_val:real
+id,string_val,int_val,real_val
 1,hello_from_r1: 1,1001,6.2669999999999995
 2,hello_from_r1: 2,1002,6.276999999999999
 3,hello_from_r1: 3,1003,6.287

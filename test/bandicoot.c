@@ -23,7 +23,7 @@ static void post_books(char *fn)
     if (http_post(io, fn, &args) != 200)
         fail();
 
-    char *data = "title string,price real\nA,1.0\nB,2.0";
+    char *data = "title,price\nA,1.0\nB,2.0";
     if (http_chunk(io, data, str_len(data)) != 200)
         fail();
 
@@ -81,8 +81,8 @@ int main(void)
     post_books("/IndirectStoreReturn");
     post_books("/ReRead");
     post_books("/IndirectReRead");
-    get("/NextPrice", "price real\n1\n");
-    get("/IndirectNextPrice", "price real,title string\n2,hello1\n");
+    get("/NextPrice", "price\n1\n");
+    get("/IndirectNextPrice", "price,title\n2,hello1\n");
 
     sys_kill(pid);
 }

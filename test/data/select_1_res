@@ -1,4 +1,4 @@
-c string,a int,b real
+c,a,b
 first,1,1.01
 third,3,1.01
 fifth,5,1.01

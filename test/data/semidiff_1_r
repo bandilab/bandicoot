@@ -1,4 +1,4 @@
-d real,b real,a int
+d,b,a
 1,.1,1
 1,0,1
 1.1,.1,0

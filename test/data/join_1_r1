@@ -1,4 +1,4 @@
-id int,string_val string,int_val int,real_val real
+id,string_val,int_val,real_val
 1,hello_from_r1,2,6.257
 2,hello_from_r1,1,7.123
 3,hello_from_r1,2,98.1

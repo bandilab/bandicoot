@@ -49,36 +49,39 @@ static int valid_id(const char *id)
     return 1;
 }
 
-static Error *pack_csv2head(char *buf, char *names[], Head **out)
+static Error *pack_csv2head(char *buf, Head *exp, char *names[])
 {
-    char *attrs[MAX_ATTRS], *name_type[MAX_ATTRS];
+    char *attrs[MAX_ATTRS];
 
-    int attrs_len = str_split(buf, ",", attrs, MAX_ATTRS);
-    if (attrs_len < 1)
+    int len = str_split(buf, ",", attrs, MAX_ATTRS);
+    if (len < 1)
         return error_new("bad header: '%s'", buf);
 
-    Type types[MAX_ATTRS];
-    char *copy[MAX_ATTRS];
-    for (int i = 0; i < attrs_len; ++i) {
-        int cnt = str_split(attrs[i], " :\t", name_type, MAX_ATTRS);
-        if (cnt != 2)
-            return error_new("bad header: invalid name/type pair: '%s'",
-                             attrs[i]);
+    Type types[len];
+    char *copy[len];
+    for (int i = 0; i < len; ++i) {
+        char *name = str_trim(attrs[i]);
+        if (!valid_id(name))
+            return error_new("bad header: invalid attribute name: '%s'", name);
 
-        if (!valid_id(name_type[0]))
-            return error_new("bad header: invalid attribute name: '%s'",
-                             name_type[0]);
+        names[i] = copy[i] = name;
 
-        int bad_type;
-        types[i] = type_from_str(str_trim(name_type[1]), &bad_type);
-        if (bad_type)
-            return error_new("bad header: invalid attribute type: '%s'",
-                             name_type[1]);
-
-        names[i] = copy[i] = str_trim(name_type[0]);
+        int idx = 0;
+        head_attr(exp, name, &idx, &types[i]);
     }
 
-    *out = head_new(copy, types, attrs_len);
+    Head *res = head_new(copy, types, len);
+    if (!head_eq(exp, res)) {
+        char head_exp[MAX_HEAD_STR];
+        char head_got[MAX_HEAD_STR];
+
+        head_to_str(head_exp, exp);
+        head_to_str(head_got, res);
+
+        mem_free(res);
+        return error_new("bad header: expected %s got %s", head_exp, head_got);
+    }
+
     return NULL;
 }
 
@@ -133,13 +136,12 @@ static Error *pack_csv2tuple(char *buf,
     return NULL;
 }
 
-extern Error *pack_csv2rel(char *buf, Head **head, TBuf **body)
+extern Error *pack_csv2rel(char *buf, Head *head, TBuf **body)
 {
     Error *err = NULL;
     char **lines = NULL;
     char *names[MAX_ATTRS];
 
-    *head = NULL;
     *body = NULL;
 
     int len;
@@ -149,7 +151,7 @@ extern Error *pack_csv2rel(char *buf, Head **head, TBuf **body)
         goto exit;
     }
 
-    if ((err = pack_csv2head(lines[0], names, head)) != NULL)
+    if ((err = pack_csv2head(lines[0], head, names)) != NULL)
         goto exit;
 
     if (str_len(lines[len - 1]) == 0)
@@ -158,7 +160,7 @@ extern Error *pack_csv2rel(char *buf, Head **head, TBuf **body)
     *body = tbuf_new();
     for (int i = 1; i < len; ++i) {
         Tuple *t = NULL;
-        if ((err = pack_csv2tuple(lines[i], i + 1, names, *head, &t)) != NULL)
+        if ((err = pack_csv2tuple(lines[i], i + 1, names, head, &t)) != NULL)
             goto exit;
 
         tbuf_add(*body, t);
@@ -167,11 +169,6 @@ extern Error *pack_csv2rel(char *buf, Head **head, TBuf **body)
 exit:
     if (lines != NULL)
         mem_free(lines);
-
-    if (err != NULL && *head != NULL) {
-        mem_free(*head);
-        *head = NULL;
-    }
 
     if (err != NULL && *body != NULL) {
         Tuple *t = NULL;
@@ -189,10 +186,7 @@ static int head_unpack(char *dest, Head *h)
 {
     int off = 0;
     for (int i = 0; i < h->len; ++i) {
-        off += str_print(dest + off,
-                         "%s %s",
-                         h->names[i],
-                         type_to_str(h->types[i]));
+        off += str_print(dest + off, "%s", h->names[i]);
 
         if ((i + 1) != h->len)
             dest[off++] = ',';

@@ -348,35 +348,12 @@ static void processor(const char *tx_addr, int port)
         if (fn->rp.name != NULL) {
             TBuf *body = NULL;
             if (req->len > 0) {
-                Head *head = NULL;
-                Error *err = pack_csv2rel(req->body, &head, &body);
+                Error *err = pack_csv2rel(req->body, fn->rp.head, &body);
                 if (err != NULL) {
                     status = http_404(io, err->msg);
                     mem_free(err);
                     goto exit;
                 }
-
-                if (!head_eq(head, fn->rp.head)) {
-                    char head_exp[MAX_HEAD_STR];
-                    char head_got[MAX_HEAD_STR];
-
-                    head_to_str(head_exp, fn->rp.head);
-                    head_to_str(head_got, head);
-
-                    Error *err = error_new("bad header: expected %s got %s",
-                                           head_exp, head_got);
-                    status = http_404(io, err->msg);
-
-                    mem_free(err);
-
-                    mem_free(head);
-                    tbuf_clean(body);
-                    tbuf_free(body);
-
-                    goto exit;
-                }
-
-                mem_free(head);
             } else {
                 body = tbuf_new();
             }

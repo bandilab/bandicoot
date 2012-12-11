@@ -163,9 +163,12 @@ void test_req()
     if (str_cmp(req->path, "/store_storage_r1") != 0)
         fail();
 
-    Head *h = NULL;
+    char *names[] = {"id", "string_val", "int_val", "real_val"};
+    Type types[] = {Int, String, Int, Real};
+    Head *h = head_new(names, types, 4);
+
     TBuf *b = NULL;
-    Error *err = pack_csv2rel(req->body, &h, &b);
+    Error *err = pack_csv2rel(req->body, h, &b);
     if (err != NULL || b == NULL || h == NULL)
         fail();
 

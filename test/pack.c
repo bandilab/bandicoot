@@ -19,11 +19,22 @@ limitations under the License.
 
 static Env *env;
 
-static Rel *pack_init(char *str, char *errmsg)
+static Rel *pack_init(char *str,
+                      char *names[],
+                      Type types[],
+                      int len,
+                      char *errmsg)
 {
-    Head *h = NULL;
+    char *n[len];
+    Type t[len];
+    for (int i = 0; i < len; ++i) {
+        n[i] = names[i];
+        t[i] = types[i];
+    }
+    Head *exp = head_new(n, t, len);
+
     TBuf *b = NULL;
-    Error *err = pack_csv2rel(str, &h, &b);
+    Error *err = pack_csv2rel(str, exp, &b);
     Vars *v = vars_new(1);
     vars_add(v, "param", 0, b);
 
@@ -33,11 +44,10 @@ static Rel *pack_init(char *str, char *errmsg)
             fail();
 
         /* FIXME: project should be part of the function call or the pack itself */
-        res = rel_project(rel_load(h, "param"), h->names, h->len);
+        res = rel_project(rel_load(exp, "param"), exp->names, exp->len);
 
         Arg arg;
         rel_eval(res, v, &arg);
-        mem_free(h);
     } else {
         if (errmsg == NULL)
             fail();
@@ -47,15 +57,20 @@ static Rel *pack_init(char *str, char *errmsg)
         mem_free(err);
     }
 
+    mem_free(exp);
     return res;
 }
 
 static void test_pack()
 {
+    char *names[2];
+    Type types[2];
     char str[1024];
 
-    str_cpy(str, "a:int,b:string");
-    Rel *rel = pack_init(str, NULL);
+    names[0] = "a"; names[1] = "b";
+    types[0] = Int; types[1] = String;
+    str_cpy(str, "a,b");
+    Rel *rel = pack_init(str, names, types, 2, NULL);
 
     if (rel == NULL)
         fail();
@@ -67,8 +82,10 @@ static void test_pack()
 
     rel_free(rel);
 
-    str_cpy(str, "c:string,a:long\nworld hello,12343");
-    rel = pack_init(str, NULL);
+    names[0] = "c"; names[1] = "a";
+    types[0] = String; types[1] = Long;
+    str_cpy(str, "c,a\nworld hello,12343");
+    rel = pack_init(str, names, types, 2, NULL);
 
     if (rel == NULL)
         fail();
@@ -90,8 +107,10 @@ static void test_pack()
     tuple_free(t);
     rel_free(rel);
 
-    str_cpy(str, "c:string,a:int\nhello world,12343\nhello world,123430");
-    rel = pack_init(str, NULL);
+    names[0] = "c"; names[1] = "a";
+    types[0] = String; types[1] = Int;
+    str_cpy(str, "c,a\nhello world,12343\nhello world,123430");
+    rel = pack_init(str, names, types, 2, NULL);
 
     if (rel == NULL)
         fail();
@@ -119,8 +138,8 @@ static void test_pack()
     rel_free(rel);
 
     /* test duplicate input */
-    str_cpy(str, "c:string,a:int\nhello world,12343\nhello world,12343");
-    rel = pack_init(str, NULL);
+    str_cpy(str, "c,a\nhello world,12343\nhello world,12343");
+    rel = pack_init(str, names, types, 2, NULL);
 
     if (rel == NULL)
         fail();
@@ -143,25 +162,26 @@ static void test_pack()
 
     rel_free(rel);
 
-    /* test invalid input */
+    names[0] = "hehehe";
+    types[0] = String;
     str_cpy(str, "hehehe");
-    rel = pack_init(str, "bad header: invalid name/type pair: 'hehehe'");
+    rel = pack_init(str, names, types, 1, NULL);
+    if (rel == NULL)
+        fail();
+
+    /* test invalid input */
+    str_cpy(str, "abc+_)# $!@#$");
+    rel = pack_init(str, names, types, 1,
+            "bad header: invalid attribute name: 'abc+_)# $!@#$'");
     if (rel != NULL)
         fail();
 
-    str_cpy(str, "hehehe:hahaha");
-    rel = pack_init(str, "bad header: invalid attribute type: 'hahaha'");
-    if (rel != NULL)
-        fail();
-
-    str_cpy(str, "abc+_)# $!@#$:int");
-    rel = pack_init(str, "bad header: invalid name/type pair: 'abc+_)#'");
-    if (rel != NULL)
-        fail();
-
-    str_cpy(str, "a:int,b:string\nabc,123");
-    rel = pack_init(str, "bad tuple on line 2: value 'abc' (attribute 'a') "
-                         "is not of type 'int'");
+    names[0] = "a"; names[1] = "b";
+    types[0] = Int; types[1] = String;
+    str_cpy(str, "a,b\nabc,123");
+    rel = pack_init(str, names, types, 2,
+            "bad tuple on line 2: value 'abc' (attribute 'a') "
+            "is not of type 'int'");
     if (rel != NULL)
         fail();
 }
@@ -171,10 +191,15 @@ static void test_unpack()
     int i = 0;
     char str[11 + MAX_STRING];
 
-    char *data = "a int,c string\n123,hehehe\n";
+    char *names[2];
+    Type types[2];
+
+    names[0] = "a"; names[1] = "c";
+    types[0] = Int; types[1] = String;
+    char *data = "a,c\n123,hehehe\n";
     str_cpy(str, data);
 
-    Rel *rel = pack_init(str, NULL);
+    Rel *rel = pack_init(str, names, types, 2, NULL);
     char *unpacked = mem_alloc(MAX_BLOCK);
     pack_rel2csv(rel, unpacked, MAX_BLOCK, i++);
 
@@ -189,14 +214,16 @@ static void test_unpack()
     p[MAX_STRING] = '\n';
     p[MAX_STRING + 1] = '\0';
 
-    data = "a string\n";
+    names[0] = "a";
+    types[0] = String;
+    data = "a\n";
     char data2[str_len(data) + str_len(p)];
     str_cpy(data2, data);
     str_cpy(data2 + str_len(data), p);
     str_cpy(str, data2);
 
     i = 0;
-    rel = pack_init(str, NULL);
+    rel = pack_init(str, names, types, 1, NULL);
     pack_rel2csv(rel, unpacked, MAX_BLOCK, i++);
     if (str_cmp(data2, unpacked) != 0)
         fail();
@@ -205,6 +232,7 @@ static void test_unpack()
 
     /* test of a file longer than MAX_BLOCK */
     int start = 1, end = 100000;
+    Head *h = gen_head();
     rel = gen_rel(start, end);
 
     i = 0;
@@ -215,10 +243,11 @@ static void test_unpack()
         ptr += len;
 
     Rel *rel1 = gen_rel(start, end);
-    Rel *rel2 = pack_init(unpacked, NULL);
+    Rel *rel2 = pack_init(unpacked, h->names, h->types, h->len, NULL);
     if (!rel_eq(rel1, rel2))
         fail();
 
+    mem_free(h);
     rel_free(rel);
     rel_free(rel1);
     rel_free(rel2);
@@ -233,6 +262,9 @@ static void test_unpack()
 
 static void test_fn2csv()
 {
+    char *ns[] = {"fname", "pattr", "pname", "ptype"};
+    Type ts[] = {String, String, String, String};
+
     char *buf = mem_alloc(MAX_BLOCK);
     int iteration = 0, len = 0;
 
@@ -251,8 +283,8 @@ static void test_fn2csv()
     len = pack_fn2csv(fns, cnt, buf, MAX_BLOCK, &iteration);
     if (iteration != 1 || len == 0)
         fail();
-    Rel *r1 = pack_init(buf, NULL);
-    Rel *r2 = pack_init(code, NULL);
+    Rel *r1 = pack_init(buf, ns, ts, 4, NULL);
+    Rel *r2 = pack_init(code, ns, ts, 4, NULL);
     if (!rel_eq(r1, r2))
         fail();
     len = pack_fn2csv(fns, cnt, buf, MAX_BLOCK, &iteration);
@@ -281,8 +313,8 @@ static void test_fn2csv()
     }
     if (iteration != env->fns.len + 1)
         fail();
-    r1 = pack_init(fullbuf, NULL);
-    r2 = pack_init(code, NULL);
+    r1 = pack_init(fullbuf, ns, ts, 4, NULL);
+    r2 = pack_init(code, ns, ts, 4, NULL);
     if (!rel_eq(r1, r2))
         fail();
 

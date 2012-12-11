@@ -1,4 +1,4 @@
-fname string,pattr string,pname string,ptype string
+fname,pattr,pname,ptype
 test_sign1,,,
 test_sign1,fname,return,string
 test_sign1,pattr,return,string

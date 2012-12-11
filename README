@@ -2,6 +2,22 @@ Bandicoot - http://bandilab.org
 
 Compatibility Notes
 
+* v6-rc: the CSV format changes: type removed from the header
+
+  More information on https://github.com/bandilab/bandicoot/issues/23
+
+  All communication with Bandicoot needs to change. The first line in the
+  input/output does not contain the "attr_name attr_type" pairs anymore. It
+  expects a comma separated list of "attr_name" instead.
+
+  old:
+      title string,pages int,price real,genre string
+      Robinson Crusoe,312,11.21,Novel
+
+  new:
+      title,pages,price,genre
+      Robinson Crusoe,312,11.21,Novel
+
 * v5: synax changes: calling conventions, type declarations
 
   Use "bandicoot convert" to transform programs to the v5 syntax. Keep in mind

@@ -1,4 +1,4 @@
-name string,something real,x string
+name,something,x
 second,2.3,line 2
 first,1.32,line 1
 third,7.3123143,line 3
