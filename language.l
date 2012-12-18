@@ -85,6 +85,7 @@ static int feed_lex(void *buf, int max_size)
 "join"              { return TK_JOIN; }
 "minus"             { return TK_MINUS; }
 "union"             { return TK_UNION; }
+"time"              { return TK_TIME; }
 
                     /* TODO: hex & octal numbers? */
 [0-9]+              {
