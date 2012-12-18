@@ -1322,6 +1322,7 @@ static L_Expr *p_alloc(L_Expr_Type t)
     res->left = NULL;
     res->right = NULL;
     res->val.v_long = 0;
+    res->pkg[0] = '\0';
     res->name[0] = '\0';
     res->is_const = 1;
 
