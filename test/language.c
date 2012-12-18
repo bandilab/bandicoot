@@ -1,6 +1,6 @@
 /*
 Copyright 2008-2012 Ostap Cherkashin
-Copyright 2008-2011 Julius Chrobak
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

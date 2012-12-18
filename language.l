@@ -1,6 +1,6 @@
 /*
 Copyright 2008-2012 Ostap Cherkashin
-Copyright 2008-2011 Julius Chrobak
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -85,7 +85,6 @@ static int feed_lex(void *buf, int max_size)
 "join"              { return TK_JOIN; }
 "minus"             { return TK_MINUS; }
 "union"             { return TK_UNION; }
-"Sys"               { return TK_SYS; }
 
                     /* TODO: hex & octal numbers? */
 [0-9]+              {

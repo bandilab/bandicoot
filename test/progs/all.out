@@ -41,9 +41,9 @@ test/progs/primitive_expr_neq_err.b:7: expressions must be of the same type, fou
 test/progs/primitive_expr_not_real_err.b:7: expressions must be of type 'int', found 'real'
 test/progs/primitive_expr_not_string_err.b:7: expressions must be of type 'int', found 'string'
 test/progs/primitive_expr_or_err.b:7: expressions must be of the same type, found 'real' and 'int'
-test/progs/primitive_expr_str_index_param_missing_err.b:3: missing parameter(s) to call Sys.String.Index function
-test/progs/primitive_expr_str_index_param_one_type_err.b:3: Sys.String.Index function expects string but found int
-test/progs/primitive_expr_str_index_param_two_type_err.b:3: Sys.String.Index function expects string but found int
+test/progs/primitive_expr_str_index_param_missing_err.b:3: missing parameter(s) to call String.Index function
+test/progs/primitive_expr_str_index_param_one_type_err.b:3: String.Index function expects string but found int
+test/progs/primitive_expr_str_index_param_two_type_err.b:3: String.Index function expects string but found int
 test/progs/primitive_expr_sub_err.b:9: expressions must be of the same type, found 'string' and 'real'
 test/progs/primitive_expr_sum_err.b:9: expressions must be of the same type, found 'int' and 'real'
 test/progs/primitive_expr_time_int_err.b:3: expressions must be of the same type, found 'int' and 'long'

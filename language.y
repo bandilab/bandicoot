@@ -106,7 +106,7 @@ static void fn_add();
 };
 
 %token TK_TYPE TK_VAR TK_FN TK_RETURN
-%token TK_INT TK_LONG TK_REAL TK_STRING TK_TIME TK_VOID TK_SYS
+%token TK_INT TK_LONG TK_REAL TK_STRING TK_TIME TK_VOID
 %token TK_PROJECT TK_RENAME TK_SELECT TK_EXTEND TK_SUMMARY
 %token TK_JOIN TK_UNION TK_MINUS
 %token TK_EQ TK_NEQ TK_AND TK_OR TK_LTE TK_GTE
@@ -357,16 +357,16 @@ prim_simple_expr:
     | '(' TK_INT prim_top_expr ')'  { $$ = p_func("", "int", $3, NULL); }
     | '(' TK_REAL prim_top_expr ')' { $$ = p_func("", "real", $3, NULL); }
     | '(' TK_LONG prim_top_expr ')' { $$ = p_func("", "long", $3, NULL); }
-    | '(' TK_SYS '.' TK_NAME '.' TK_NAME prim_top_expr ')'
-                                    { $$ = p_func($4, $6, $7, NULL); }
-    | '(' TK_SYS '.' TK_NAME '.' TK_NAME prim_top_expr prim_top_expr ')'
-                                    { $$ = p_func($4, $6, $7, $8); }
+    | '(' TK_NAME '.' TK_NAME prim_top_expr ')'
+                                    { $$ = p_func($2, $4, $5, NULL); }
+    | '(' TK_NAME '.' TK_NAME prim_top_expr prim_top_expr ')'
+                                    { $$ = p_func($2, $4, $5, $6); }
     ;
 
 prim_top_expr:
       prim_simple_expr                  { $$ = $1; }
     | TK_NAME                           { $$ = p_attr($1); }
-    | TK_SYS '.' TK_NAME '.' TK_NAME    { $$ = p_func($3, $5, NULL, NULL); }
+    | TK_NAME '.' TK_NAME               { $$ = p_func($1, $3, NULL, NULL); }
     ;
 
 prim_unary_expr:
@@ -739,11 +739,11 @@ static Expr *p_convert(Head *h, Func *fn, L_Expr *e, L_Expr_Type parent_type)
     } else if (t == FUNC && str_cmp("String", e->pkg) == 0
                          && str_cmp("Index", e->name) == 0) {
         if (l == NULL || r == NULL)
-            yyerror("missing parameter(s) to call Sys.String.Index function");
+            yyerror("missing parameter(s) to call String.Index function");
 
         Type t = l->type;
         if (t != String || (t = r->type) != String)
-            yyerror("Sys.String.Index function expects string but found %s",
+            yyerror("String.Index function expects string but found %s",
                 type_to_str(t));
 
         res = expr_str_index(l, r);
