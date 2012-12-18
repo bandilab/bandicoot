@@ -72,7 +72,7 @@ static Rel *r_call(const char *func, L_Attrs args);
 static L_Expr *p_attr(const char *name);
 static L_Expr *p_value(L_Value val, Type t);
 static L_Expr *p_op(L_Expr *l, L_Expr *r, L_Expr_Type node_type);
-static L_Expr *p_func(const char *name, L_Expr *e);
+static L_Expr *p_func(const char *pkg, const char *name, L_Expr *l, L_Expr *r);
 static void p_free(L_Expr *e);
 static int is_constant(L_Expr *e);
 
@@ -352,16 +352,21 @@ prim_const_expr:
     ;
 
 prim_simple_expr:
-      prim_const_expr                           { $$ = $1; }
-    | '(' prim_expr ')'                         { $$ = $2; }
-    | '(' TK_INT prim_expr ')'                  { $$ = p_func("int", $3); }
-    | '(' TK_REAL prim_expr ')'                 { $$ = p_func("real", $3); }
-    | '(' TK_LONG prim_expr ')'                 { $$ = p_func("long", $3); }
+      prim_const_expr               { $$ = $1; }
+    | '(' prim_expr ')'             { $$ = $2; }
+    | '(' TK_INT prim_top_expr ')'  { $$ = p_func("", "int", $3, NULL); }
+    | '(' TK_REAL prim_top_expr ')' { $$ = p_func("", "real", $3, NULL); }
+    | '(' TK_LONG prim_top_expr ')' { $$ = p_func("", "long", $3, NULL); }
+    | '(' TK_NAME '.' TK_NAME prim_top_expr ')'
+                                    { $$ = p_func($2, $4, $5, NULL); }
+    | '(' TK_NAME '.' TK_NAME prim_top_expr prim_top_expr ')'
+                                    { $$ = p_func($2, $4, $5, $6); }
     ;
 
 prim_top_expr:
-      prim_simple_expr                          { $$ = $1; }
-    | TK_NAME                                   { $$ = p_attr($1); }
+      prim_simple_expr                  { $$ = $1; }
+    | TK_NAME                           { $$ = p_attr($1); }
+    | TK_NAME '.' TK_NAME               { $$ = p_func($1, $3, NULL, NULL); }
     ;
 
 prim_unary_expr:
@@ -728,16 +733,31 @@ static Expr *p_convert(Head *h, Func *fn, L_Expr *e, L_Expr_Type parent_type)
         else
             yyerror("NEG operator does not support '%s' type",
                     type_to_str(l->type));
+    } else if (t == FUNC && str_cmp("Time", e->pkg) == 0
+                         && str_cmp("Now", e->name) == 0) {
+        res = expr_time();
+    } else if (t == FUNC && str_cmp("String", e->pkg) == 0
+                         && str_cmp("Index", e->name) == 0) {
+        if (l == NULL || r == NULL)
+            yyerror("missing parameter(s) to call String.Index function");
+
+        Type t = l->type;
+        if (t != String || (t = r->type) != String)
+            yyerror("String.Index function expects string but found %s",
+                type_to_str(t));
+
+        res = expr_str_index(l, r);
     } else if (t == FUNC) {
         Type to = 0;
-        if (str_cmp("int", e->name) == 0)
+        if (str_cmp("int", e->name) == 0 && str_len(e->pkg) == 0)
             to = Int;
-        else if (str_cmp("real", e->name) == 0)
+        else if (str_cmp("real", e->name) == 0 && str_len(e->pkg) == 0)
             to = Real;
-        else if (str_cmp("long", e->name) == 0)
+        else if (str_cmp("long", e->name) == 0 && str_len(e->pkg) == 0)
             to = Long;
         else
-            yyerror("unknown function '%s' in primitive expression", e->name);
+            yyerror("unknown function '%s.%s' in primitive expression",
+                e->pkg, e->name);
 
         if (l->type == String)
             yyerror("conversion from string is not supported");
@@ -1302,6 +1322,7 @@ static L_Expr *p_alloc(L_Expr_Type t)
     res->left = NULL;
     res->right = NULL;
     res->val.v_long = 0;
+    res->pkg[0] = '\0';
     res->name[0] = '\0';
     res->is_const = 1;
 
@@ -1317,12 +1338,14 @@ static L_Expr *p_attr(const char *name)
     return res;
 }
 
-static L_Expr *p_func(const char *name, L_Expr *e)
+static L_Expr *p_func(const char *pkg, const char *name, L_Expr *l, L_Expr *r)
 {
     L_Expr *res = p_alloc(FUNC);
+    str_cpy(res->pkg, pkg);
     str_cpy(res->name, name);
     res->is_const = 0;
-    res->left = e;
+    res->left = l;
+    res->right = r;
 
     return res;
 }

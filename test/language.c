@@ -1,6 +1,6 @@
 /*
 Copyright 2008-2012 Ostap Cherkashin
-Copyright 2008-2011 Julius Chrobak
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -145,6 +145,8 @@ static void test_primitive_exprs()
     OK("primitive_expr_basic.b");
     OK("primitive_expr_ops.b");
     OK("primitive_expr_conv.b");
+    OK("primitive_expr_time.b");
+    OK("primitive_expr_str_index.b");
     FAIL("primitive_expr_not_string_err.b");
     FAIL("primitive_expr_not_real_err.b");
     FAIL("primitive_expr_eq_err.b");
@@ -161,6 +163,11 @@ static void test_primitive_exprs()
     FAIL("primitive_expr_conv_str_to_int_err.b");
     FAIL("primitive_expr_conv_str_to_real_err.b");
     FAIL("primitive_expr_conv_str_to_long_err.b");
+    FAIL("primitive_expr_conv_param_err.b");
+    FAIL("primitive_expr_time_int_err.b");
+    FAIL("primitive_expr_str_index_param_missing_err.b");
+    FAIL("primitive_expr_str_index_param_one_type_err.b");
+    FAIL("primitive_expr_str_index_param_two_type_err.b");
 }
 
 static void test_assign()

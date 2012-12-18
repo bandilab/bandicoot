@@ -1,6 +1,6 @@
 /*
 Copyright 2008-2012 Ostap Cherkashin
-Copyright 2008-2011 Julius Chrobak
+Copyright 2008-2012 Julius Chrobak
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -151,6 +151,7 @@ static int feed_lex(void *buf, int max_size)
 ","                 { return ','; }
 "!"                 { return '!'; }
 "="                 { return '='; }
+"."                 { return '.'; }
 
 [ \t\r\n]           { if (*yytext == '\n') gsrc.line++; }
 "#".*\n             { gsrc.line++; }
