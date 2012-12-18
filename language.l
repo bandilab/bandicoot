@@ -85,7 +85,7 @@ static int feed_lex(void *buf, int max_size)
 "join"              { return TK_JOIN; }
 "minus"             { return TK_MINUS; }
 "union"             { return TK_UNION; }
-"time"              { return TK_TIME; }
+"Sys"               { return TK_SYS; }
 
                     /* TODO: hex & octal numbers? */
 [0-9]+              {
@@ -151,6 +151,7 @@ static int feed_lex(void *buf, int max_size)
 ","                 { return ','; }
 "!"                 { return '!'; }
 "="                 { return '='; }
+"."                 { return '.'; }
 
 [ \t\r\n]           { if (*yytext == '\n') gsrc.line++; }
 "#".*\n             { gsrc.line++; }

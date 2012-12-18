@@ -28,6 +28,7 @@ test/progs/params_rel_redecl_2_err.b:3: identifier 'p' is already defined
 test/progs/params_rel_unknown_param_err.b:5: unknown identifier 'p' neither function call nor variable declared with this name
 test/progs/params_rel_unknown_type_err.b:1: unknown type 'unknown_t'
 test/progs/primitive_expr_and_err.b:7: expressions must be of the same type, found 'string' and 'int'
+test/progs/primitive_expr_conv_param_err.b:5: syntax error, unexpected ')'
 test/progs/primitive_expr_conv_str_to_int_err.b:5: conversion from string is not supported
 test/progs/primitive_expr_conv_str_to_long_err.b:5: conversion from string is not supported
 test/progs/primitive_expr_conv_str_to_real_err.b:5: conversion from string is not supported
@@ -40,8 +41,12 @@ test/progs/primitive_expr_neq_err.b:7: expressions must be of the same type, fou
 test/progs/primitive_expr_not_real_err.b:7: expressions must be of type 'int', found 'real'
 test/progs/primitive_expr_not_string_err.b:7: expressions must be of type 'int', found 'string'
 test/progs/primitive_expr_or_err.b:7: expressions must be of the same type, found 'real' and 'int'
+test/progs/primitive_expr_str_index_param_missing_err.b:3: missing parameter(s) to call Sys.String.Index function
+test/progs/primitive_expr_str_index_param_one_type_err.b:3: Sys.String.Index function expects string but found int
+test/progs/primitive_expr_str_index_param_two_type_err.b:3: Sys.String.Index function expects string but found int
 test/progs/primitive_expr_sub_err.b:9: expressions must be of the same type, found 'string' and 'real'
 test/progs/primitive_expr_sum_err.b:9: expressions must be of the same type, found 'int' and 'real'
+test/progs/primitive_expr_time_int_err.b:3: expressions must be of the same type, found 'int' and 'long'
 test/progs/primitive_expr_unknown_func_err.b:5: syntax error, unexpected TK_NAME, expecting TK_AND or TK_OR or ')'
 test/progs/project_bad_attr_err.b:9: unknown attribute 'z' in {x real, y real}
 test/progs/project_max_attrs_err.b:7: number of attributes exceeds the maximum (64)

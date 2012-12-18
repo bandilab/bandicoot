@@ -30,6 +30,7 @@ union L_Value {
 
 struct L_Expr {
     L_Expr_Type node_type;
+    char pkg[MAX_NAME];
     char name[MAX_NAME];
     Type type;
     int is_const;

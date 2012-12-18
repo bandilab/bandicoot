@@ -380,6 +380,30 @@ extern Expr *expr_conv(Expr *e, Type t)
     return res;
 }
 
+static void eval_time(Expr *e, Tuple *t, Arg *arg)
+{
+    e_long(e) = sys_millis();
+}
+
+extern Expr *expr_time(long long val)
+{
+    Expr *res = alloc(Long, 0, eval_time, free_noop);
+    return res;
+}
+
+static void op_str_index(Expr *dest, Expr *l, Expr *r)
+{
+    char *lstr = e_str(l);
+    char *rstr = e_str(r);
+
+    e_int(dest) = (int) str_idx(lstr, rstr);
+}
+
+extern Expr *expr_str_index(Expr *l, Expr *r)
+{
+    return expr_binary(Int, l, r, op_str_index);
+}
+
 extern int expr_bool_val(Expr *e, Tuple *t, Arg *arg)
 {
     return e_int(do_eval(e, t, arg));

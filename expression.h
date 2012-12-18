@@ -59,6 +59,8 @@ extern Expr *expr_sub(Expr *l, Expr *r);
 extern Expr *expr_div(Expr *l, Expr *r);
 extern Expr *expr_mul(Expr *l, Expr *r);
 extern Expr *expr_conv(Expr *e, Type t);
+extern Expr *expr_time();
+extern Expr *expr_str_index(Expr *l, Expr *r);
 
 extern int expr_bool_val(Expr *e, Tuple *t, Arg *arg);
 extern Value expr_new_val(Expr *e, Tuple *t, Arg *arg);
