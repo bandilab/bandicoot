@@ -21,9 +21,9 @@ STRUCT_TESTS="$STRUCT_TESTS test/multiproc% test/network% test/number%"
 STRUCT_TESTS="$STRUCT_TESTS test/pack% test/relation% test/string%"
 STRUCT_TESTS="$STRUCT_TESTS test/summary% test/system% test/tuple%"
 STRUCT_TESTS="$STRUCT_TESTS test/transaction% test/value% test/bandicoot%"
-PERF_TESTS="test/perf/expression% test/perf/index% test/perf/multiproc%"
-PERF_TESTS="$PERF_TESTS test/perf/number% test/perf/relation%"
-PERF_TESTS="$PERF_TESTS test/perf/system% test/perf/tuple%"
+PERF_TESTS="test/perf/bandicoot% test/perf/expression% test/perf/index%"
+PERF_TESTS="$PERF_TESTS test/perf/multiproc% test/perf/number%"
+PERF_TESTS="$PERF_TESTS test/perf/relation% test/perf/system% test/perf/tuple%"
 PROGS="bandicoot%"
 
 if [ ! "`uname | grep -i CYGWIN`" = "" ]
