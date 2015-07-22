@@ -2,6 +2,8 @@ Bandicoot - http://bandilab.org
 
 Compatibility Notes
 
+* v6: tagging the v6-rc without any further changes in the compatibility
+
 * v6-rc: the CSV format changes: type removed from the header
 
   More information on https://github.com/bandilab/bandicoot/issues/23

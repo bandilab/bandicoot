@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VERSION="v6-rc"
+VERSION="v6"
 
 BIN="bin"
 PORT=12345
