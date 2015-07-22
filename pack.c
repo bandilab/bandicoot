@@ -57,25 +57,12 @@ static Error *pack_csv2head(char *buf, Head *exp, char *names[])
     if (len < 1)
         return error_new("bad header: '%s'", buf);
 
-    Head *head = NULL;
-    Error *err = NULL;
-    char **name_type = NULL;
-
     Type types[len];
     char *copy[len];
     for (int i = 0; i < len; ++i) {
-        int cnt;
-        name_type = str_split_big(attrs[i], ":", &cnt);
-        if (cnt < 1 || cnt > 2) {
-            err = error_new("bad header: invalid attribute name: '%s'", attrs[i]);
-            goto exit;
-        }
-
-        char *name = str_trim(name_type[0]);
-        if (!valid_id(name)) {
-            err = error_new("bad header: invalid attribute name: '%s'", name);
-            goto exit;
-        }
+        char *name = str_trim(attrs[i]);
+        if (!valid_id(name))
+            return error_new("bad header: invalid attribute name: '%s'", name);
 
         names[i] = copy[i] = name;
 
@@ -83,24 +70,19 @@ static Error *pack_csv2head(char *buf, Head *exp, char *names[])
         head_attr(exp, name, &idx, &types[i]);
     }
 
-    head = head_new(copy, types, len);
-    if (!head_eq(exp, head)) {
+    Head *res = head_new(copy, types, len);
+    if (!head_eq(exp, res)) {
         char head_exp[MAX_HEAD_STR];
         char head_got[MAX_HEAD_STR];
 
         head_to_str(head_exp, exp);
-        head_to_str(head_got, head);
-        err = error_new("bad header: expected %s got %s", head_exp, head_got);
+        head_to_str(head_got, res);
+
+        mem_free(res);
+        return error_new("bad header: expected %s got %s", head_exp, head_got);
     }
 
-exit:
-    if (name_type != NULL)
-        mem_free(name_type);
-
-    if (head != NULL)
-        mem_free(head);
-
-    return err;
+    return NULL;
 }
 
 static Error *pack_csv2tuple(char *buf,
