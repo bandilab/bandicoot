@@ -48,7 +48,7 @@ static void sem_dec(Mon *m)
 {
     mon_lock(m);
     while (m->value < 1)
-        mon_wait(m, -1);
+        mon_wait(m, 100);
     m->value--;
     mon_unlock(m);
 }
@@ -57,7 +57,7 @@ static void sem_wait(Mon *m, int val)
 {
     mon_lock(m);
     while (m->value != val)
-        mon_wait(m, -1);
+        mon_wait(m, 100);
     mon_unlock(m);
 }
 
